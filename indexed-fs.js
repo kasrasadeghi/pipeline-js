@@ -73,6 +73,9 @@ class FileDB {
 }
 const global_notes = new FileDB();
 
+let global = {today_uuid: null};
+let handlers = {msg: (e) => {}};
+
 async function newNote(title) {
   let content = `--- METADATA ---
 Date: ${new Date()}
@@ -115,40 +118,52 @@ function today() {
 
 async function getNotesWithTitle(title) {
   const files = await global_notes.listFiles();
-  return await Promise.all(files.filter(async note => (await getTitle(note)) === title));
+  const files_with_pred = await Promise.all(files.map(async note => [note, (await getTitle(note)) === title]));
+  return files.filter(async note_pred => note_pred[1]).map(note_pred => note_pred[0]);
 }
 
 async function handle_msg(event) {
   console.log(event);
   event.preventDefault();
+
+  let msg_input = document.getElementById('msg_input');
+  handlers.msg(msg_input.value);
   return false;
 }
 
 async function run() {
   await global_notes.init();
   let main = document.getElementsByTagName('main')[0];
+  console.log('today is', today());
   let notes = await getNotesWithTitle(today());
+  console.log('notes', notes);
   if (notes.length === 0) {
     let uuid = await newNote(today());
     notes = [uuid];
   }
-  let today_uuid = notes[0];
-  main.innerHTML = '<pre>' + await global_notes.readFile(today_uuid); + '</pre>';
 
-  // msg_input = document.getElementById('msg_input');
-  // console.log('msg_input', msg_input);
-  // msg_input.addEventListener('keyup', async (event) => {
-  //   console.log(event);
-  //   if (event.keyCode !== 13) return;
-  //   event.preventDefault();
-  //   let msg = msg_input.value;
-  //   msg_input.value = '';
-  //   console.log('msg', msg);
-  //   let content = await global_notes.readFile(today_uuid);
-  //   content += '\n' + msg;
-  //   await global_notes.writeFile(today_uuid, content);
-  //   main.innerHTML = '<pre>' + await global_notes.readFile(today_uuid); + '</pre>';
-  // });
+  // we can only handle messages once we know what today_uuid is
+  global.today_uuid = notes[0];
+  console.log('rendering', global.today_uuid);
+  handlers.msg = async (msg) => {
+    let msg_input = document.getElementById('msg_input');
+    msg_input.value = '';
+    console.log('msg', msg);
+
+    let content = await global_notes.readFile(global.today_uuid);
+    let lines = content.split("\n");
+    const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
+    const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
+    const old_content = content_lines.join("\n");
+    const metadata = metadata_lines.join("\n");
+
+    const new_content = old_content + `\n- msg: ${msg}` + '\n' + `  - Date: ${new Date}` + '\n\n';
+    await global_notes.writeFile(global.today_uuid, new_content + metadata);
+    main.innerHTML = '<pre>' + await global_notes.readFile(global.today_uuid); + '</pre>';
+  };
+
+
+  main.innerHTML = '<pre>' + await global_notes.readFile(global.today_uuid); + '</pre>';
   // const exists = await global_notes.noteExists("uuid-12345");
   // console.log(content, exists);
 }
