@@ -118,8 +118,10 @@ function today() {
 
 async function getNotesWithTitle(title) {
   const files = await global_notes.listFiles();
-  const files_with_pred = await Promise.all(files.map(async note => [note, (await getTitle(note)) === title]));
-  return files.filter(async note_pred => note_pred[1]).map(note_pred => note_pred[0]);
+  console.log('all files', files);
+  const files_with_names = await Promise.all(files.map(async uuid => { return {uuid, title: await getTitle(uuid)}; }));
+  console.log('all files with names', files_with_names);
+  return files_with_names.filter(note => note.title === title).map(note => note.uuid);
 }
 
 async function handle_msg(event) {
