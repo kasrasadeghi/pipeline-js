@@ -177,8 +177,65 @@ function parseSection(lines) {
       blocks.slice(-1)[0].push(L)
     }
   }
-  return blocks;
+  return blocks.map(parseTree);
 }
+
+function parseTree(block) {
+  let indent_lines = []
+  for (let L of block) {
+    if (L.startsWith("- ")) {
+      indent_lines.push([0, L.slice("- ".length)])
+    } else if (L.startsWith(" ")) {
+      let trimmed = L.trimStart();
+      let indent = L.length - trimmed.length;
+      if (indent % 2 !== 0) { return block; } // in case of failure, return block
+      if (! trimmed.startsWith("- ")) { return block; }
+      indent_lines.push([indent / 2, trimmed.slice(2)]); // remove "- "
+    } else {
+      indent_lines.push([-1, L])
+    }
+  }
+
+  console.log('indent_lines', indent_lines);
+
+  let roots = [];
+  let stack = [];
+  let found_children = false;
+
+  for (let [indent, L] of indent_lines) {
+    while (stack.length !== 0 && stack.slice(-1)[0].indent >= indent) {
+      stack.pop();
+    }
+
+    if (stack.length === 0) {
+      if ([-1, 0].includes(indent)) {
+        let node = {indent, value: L, children: []};
+        stack.push(node);
+        roots.push(node);
+        continue;
+      } else {
+        return block; // failure, block must start with root
+      }
+    }
+
+    // stack must have elements in it, so the current line must be the stack's child
+    found_children = true;
+
+    let node = {indent, value: L, children: []};
+    if (stack.slice(-1)[0].indent + 1 !== indent) {
+      return block; // failure, children must be one indent deeper than their parent
+    }
+    stack.slice(-1)[0].children.push(node);
+    stack.push(node); // node is the new top of the stack, also added to prior top of stack
+  }
+
+  if (! found_children) {
+    return block; // found no children, so there was no tree to parse
+  }
+
+  return roots;
+}
+
 
 // RENDER
 
