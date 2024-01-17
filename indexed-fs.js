@@ -133,6 +133,64 @@ async function handle_msg(event) {
   return false;
 }
 
+// PARSE
+async function parseFile(filepath) {
+  let content = await global_notes.readFile(filepath);
+  return parseContent(content);
+}
+
+function parseContent(content) {
+  // EXPL: a page is a list of sections, which each have a title and a list of blocks
+  // - a block is a list of nodes
+  // - a node can be either a line of type 'str', or a parsed tree
+  let sections = [{title: 'entry', lines: []}];
+  for (let L of content.split("\n")) {
+    if (L.startsWith("--- ") && L.endsWith(" ---") && L.length > 9) {
+      sections.push({title: L.slice(4, -4), lines: []})
+    } else {
+      console.log('append ', L, 'to section', sections);
+      sections.slice(-1)[0].lines.push(L);
+    }
+  }
+
+  for (let S of sections) {
+    if (! ['METADATA', 'HTML'].includes(S.title)) {
+      S.blocks = parseSection(S.lines);
+      // delete S.lines;
+    }
+  }
+  return sections;
+}
+
+function parseSection(lines) {
+  let blocks = [];
+  for (let L of lines) {
+    if (L === '') {
+      blocks.push([])
+    } else {
+      // TODO what?  if there are no blocks or if the last block is a newline, add another one?
+      if (blocks.length === 0 
+      //|| blocks.slice(-1).length === 0
+      ) {
+        blocks.push([])
+      }
+      blocks.slice(-1)[0].push(L)
+    }
+  }
+  return blocks;
+}
+
+// RENDER
+
+async function render(uuid) {
+  console.log('rendering', global.today_uuid);
+  let rendered = JSON.stringify(await parseFile(uuid), undefined, 2);
+  console.log(rendered);
+  return "<pre>" + rendered + "</pre>";
+}
+
+// MAIN
+
 async function run() {
   await global_notes.init();
   let main = document.getElementsByTagName('main')[0];
@@ -146,7 +204,6 @@ async function run() {
 
   // we can only handle messages once we know what today_uuid is
   global.today_uuid = notes[0];
-  console.log('rendering', global.today_uuid);
   handlers.msg = async (msg) => {
     let msg_input = document.getElementById('msg_input');
     msg_input.value = '';
@@ -161,11 +218,11 @@ async function run() {
 
     const new_content = old_content + `\n- msg: ${msg}` + '\n' + `  - Date: ${new Date}` + '\n\n';
     await global_notes.writeFile(global.today_uuid, new_content + metadata);
-    main.innerHTML = '<pre>' + await global_notes.readFile(global.today_uuid); + '</pre>';
+    main.innerHTML = await render(global.today_uuid);
   };
 
-
-  main.innerHTML = '<pre>' + await global_notes.readFile(global.today_uuid); + '</pre>';
+  
+  main.innerHTML = await render(global.today_uuid);
   // const exists = await global_notes.noteExists("uuid-12345");
   // console.log(content, exists);
 }
