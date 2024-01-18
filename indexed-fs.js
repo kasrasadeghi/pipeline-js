@@ -148,7 +148,7 @@ function parseContent(content) {
     if (L.startsWith("--- ") && L.endsWith(" ---") && L.length > 9) {
       sections.push({title: L.slice(4, -4), lines: []})
     } else {
-      console.log('append ', L, 'to section', sections);
+      // console.log('append ', L, 'to section', sections);
       sections.slice(-1)[0].lines.push(L);
     }
   }
@@ -156,7 +156,7 @@ function parseContent(content) {
   for (let S of sections) {
     if (! ['METADATA', 'HTML'].includes(S.title)) {
       S.blocks = parseSection(S.lines);
-      // delete S.lines;
+      delete S.lines;
     }
   }
   return sections;
@@ -236,12 +236,88 @@ function parseTree(block) {
   return roots;
 }
 
+// REWRITE
+
+// page -> *section
+// section -> {title: METADATA, lines: *str} | {title,blocks: *block} | {title,roots: *root}
+// root -> {root: 'pre_roots'|'nonfinal'|'final', children: block*}
+// block -> message | newline | *node | *line
+// newline -> []
+// message -> {msg: *line_content,date,content: str}
+// node -> {value,indent,children:*node,line: *line_content}
+// line -> {line: *line_content}
+// line_content -> str | tag | cmd | link
+// link -> note | root-link | internal-link | simple-link
+
+function pageIsJournal(page) {
+  return page
+    .find(s => s.title === 'METADATA').lines
+    .find(l => l.startsWith("Tags: ")).slice("Tags: ".length)
+    .split(",").map(x => x.trim()).includes("Journal");
+}
+
+function rewrite(page) {
+  return page.map(rewriteSection, pageIsJournal(page));
+}
+
+function rewriteSection(section, isJournal) {
+  if (['METADATA', 'HTML'].includes(section.title)) {
+    return section;
+  }
+
+  let new_blocks = [];
+  for (let i = 0; i < section.blocks.length; ++i) {
+    let block = section.blocks[i];
+    new_blocks.push(rewriteBlock(block));
+    if (block.length === 0) {
+      i ++;
+    }
+  }
+  section.blocks = new_blocks;
+  return section;
+  // return rewriteDiscSection(section, isJournal);
+}
+
+// function rewriteDiscSection(section, isJournal) {
+//   let disc_section = section.title === 'DISCUSSION';
+//   let journal_disc_section = (section.title === 'entry' && isJournal);
+
+//   if (! (disc_section || journal_disc_section)) {
+//     return section;
+//   }
+
+//   let roots = [{roots: 'pre_roots', children: []}];
+//   for (let block of section.blocks) {
+
+//   }
+// }
+
+function rewriteBlock(block) {
+  if (block.length === 0) { // newline
+    return block;
+  }
+  if (block.length === 1) {
+    console.log('rewrite block', block);
+    let item = block[0];
+    if (item.value.startsWith("msg: ") && item.indent === 0 && item.children.length === 1) {
+      let child = item.children[0];
+      if (child.value.startsWith("Date: ") && child.indent === 1 && child.children.length === 0) {
+        return {msg: item.value.slice("msg: ".length), content: item.value, date: child.value.slice("Date: ".length)}
+      }
+    }
+  }
+  
+  // TODO the rest of block rewrite
+  return block;
+}
 
 // RENDER
 
 async function render(uuid) {
   console.log('rendering', global.today_uuid);
-  let rendered = JSON.stringify(await parseFile(uuid), undefined, 2);
+  let page = await parseFile(uuid);
+  let rewritten = rewrite(page);
+  let rendered = JSON.stringify(rewritten, undefined, 2);
   console.log(rendered);
   return "<pre>" + rendered + "</pre>";
 }
