@@ -292,6 +292,16 @@ function rewriteSection(section, isJournal) {
 //   }
 // }
 
+class Msg {
+  msg;
+  content;
+  date;
+  constructor(properties) {
+    console.assert(['content', 'date', 'msg'].every(x => Object.keys(properties).includes(x)), properties, 'huh');
+    Object.assign(this, properties);
+  }
+}
+
 function rewriteBlock(block) {
   if (block.length === 0) { // newline
     return block;
@@ -302,7 +312,11 @@ function rewriteBlock(block) {
     if (item.value.startsWith("msg: ") && item.indent === 0 && item.children.length === 1) {
       let child = item.children[0];
       if (child.value.startsWith("Date: ") && child.indent === 1 && child.children.length === 0) {
-        return {msg: item.value.slice("msg: ".length), content: item.value, date: child.value.slice("Date: ".length)}
+        return new Msg({
+          msg: item.value.slice("msg: ".length), 
+          content: item.value, 
+          date: child.value.slice("Date: ".length)
+        });
       }
     }
   }
@@ -337,7 +351,15 @@ function renderSection(section, i) {
 }
 
 function renderBlock(block) {
+  console.log('render block', block, block instanceof Msg);
+  if (block instanceof Msg) {
+    return renderMsg(block);
+  }
   return JSON.stringify(block, undefined, 2);
+}
+
+function renderMsg(item) {
+  return `<div class='msg'><div class='msg_timestamp'>${item.date}</div><div class="msg_content">${item.msg}</div></div>`
 }
 
 // MAIN
