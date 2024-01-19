@@ -317,9 +317,27 @@ async function render(uuid) {
   console.log('rendering', global.today_uuid);
   let page = await parseFile(uuid);
   let rewritten = rewrite(page);
-  let rendered = JSON.stringify(rewritten, undefined, 2);
-  console.log(rendered);
+  let rendered = rewritten.map(renderSection).join("\n");
   return "<pre>" + rendered + "</pre>";
+}
+
+function renderSection(section, i) {
+  output = []
+  if (! ('entry' === section.title && i === 0)) {
+    output.push(`--- ${section.title} ---`)
+  }
+  if (['METADATA', 'HTML'].includes(section.title)) {
+    output.push(...section.lines);
+    return "<pre>" + output.join("\n") + "</pre>";
+  }
+
+  output.push(...section.blocks.map(renderBlock))
+
+  return output.join("\n");
+}
+
+function renderBlock(block) {
+  return JSON.stringify(block, undefined, 2);
 }
 
 // MAIN
