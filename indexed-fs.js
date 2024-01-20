@@ -73,7 +73,7 @@ class FileDB {
 }
 const global_notes = new FileDB();
 
-let global = {today_uuid: null};
+let global = null;
 let handlers = {msg: (e) => {}};
 
 async function newNote(title) {
@@ -327,12 +327,18 @@ function rewriteBlock(block) {
 
 // RENDER
 
-async function render(uuid) {
+async function renderNote(uuid) {
   console.log('rendering', global.today_uuid);
   let page = await parseFile(uuid);
   let rewritten = rewrite(page);
   let rendered = rewritten.map(renderSection).join("\n");
-  return "<pre>" + rendered + "</pre>";
+  return [
+    "<pre>" + rendered + "</pre>", 
+    `<form id="msg_form" onsubmit="return handle_msg(event)">
+      <input id='msg_input' type="text"/>
+      <button href="/edit">edit</button>
+    </form>`
+  ];
 }
 
 function renderSection(section, i) {
@@ -369,6 +375,7 @@ function renderMsg(item) {
 async function run() {
   await global_notes.init();
   let main = document.getElementsByTagName('main')[0];
+  let footer = document.getElementsByTagName('footer')[0];
   console.log('today is', today());
   let notes = await getNotesWithTitle(today());
   console.log('notes', notes);
@@ -378,7 +385,7 @@ async function run() {
   }
 
   // we can only handle messages once we know what today_uuid is
-  global.today_uuid = notes[0];
+  global = {today_uuid: notes[0]};
   handlers.msg = async (msg) => {
     let msg_input = document.getElementById('msg_input');
     msg_input.value = '';
@@ -393,10 +400,9 @@ async function run() {
 
     const new_content = old_content + `\n- msg: ${msg}` + '\n' + `  - Date: ${new Date}` + '\n\n';
     await global_notes.writeFile(global.today_uuid, new_content + metadata);
-    main.innerHTML = await render(global.today_uuid);
+    [main.innerHTML, footer.innerHTML] = await renderNote(global.today_uuid);
   };
-
   
-  main.innerHTML = await render(global.today_uuid);
+  [main.innerHTML, footer.innerHTML] = await renderNote(global.today_uuid);
 }
 
