@@ -358,8 +358,10 @@ function renderBlock(block) {
   return JSON.stringify(block, undefined, 2);
 }
 
+// date timestamp
+const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); 
 function renderMsg(item) {
-  return `<div class='msg'><div class='msg_timestamp'>${item.date}</div><div class="msg_content">${item.msg}</div></div>`
+  return `<div class='msg'><div class='msg_timestamp'>${timestamp_format.format(Date.parse(item.date))}</div><div class="msg_content">${item.msg}</div></div>`
 }
 
 // MAIN
@@ -396,7 +398,5 @@ async function run() {
 
   
   main.innerHTML = await render(global.today_uuid);
-  // const exists = await global_notes.noteExists("uuid-12345");
-  // console.log(content, exists);
 }
 
