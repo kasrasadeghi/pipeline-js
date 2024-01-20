@@ -124,15 +124,6 @@ async function getNotesWithTitle(title) {
   return files_with_names.filter(note => note.title === title).map(note => note.uuid);
 }
 
-async function handle_msg(event) {
-  console.log(event);
-  event.preventDefault();
-
-  let msg_input = document.getElementById('msg_input');
-  handlers.msg(msg_input.value);
-  return false;
-}
-
 // PARSE
 async function parseFile(filepath) {
   let content = await global_notes.readFile(filepath);
@@ -328,16 +319,16 @@ function rewriteBlock(block) {
 // RENDER
 
 async function renderNote(uuid) {
-  console.log('rendering', global.today_uuid);
+  console.log('rendering', global.current_uuid);
   let page = await parseFile(uuid);
   let rewritten = rewrite(page);
   let rendered = rewritten.map(renderSection).join("\n");
   return [
     "<pre>" + rendered + "</pre>", 
-    `<form id="msg_form" onsubmit="return handle_msg(event)">
+    `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
       <input id='msg_input' type="text"/>
-      <button href="/edit">edit</button>
-    </form>`
+    </form>
+    <button onclick="gotoEdit()">edit</button>`
   ];
 }
 
@@ -370,12 +361,78 @@ function renderMsg(item) {
   return `<div class='msg'><div class='msg_timestamp'>${timestamp_format.format(Date.parse(item.date))}</div><div class="msg_content">${item.msg}</div></div>`
 }
 
+// DISC
+
+async function gotoDisc() {
+  let main = document.getElementsByTagName('main')[0];
+  let footer = document.getElementsByTagName('footer')[0];
+  window.history.pushState({},"", "/disc");
+
+  const handleMsg = async (event) => {
+
+    console.log(event);
+    event.preventDefault();
+
+    let msg_input = document.getElementById('msg_input');
+    let msg = msg_input.value;
+    console.log('msg', msg);
+    msg_input.value = '';
+
+    let content = await global_notes.readFile(global.current_uuid);
+    let lines = content.split("\n");
+    const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
+    const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
+    const old_content = content_lines.join("\n");
+    const metadata = metadata_lines.join("\n");
+
+    const new_content = old_content + `\n- msg: ${msg}` + '\n' + `  - Date: ${new Date}` + '\n\n';
+    await global_notes.writeFile(global.current_uuid, new_content + metadata);
+  
+    gotoDisc();
+    return false;
+  };
+  global.handlers = {handleMsg};
+
+  [main.innerHTML, footer.innerHTML] = await renderNote(global.current_uuid);
+  return false;
+}
+
+// EDIT
+
+async function gotoEdit() {
+  let main = document.getElementsByTagName('main')[0];
+  let footer = document.getElementsByTagName('footer')[0];
+  window.history.pushState({},"", "/edit");
+  [main.innerHTML, footer.innerHTML] = await renderEdit(global.current_uuid);
+
+}
+
+async function renderEdit(uuid) {
+  console.log('rendering', uuid);
+  let content = await global_notes.readFile(uuid);
+  const submitEdit = async () => {
+    let textarea = document.getElementsByTagName('textarea')[0];
+    let content = textarea.value;
+    await global_notes.writeFile(global.current_uuid, content);
+    gotoDisc();
+  };
+  global.handlers = {submitEdit};
+  const textarea_style = `
+  box-sizing: border-box;
+  resize: none;
+  overflow: auto;
+  width: -webkit-fill-available;
+  height: 80dvh;`
+  return [
+    `<textarea style='${textarea_style}'>` + content + "</textarea>", 
+    `<button onclick="global.handlers.submitEdit()">submit</button>`
+  ];
+}
+
 // MAIN
 
 async function run() {
   await global_notes.init();
-  let main = document.getElementsByTagName('main')[0];
-  let footer = document.getElementsByTagName('footer')[0];
   console.log('today is', today());
   let notes = await getNotesWithTitle(today());
   console.log('notes', notes);
@@ -384,25 +441,13 @@ async function run() {
     notes = [uuid];
   }
 
-  // we can only handle messages once we know what today_uuid is
-  global = {today_uuid: notes[0]};
-  handlers.msg = async (msg) => {
-    let msg_input = document.getElementById('msg_input');
-    msg_input.value = '';
-    console.log('msg', msg);
-
-    let content = await global_notes.readFile(global.today_uuid);
-    let lines = content.split("\n");
-    const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
-    const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
-    const old_content = content_lines.join("\n");
-    const metadata = metadata_lines.join("\n");
-
-    const new_content = old_content + `\n- msg: ${msg}` + '\n' + `  - Date: ${new Date}` + '\n\n';
-    await global_notes.writeFile(global.today_uuid, new_content + metadata);
-    [main.innerHTML, footer.innerHTML] = await renderNote(global.today_uuid);
-  };
+  // we can only handle messages once we know what current_uuid is
+  global = {current_uuid: notes[0]};
   
-  [main.innerHTML, footer.innerHTML] = await renderNote(global.today_uuid);
+  if (window.location.href.endsWith('/edit')) {
+    gotoEdit();
+  } else {
+    gotoDisc();
+  }
 }
 
