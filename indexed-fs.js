@@ -330,7 +330,7 @@ async function htmlNote(uuid) {
   let page = await parseFile(uuid);
   let rewritten = rewrite(page);
   let rendered = rewritten.map(htmlSection).join("\n");
-  return rendered;
+  return "<div class='msglist'>" + rendered + "</div>";
 }
 
 function htmlSection(section, i) {
@@ -400,8 +400,10 @@ async function renderDisc(uuid) {
     `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
       <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
     </form>
-    <button onclick="gotoEdit()">edit</button>
-    <button onclick="gotoList()">list</button>`
+    <button onclick="gotoEdit('${uuid}')">edit</button>
+    <button onclick="gotoList()">list</button>
+    <button onclick="gotoJournal()">journal</button>
+    `
   ];
 }
 
@@ -520,6 +522,15 @@ window.addEventListener('load', () => {
 
 const files = new FileDB("temp-pipeline-db", "test");
 
+async function gotoJournal() {
+  let notes = await getNotesWithTitle(today());
+  if (notes.length === 0) {
+    let uuid = await newNote(today());
+    notes = [uuid];
+  }
+  gotoDisc(notes[0]);
+}
+
 async function run() {
   await global_notes.init();
   console.log('today is', today());
@@ -550,6 +561,9 @@ async function run() {
 
   } else if (window.location.pathname.startsWith('/list')) {
     [main.innerHTML, footer.innerHTML] = await renderList();
+
+  } else if (window.location.pathname.startsWith('/today')) {
+    gotoDisc(notes[0]);
 
   } else {
     gotoDisc(notes[0]);
