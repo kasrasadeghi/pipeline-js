@@ -103,7 +103,6 @@ async function getTitle(uuid, storage) {
 function today() {
   const today = new Date();
   const year = today.getFullYear();
-  const month_number = today.getMonth() + 1;
 
   const month = today.toLocaleString('en-us', { month: "long" });
   const day = today.getDate();
@@ -360,7 +359,7 @@ function htmlBlock(block) {
 // date timestamp
 const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); 
 function htmlMsg(item) {
-  return `<div class='msg'><div class='msg_timestamp'>${timestamp_format.format(Date.parse(item.date))}</div><div class="msg_content">${item.msg}</div></div>`
+  return `<div class='msg' id='${item.date}'><a class='msg_timestamp' href='${window.location.pathname}#${item.date}'>${timestamp_format.format(Date.parse(item.date))}</a><div class="msg_content">${item.msg}</div></div>`
 }
 
 // DISC
@@ -491,6 +490,32 @@ async function renderList() {
   ];
 }
 
+// BACKGROUND
+
+window.addEventListener('load', () => {
+  console.log('enable highlight-selected');
+
+  updateSelected = () => {
+    // clear selected
+    const currently_selected = document.getElementsByClassName('selected');
+    for (s of currently_selected) {
+      s.classList.remove('selected');
+    }
+
+    // select from hash
+    if (window.location.hash) {
+      const selected = document.getElementById(decodeURI(window.location.hash.slice(1)));
+      selected.classList.add('selected');
+    }
+  };
+
+  window.addEventListener('hashchange', () => {
+    updateSelected();
+  });
+
+  updateSelected();
+});
+
 // MAIN
 
 const files = new FileDB("temp-pipeline-db", "test");
@@ -536,4 +561,3 @@ async function run() {
 
   // await getList();
 }
-
