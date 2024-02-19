@@ -36,14 +36,14 @@ Hello, World!
         continue
 
     path = path.removeprefix("/")
-    if path in ('', 'disc', 'edit'):
+    if path.startswith('disc') or path.startswith('edit') or path.startswith("list") or path == '':
         path = 'index.html'
     
     if not os.path.exists(path):
         http_response = b"""\
-HTTP/1.1 400 NOT_FOUND
+HTTP/1.1 400 NOT_FOUND 
 
-"""
+HTTP 400: could not handle path: """ + path.encode()
         client_connection.sendall(http_response)
         client_connection.close()    
         continue

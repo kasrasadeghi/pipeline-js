@@ -73,8 +73,7 @@ class FileDB {
 }
 const global_notes = new FileDB();
 
-let global = null;
-let handlers = {msg: (e) => {}};
+global = null;
 
 async function newNote(title) {
   let content = `--- METADATA ---
@@ -87,8 +86,11 @@ Tags: Journal`;
   return uuid;
 }
 
-async function getTitle(uuid) {
-  const note = await global_notes.readFile(uuid);
+async function getTitle(uuid, storage) {
+  if (storage === undefined) {
+    storage = global_notes;
+  }
+  const note = await storage.readFile(uuid);
   const lines = note.split("\n");
   const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---") + 1);
   const title_line = metadata_lines.find(line => line.startsWith("Title: "));
@@ -114,6 +116,12 @@ function today() {
     : 'th';
 
   return `${month} ${day}${day_suffix}, ${year}`;
+}
+
+async function getNoteTitleMap() {
+  const notes = await global_notes.listFiles();
+  console.log('all notes', notes);
+  return await Promise.all(notes.map(async uuid => { return {uuid, title: await getTitle(uuid)}; }));
 }
 
 async function getNotesWithTitle(title) {
@@ -318,21 +326,15 @@ function rewriteBlock(block) {
 
 // RENDER
 
-async function renderNote(uuid) {
-  console.log('rendering', global.current_uuid);
+async function htmlNote(uuid) {
+  console.log('rendering note for', uuid);
   let page = await parseFile(uuid);
   let rewritten = rewrite(page);
-  let rendered = rewritten.map(renderSection).join("\n");
-  return [
-    "<pre>" + rendered + "</pre>", 
-    `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
-      <input id='msg_input' type="text"/>
-    </form>
-    <button onclick="gotoEdit()">edit</button>`
-  ];
+  let rendered = rewritten.map(htmlSection).join("\n");
+  return rendered;
 }
 
-function renderSection(section, i) {
+function htmlSection(section, i) {
   output = []
   if (! ('entry' === section.title && i === 0)) {
     output.push(`--- ${section.title} ---`)
@@ -342,31 +344,30 @@ function renderSection(section, i) {
     return "<pre>" + output.join("\n") + "</pre>";
   }
 
-  output.push(...section.blocks.map(renderBlock))
+  output.push(...section.blocks.map(htmlBlock))
 
   return output.join("\n");
 }
 
-function renderBlock(block) {
+function htmlBlock(block) {
   console.log('render block', block, block instanceof Msg);
   if (block instanceof Msg) {
-    return renderMsg(block);
+    return htmlMsg(block);
   }
   return JSON.stringify(block, undefined, 2);
 }
 
 // date timestamp
 const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); 
-function renderMsg(item) {
+function htmlMsg(item) {
   return `<div class='msg'><div class='msg_timestamp'>${timestamp_format.format(Date.parse(item.date))}</div><div class="msg_content">${item.msg}</div></div>`
 }
 
 // DISC
 
-async function gotoDisc() {
-  let main = document.getElementsByTagName('main')[0];
-  let footer = document.getElementsByTagName('footer')[0];
-  window.history.pushState({},"", "/disc");
+async function renderDisc(uuid) {
+  let note = await htmlNote(uuid);
+  console.log('rendered note:', note);
 
   const handleMsg = async (event) => {
 
@@ -378,7 +379,7 @@ async function gotoDisc() {
     console.log('msg', msg);
     msg_input.value = '';
 
-    let content = await global_notes.readFile(global.current_uuid);
+    let content = await global_notes.readFile(uuid);
     let lines = content.split("\n");
     const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
     const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
@@ -386,25 +387,39 @@ async function gotoDisc() {
     const metadata = metadata_lines.join("\n");
 
     const new_content = old_content + `\n- msg: ${msg}` + '\n' + `  - Date: ${new Date}` + '\n\n';
-    await global_notes.writeFile(global.current_uuid, new_content + metadata);
+    await global_notes.writeFile(uuid, new_content + metadata);
   
-    gotoDisc();
+    let main = document.getElementsByTagName('main')[0];
+    let footer = document.getElementsByTagName('footer')[0];
+    [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
     return false;
   };
   global.handlers = {handleMsg};
+  return [
+    "<pre>" + note + "</pre>", 
+    `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
+      <input id='msg_input' type="text"/>
+    </form>
+    <button onclick="gotoEdit()">edit</button>
+    <button onclick="gotoList()">list</button>`
+  ];
+}
 
-  [main.innerHTML, footer.innerHTML] = await renderNote(global.current_uuid);
+async function gotoDisc(uuid) {
+  let main = document.getElementsByTagName('main')[0];
+  let footer = document.getElementsByTagName('footer')[0];
+  window.history.pushState({},"", "/disc/" + uuid);
+  [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
   return false;
 }
 
 // EDIT
 
-async function gotoEdit() {
+async function gotoEdit(uuid) {
   let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
   window.history.pushState({},"", "/edit");
-  [main.innerHTML, footer.innerHTML] = await renderEdit(global.current_uuid);
-
+  [main.innerHTML, footer.innerHTML] = await renderEdit(uuid);
 }
 
 async function renderEdit(uuid) {
@@ -413,7 +428,7 @@ async function renderEdit(uuid) {
   const submitEdit = async () => {
     let textarea = document.getElementsByTagName('textarea')[0];
     let content = textarea.value;
-    await global_notes.writeFile(global.current_uuid, content);
+    await global_notes.writeFile(uuid, content);
     gotoDisc();
   };
   global.handlers = {submitEdit};
@@ -429,7 +444,54 @@ async function renderEdit(uuid) {
   ];
 }
 
+// LIST
+
+async function fetchNote(uuid) {
+  return await fetch('https://10.50.50.2:5000/api/get/' + uuid).then(t => t.text());
+}
+async function cacheNote(uuid) {
+  await files.writeFile("core/" + uuid, await fetchNote(uuid))
+  global.cacheMap[uuid] = true;
+}
+
+async function getList() {
+  let list = await fetch('https://10.50.50.2:5000/api/list/core').then(x => x.json());
+  global.cacheMap = {};
+  for (let uuid of list) {
+    global.cacheMap[uuid] = false;
+  }
+  
+  // this takes around 2 minutes.  it's only 57 megs on disk, can we do better?
+  // - maybe a single big request with one big batch?
+  try {
+    for (let i = 0; i < list.length; i++) {
+      const uuid = list[i];
+      await cacheNote(uuid);
+      console.log(`${i+1}/${list.length}: ${uuid}`);
+    }
+  } catch (e) {
+    console.log(e);
+  }
+}
+
+async function gotoList() {
+  window.history.pushState({}, "", "/list");
+  let main = document.getElementsByTagName('main')[0];
+  let footer = document.getElementsByTagName('footer')[0];
+  [main.innerHTML, footer.innerHTML] = await renderList();
+}
+
+async function renderList() {
+  let content = "<pre>" + (await getNoteTitleMap()).map(x => `<a href="/disc/${x.uuid}">${x.title}</a>`).join("\n") + "</pre>";
+  return [
+    content, 
+    undefined
+  ];
+}
+
 // MAIN
+
+const files = new FileDB("temp-pipeline-db", "test");
 
 async function run() {
   await global_notes.init();
@@ -442,12 +504,33 @@ async function run() {
   }
 
   // we can only handle messages once we know what current_uuid is
-  global = {current_uuid: notes[0]};
+  global = {};
   
-  if (window.location.href.endsWith('/edit')) {
-    gotoEdit();
+  let main = document.getElementsByTagName('main')[0];
+  let footer = document.getElementsByTagName('footer')[0];
+
+  console.log("initializing from path", window.location.pathname);
+
+  if (window.location.pathname.startsWith('/disc/')) {
+    let uuid = window.location.pathname.slice("/disc/".length);
+    [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
+
+  } else if (window.location.pathname.startsWith('/edit/')) {
+    let uuid = window.location.pathname.slice("/edit".length);
+    [main.innerHTML, footer.innerHTML] = await renderEdit(uuid);
+
+  } else if (window.location.pathname.startsWith('/list')) {
+    [main.innerHTML, footer.innerHTML] = await renderList();
+    
   } else {
-    gotoDisc();
+    gotoDisc(notes[0]);
   }
+
+  await files.init();
+  console.time('test');
+  await getNoteTitleMap(files);
+  console.timeEnd('test');
+
+  // await getList();
 }
 
