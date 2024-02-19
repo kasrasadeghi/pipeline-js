@@ -435,14 +435,8 @@ async function renderEdit(uuid) {
     gotoDisc(uuid);
   };
   global.handlers = {submitEdit};
-  const textarea_style = `
-  box-sizing: border-box;
-  resize: none;
-  overflow: auto;
-  width: -webkit-fill-available;
-  height: 80dvh;`
   return [
-    `<textarea style='${textarea_style}'>` + content + "</textarea>", 
+    `<textarea class='editor_textarea'>` + content + "</textarea>", 
     `<button onclick="global.handlers.submitEdit()">submit</button>
     <button onclick="gotoDisc('${uuid}')">disc</button>`
   ];
