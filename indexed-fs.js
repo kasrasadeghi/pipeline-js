@@ -82,7 +82,7 @@ Title: ${title}
 Tags: Journal`;
 // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
   let uuid = crypto.randomUUID();
-  await global_notes.writeFile(uuid, content);
+  await global_notes.writeFile('bigmac-js/' + uuid, content);
   return uuid;
 }
 
@@ -366,7 +366,6 @@ function htmlMsg(item) {
 
 async function renderDisc(uuid) {
   let note = await htmlNote(uuid);
-  console.log('rendered note:', note);
 
   const handleMsg = async (event) => {
 
@@ -426,13 +425,14 @@ async function gotoEdit(uuid) {
 }
 
 async function renderEdit(uuid) {
-  console.log('rendering', uuid);
+  console.log('rendering /edit/ for ', uuid);
   let content = await global_notes.readFile(uuid);
+  console.log('editing content: ', content);
   const submitEdit = async () => {
     let textarea = document.getElementsByTagName('textarea')[0];
     let content = textarea.value;
     await global_notes.writeFile(uuid, content);
-    gotoDisc();
+    gotoDisc(uuid);
   };
   global.handlers = {submitEdit};
   const textarea_style = `
@@ -443,7 +443,8 @@ async function renderEdit(uuid) {
   height: 80dvh;`
   return [
     `<textarea style='${textarea_style}'>` + content + "</textarea>", 
-    `<button onclick="global.handlers.submitEdit()">submit</button>`
+    `<button onclick="global.handlers.submitEdit()">submit</button>
+    <button onclick="gotoDisc('${uuid}')">disc</button>`
   ];
 }
 
@@ -528,22 +529,17 @@ async function gotoJournal() {
     let uuid = await newNote(today());
     notes = [uuid];
   }
-  gotoDisc(notes[0]);
+  await gotoDisc(notes[0]);
 }
 
-async function run() {
-  await global_notes.init();
-  console.log('today is', today());
-  let notes = await getNotesWithTitle(today());
-  console.log('notes', notes);
-  if (notes.length === 0) {
-    let uuid = await newNote(today());
-    notes = [uuid];
-  }
+window.addEventListener("popstate", (event) => {
+  console.log(
+    `location: ${document.location}, state: ${JSON.stringify(event.state)}`,
+  );
+  handleRouting();
+});
 
-  // we can only handle messages once we know what current_uuid is
-  global = {};
-  
+async function handleRouting() {
   let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
 
@@ -556,18 +552,28 @@ async function run() {
     updateSelected();
 
   } else if (window.location.pathname.startsWith('/edit/')) {
-    let uuid = window.location.pathname.slice("/edit".length);
+    let uuid = window.location.pathname.slice("/edit/".length);
     [main.innerHTML, footer.innerHTML] = await renderEdit(uuid);
 
   } else if (window.location.pathname.startsWith('/list')) {
     [main.innerHTML, footer.innerHTML] = await renderList();
 
   } else if (window.location.pathname.startsWith('/today')) {
-    gotoDisc(notes[0]);
+    await gotoJournal();
 
   } else {
-    gotoDisc(notes[0]);
+    await gotoJournal();
   }
+}
+
+async function run() {
+  await global_notes.init();
+  console.log('today is', today());
+
+  // we can only handle messages once we know what current_uuid is
+  global = {};
+
+  await handleRouting();
 
   await files.init();
   console.time('test');
