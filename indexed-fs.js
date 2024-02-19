@@ -390,15 +390,16 @@ async function renderDisc(uuid) {
     await global_notes.writeFile(uuid, new_content + metadata);
   
     let main = document.getElementsByTagName('main')[0];
-    let footer = document.getElementsByTagName('footer')[0];
-    [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
+    // let footer = document.getElementsByTagName('footer')[0];
+    main.innerHTML = (await renderDisc(uuid))[0];
+    main.scrollTop = main.scrollHeight;
     return false;
   };
   global.handlers = {handleMsg};
   return [
-    "<pre>" + note + "</pre>", 
+    note, 
     `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
-      <input id='msg_input' type="text"/>
+      <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
     </form>
     <button onclick="gotoEdit()">edit</button>
     <button onclick="gotoList()">list</button>`
@@ -410,6 +411,7 @@ async function gotoDisc(uuid) {
   let footer = document.getElementsByTagName('footer')[0];
   window.history.pushState({},"", "/disc/" + uuid);
   [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
+  main.scrollTop = main.scrollHeight;
   return false;
 }
 
@@ -418,7 +420,7 @@ async function gotoDisc(uuid) {
 async function gotoEdit(uuid) {
   let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
-  window.history.pushState({},"", "/edit");
+  window.history.pushState({},"", "/edit/" + uuid);
   [main.innerHTML, footer.innerHTML] = await renderEdit(uuid);
 }
 
@@ -514,6 +516,7 @@ async function run() {
   if (window.location.pathname.startsWith('/disc/')) {
     let uuid = window.location.pathname.slice("/disc/".length);
     [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
+    main.scrollTop = main.scrollHeight;
 
   } else if (window.location.pathname.startsWith('/edit/')) {
     let uuid = window.location.pathname.slice("/edit".length);
@@ -521,7 +524,7 @@ async function run() {
 
   } else if (window.location.pathname.startsWith('/list')) {
     [main.innerHTML, footer.innerHTML] = await renderList();
-    
+
   } else {
     gotoDisc(notes[0]);
   }
