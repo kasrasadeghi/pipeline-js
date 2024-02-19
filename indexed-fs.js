@@ -492,22 +492,22 @@ async function renderList() {
 
 // BACKGROUND
 
+function updateSelected() {
+  // clear selected
+  const currently_selected = document.getElementsByClassName('selected');
+  for (s of currently_selected) {
+    s.classList.remove('selected');
+  }
+
+  // select from hash
+  if (window.location.hash) {
+    const selected = document.getElementById(decodeURI(window.location.hash.slice(1)));
+    selected.classList.add('selected');
+  }
+};
+
 window.addEventListener('load', () => {
   console.log('enable highlight-selected');
-
-  updateSelected = () => {
-    // clear selected
-    const currently_selected = document.getElementsByClassName('selected');
-    for (s of currently_selected) {
-      s.classList.remove('selected');
-    }
-
-    // select from hash
-    if (window.location.hash) {
-      const selected = document.getElementById(decodeURI(window.location.hash.slice(1)));
-      selected.classList.add('selected');
-    }
-  };
 
   window.addEventListener('hashchange', () => {
     updateSelected();
@@ -542,6 +542,7 @@ async function run() {
     let uuid = window.location.pathname.slice("/disc/".length);
     [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
     main.scrollTop = main.scrollHeight;
+    updateSelected();
 
   } else if (window.location.pathname.startsWith('/edit/')) {
     let uuid = window.location.pathname.slice("/edit".length);
