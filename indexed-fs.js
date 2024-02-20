@@ -311,7 +311,7 @@ function rewriteBlock(block) {
       let child = item.children[0];
       if (child.value.startsWith("Date: ") && child.indent === 1 && child.children.length === 0) {
         return new Msg({
-          msg: item.value.slice("msg: ".length), 
+          msg: rewriteLine(item.value.slice("msg: ".length)),
           content: item.value, 
           date: child.value.slice("Date: ".length)
         });
@@ -321,6 +321,54 @@ function rewriteBlock(block) {
   
   // TODO the rest of block rewrite
   return block;
+}
+
+function rewriteLine(line) {
+  return tagParse(line);
+}
+
+// TAG
+
+class Tag {
+  tag;
+  constructor(tag) {
+    this.tag = tag;
+  }
+  toString() {
+    return `Tag(${this.tag})`;
+  }
+}
+
+function tagParse(line) {
+  let acc = [];
+  if (line.startsWith("\\")) {
+    // eat the command until a space
+    // unless no space, then eat everything (indexOf returns -1, and slice(-1) goes to the end).
+    let first_space = line.indexOf(' ');
+    let cmd = line.slice(0, first_space);
+    line = line.slice(first_space);
+    acc.push(cmd);
+  }
+  const isUpperCase = (string) => /^[A-Z]*$/.test(string);
+  
+  let i = 0;
+  while(i < line.length) {
+    if (isUpperCase(line[i])) {
+      let tag = line[i++];
+      // eat uppercase prefix, including dashes
+      while (i < line.length && (isUpperCase(line[i]) || line[i] === '-' || line[i] === '_')) {
+        tag += line[i++];
+      }
+      acc.push(new Tag(tag));
+    } else {
+      let nontag = line[i++];
+      while (i < line.length && (! isUpperCase(line[i]))) {
+        nontag += line[i++];
+      }
+      acc.push(nontag);
+    }
+  }
+  return acc;
 }
 
 // RENDER
@@ -359,7 +407,20 @@ function htmlBlock(block) {
 // date timestamp
 const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); 
 function htmlMsg(item) {
-  return `<div class='msg' id='${item.date}'><a class='msg_timestamp' href='${window.location.pathname}#${item.date}'>${timestamp_format.format(Date.parse(item.date))}</a><div class="msg_content">${item.msg}</div></div>`
+  let line = htmlLine(item.msg);
+  return `<div class='msg' id='${item.date}'><a class='msg_timestamp' href='${window.location.pathname}#${item.date}'>${timestamp_format.format(Date.parse(item.date))}</a><div class="msg_content">${line}</div></div>`
+}
+
+function htmlLine(line) {
+  if (line instanceof Array) {
+    return line.map(x => {
+      if (x instanceof Tag) {
+        return "<emph class='tag'>" + x.tag + "</emph>";
+      }
+      return x;
+    }).join("");
+  }
+  return line;
 }
 
 // DISC
