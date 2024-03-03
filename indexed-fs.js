@@ -468,6 +468,7 @@ async function renderDisc(uuid) {
     <button onclick="gotoEdit('${uuid}')">edit</button>
     <button onclick="gotoList()">list</button>
     <button onclick="gotoJournal()">journal</button>
+    <button onclick="putNote('${uuid}')">sync</button>
     `
   ];
 }
@@ -516,6 +517,22 @@ async function fetchNote(uuid) {
 async function cacheNote(uuid) {
   await files.writeFile("core/" + uuid, await fetchNote(uuid))
   global.cacheMap[uuid] = true;
+}
+async function putNote(uuid) {
+  console.log('syncing note', uuid, 'to server');
+  const response = await fetch("/api/put/" + uuid, {
+    method: "PUT", // *GET, POST, PUT, DELETE, etc.
+    headers: {
+      "Content-Type": "text/plain",
+    },
+    body: await global_notes.readFile(uuid), // body data type must match "Content-Type" header
+  });
+  return response.text();
+}
+async function putAllNotes() {
+  for (let file of await global_notes.listFiles()) {
+    await putNote(file);
+  }
 }
 
 async function getList() {
