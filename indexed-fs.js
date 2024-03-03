@@ -81,8 +81,8 @@ Date: ${new Date()}
 Title: ${title}
 Tags: Journal`;
 // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
-  let uuid = crypto.randomUUID();
-  await global_notes.writeFile('bigmac-js/' + uuid, content);
+  let uuid = 'bigmac-js/' + crypto.randomUUID();
+  await global_notes.writeFile(uuid, content);
   return uuid;
 }
 
