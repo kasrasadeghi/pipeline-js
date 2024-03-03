@@ -599,7 +599,23 @@ window.addEventListener("popstate", (event) => {
   handleRouting();
 });
 
+// may return null iff not /edit/ or /disc/
+function getCurrentNoteUuid() {
+  console.log("getting note uuid from path", window.location.pathname);
+
+  if (window.location.pathname.startsWith('/disc/')) {
+    let uuid = window.location.pathname.slice("/disc/".length);
+    return uuid;
+  } else if (window.location.pathname.startsWith('/edit/')) {
+    let uuid = window.location.pathname.slice("/edit/".length);
+    return uuid;
+  }
+  return null;
+}
+
 async function handleRouting() {
+  console.log("notes that match today's date:", await getNotesWithTitle(today()));
+
   let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
 
