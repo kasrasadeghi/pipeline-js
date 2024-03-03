@@ -354,9 +354,14 @@ function tagParse(line) {
   let i = 0;
   while(i < line.length) {
     if (isUpperCase(line[i])) {
+      // [A-Z]{2,}([-_][A-Z]{2,})*
+
       let tag = line[i++];
-      // eat uppercase prefix, including dashes
-      while (i < line.length && (isUpperCase(line[i]) || line[i] === '-' || line[i] === '_')) {
+      // eat uppercase prefix, including intermediate dashes
+      // - an intermediate dash is when the current character is a dash and the next letter is uppercase
+      let head_dash = (line[i] === '-' || line[i] === '_');
+      let intermediate_dash = head_dash && (i + 1 > line.length && isUpperCase(line[i+1]));
+      while (i < line.length && (isUpperCase(line[i]) || intermediate_dash)) {
         tag += line[i++];
       }
       acc.push(new Tag(tag));
