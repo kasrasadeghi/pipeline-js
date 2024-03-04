@@ -250,8 +250,8 @@ function parseTree(block) {
 function pageIsJournal(page) {
   return page
     .find(s => s.title === 'METADATA').lines
-    .find(l => l.startsWith("Tags: ")).slice("Tags: ".length)
-    .split(",").map(x => x.trim()).includes("Journal");
+    .find(l => l.startsWith("Tags: "))?.slice("Tags: ".length)
+    .split(",").map(x => x.trim()).includes("Journal") !== undefined;
 }
 
 function rewrite(page) {
