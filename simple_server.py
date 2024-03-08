@@ -23,6 +23,12 @@ redirect = """
 </html>   
 """
 
+def HTTP_OK(body):
+    return b"HTTP/1.1 200 OK\n\n" + body
+
+def HTTP_NOT_FOUND(msg):
+    return b"HTTP/1.1 400 NOT_FOUND\n\n HTTP 400:" + msg
+
 listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 listen_socket.bind((HOST, PORT))
@@ -50,11 +56,7 @@ while True:
         method, path, httpver = None, None, None
 
     if method == None:
-        http_response = b"""\
-HTTP/1.1 200 OK
-
-Hello, World!
-"""
+        http_response = HTTP_OK(b"Hello, World!\n")
         client_connection.sendall(http_response)
         client_connection.close()
         continue
@@ -70,14 +72,13 @@ Hello, World!
 
     if path.startswith('/api'):
         path = path.removeprefix('/api')
-        http_response = b"""\
-HTTP/1.1 200 OK
-
+        http_response = HTTP_OK(b"""\
 The Pipeline API listing:
 GET /api/list/<repo>
 GET /api/get/<note>
 PUT /api/put/<note>
-"""
+GET /api/status/<repo>
+""")
 
         if path.startswith('/list/') and method == 'GET':
             repo = path.removeprefix('/list/')
@@ -99,10 +100,7 @@ PUT /api/put/<note>
                 headers, body = rest.split(b'\n\n', 1)
             else:
                 print('empty line before body not found')
-                http_response = b"""\
-HTTP/1.1 400 NOT_FOUND 
-
-HTTP 400: empty line between body and headers not found"""
+                http_response = HTTP_NOT_FOUND(b"empty line between body and headers not found")
                 client_connection.sendall(http_response)
                 client_connection.close()    
                 continue
@@ -115,10 +113,11 @@ HTTP 400: empty line between body and headers not found"""
             print('body!:', body)
             with open(os.path.join(os.path.expanduser('~'), "notes", note), 'wb+') as f:
                 f.write(body)
-            http_response = b"""\
-HTTP/1.1 200 OK
+            http_response = HTTP_OK(b"wrote notes/" + note.encode())
+        elif path.startswith('/status/') and method == 'GET':
+            repo = path.removeprefix('/status/')
+            
 
-wrote notes/""" + note.encode()
         
         client_connection.sendall(http_response)
         client_connection.close()
@@ -128,10 +127,7 @@ wrote notes/""" + note.encode()
     
     path = path.removeprefix('/')
     if not os.path.exists(path):
-        http_response = b"""\
-HTTP/1.1 400 NOT_FOUND 
-
-HTTP 400: could not handle path: """ + path.encode()
+        http_response = HTTP_NOT_FOUND(b"could not handle path: " + path.encode())
         client_connection.sendall(http_response)
         client_connection.close()    
         continue
@@ -140,9 +136,6 @@ HTTP 400: could not handle path: """ + path.encode()
         print('reading', path)
         content = f.read()
     
-    http_response = b"""\
-HTTP/1.1 200 OK
-
-""" + content
+    http_response = HTTP_OK(content)
     client_connection.sendall(http_response)
     client_connection.close()
