@@ -81,7 +81,7 @@ Date: ${new Date()}
 Title: ${title}
 Tags: Journal`;
 // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
-  let uuid = 'bigmac-js/' + crypto.randomUUID();
+  let uuid = 'bigmac-js/' + crypto.randomUUID() + '.note';
   await global_notes.writeFile(uuid, content);
   return uuid;
 }
@@ -305,17 +305,22 @@ function rewriteBlock(block) {
     return block;
   }
   if (block.length === 1) {
-    console.log('rewrite block', block);
-    let item = block[0];
-    if (item.value.startsWith("msg: ") && item.indent === 0 && item.children.length === 1) {
-      let child = item.children[0];
-      if (child.value.startsWith("Date: ") && child.indent === 1 && child.children.length === 0) {
-        return new Msg({
-          msg: rewriteLine(item.value.slice("msg: ".length)),
-          content: item.value, 
-          date: child.value.slice("Date: ".length)
-        });
+    try {
+      console.log('rewrite block', block);
+      let item = block[0];
+      if (item.value.startsWith("msg: ") && item.indent === 0 && item.children.length === 1) {
+        let child = item.children[0];
+        if (child.value.startsWith("Date: ") && child.indent === 1 && child.children.length === 0) {
+          return new Msg({
+            msg: rewriteLine(item.value.slice("msg: ".length)),
+            content: item.value, 
+            date: child.value.slice("Date: ".length)
+          });
+        }
       }
+    } catch (e) {
+      console.log("failed to rewrite block:", e);
+      return block;
     }
   }
   
@@ -356,15 +361,24 @@ function tagParse(line) {
     if (isUpperCase(line[i])) {
       // [A-Z]{2,}([-_][A-Z]{2,})*
 
-      let tag = line[i++];
+      let uppercase_prefix = line[i++];
       // eat uppercase prefix, including intermediate dashes
       // - an intermediate dash is when the current character is a dash and the next letter is uppercase
       let head_dash = (line[i] === '-' || line[i] === '_');
       let intermediate_dash = head_dash && (i + 1 > line.length && isUpperCase(line[i+1]));
       while (i < line.length && (isUpperCase(line[i]) || intermediate_dash)) {
-        tag += line[i++];
+        uppercase_prefix += line[i++];
       }
-      acc.push(new Tag(tag));
+
+      if (uppercase_prefix.length < 2) {
+        let non_uppercase_prefix = uppercase_prefix;
+        while (i < line.length && (!isUpperCase(line[i+1]))) {
+          non_uppercase_prefix += line[i++];
+        }
+        acc.push(non_uppercase_prefix);
+      } else {
+        acc.push(new Tag(uppercase_prefix));
+      }
     } else {
       let nontag = line[i++];
       while (i < line.length && (! isUpperCase(line[i]))) {
@@ -468,7 +482,8 @@ async function renderDisc(uuid) {
     <button onclick="gotoEdit('${uuid}')">edit</button>
     <button onclick="gotoList()">list</button>
     <button onclick="gotoJournal()">journal</button>
-    <button onclick="putNote('${uuid}')">sync</button>
+    <button onclick="putNote('${uuid}')">put</button>
+    <button onclick="gotoSync()">sync</button>
     `
   ];
 }
@@ -505,55 +520,11 @@ async function renderEdit(uuid) {
   return [
     `<textarea class='editor_textarea'>` + content + "</textarea>", 
     `<button onclick="global.handlers.submitEdit()">submit</button>
-    <button onclick="gotoDisc('${uuid}')">disc</button>`
+     <button onclick="gotoDisc('${uuid}')">disc</button>`
   ];
 }
 
 // LIST
-
-async function fetchNote(uuid) {
-  return await fetch('https://10.50.50.2:5000/api/get/' + uuid).then(t => t.text());
-}
-async function cacheNote(uuid) {
-  await files.writeFile("core/" + uuid, await fetchNote(uuid))
-  global.cacheMap[uuid] = true;
-}
-async function putNote(uuid) {
-  console.log('syncing note', uuid, 'to server');
-  const response = await fetch("/api/put/" + uuid, {
-    method: "PUT", // *GET, POST, PUT, DELETE, etc.
-    headers: {
-      "Content-Type": "text/plain",
-    },
-    body: await global_notes.readFile(uuid), // body data type must match "Content-Type" header
-  });
-  return response.text();
-}
-async function putAllNotes() {
-  for (let file of await global_notes.listFiles()) {
-    await putNote(file);
-  }
-}
-
-async function getList() {
-  let list = await fetch('https://10.50.50.2:5000/api/list/core').then(x => x.json());
-  global.cacheMap = {};
-  for (let uuid of list) {
-    global.cacheMap[uuid] = false;
-  }
-  
-  // this takes around 2 minutes.  it's only 57 megs on disk, can we do better?
-  // - maybe a single big request with one big batch?
-  try {
-    for (let i = 0; i < list.length; i++) {
-      const uuid = list[i];
-      await cacheNote(uuid);
-      console.log(`${i+1}/${list.length}: ${uuid}`);
-    }
-  } catch (e) {
-    console.log(e);
-  }
-}
 
 async function gotoList() {
   window.history.pushState({}, "", "/list");
@@ -596,9 +567,127 @@ window.addEventListener('load', () => {
   updateSelected();
 });
 
+// SYNC
+
+const SYNC_FILE = 'sync_status';
+const SYNC_ELEMENT_ID = 'sync_output'
+
+async function gotoSync() {
+  window.history.pushState({}, "", "/sync");
+  let main = document.getElementsByTagName('main')[0];
+  let footer = document.getElementsByTagName('footer')[0];
+  [main.innerHTML, footer.innerHTML] = await renderSync();
+}
+
+async function renderSync() {
+  if (! (await cache.exists(SYNC_FILE))) {
+    await cache.writeFile(SYNC_FILE, '{}');
+  }
+  return [`<pre id='${SYNC_ELEMENT_ID}'>
+    ${await cache.readFile(SYNC_FILE)}
+  </pre>`,
+  `<div>
+    <button onclick="gotoList()">list</button>
+    <button onclick="gotoJournal()">journal</button>
+    <button onclick="putAllNotes()">put all</button>
+    <button onclick="getAllNotes()">get all</button>
+  </div>
+  `]
+}
+async function flushSyncStatus(cacheMap) {
+  let notes = Object.keys(cacheMap);
+  let done_count = notes.reduce((prev, curr) => prev + (cacheMap[curr] ? 1 : 0), 0);  // bool-to-int with ternary is apparently faster than unary+ cast
+  let progress = `${done_count}/${notes.length}`;
+  document.getElementById(SYNC_ELEMENT_ID).innerHTML = progress + "\n" + JSON.stringify(cacheMap, undefined, 2);
+  await cache.writeFile(SYNC_FILE, JSON.stringify(cacheMap));
+}
+
+async function fetchNote(uuid) {
+  return await fetch('https://10.50.50.2:5000/api/get/' + uuid).then(t => t.text());
+}
+async function cacheNote(uuid) {
+  await global_notes.writeFile("core/" + uuid, await fetchNote(uuid));
+  let cacheMap = JSON.parse(await cache.readFile(SYNC_FILE));
+  cacheMap[uuid] = true;
+  flushSyncStatus(cacheMap);
+}
+async function getAllNotes() {
+  console.log('getting notes');
+
+  let list = await fetch('https://10.50.50.2:5000/api/list/core').then(x => x.json());
+  let cacheMap = {};
+  for (let uuid of list) {
+    cacheMap[uuid] = false;
+  }
+  flushSyncStatus(cacheMap);
+
+  console.log('list of notes to receive:', list);
+
+  // this takes around 2 minutes.  it's only 57 megs on disk, can we do better?
+  // - maybe a single big request with one big batch?
+  // NB: this is intentionally slowed down, because the server crashes when you send it requests too fast/ multithreaded.
+  try {
+    for (let i = 0; i < list.length; i++) {
+      const uuid = list[i];
+      await cacheNote(uuid);
+      console.log(`${i+1}/${list.length}: ${uuid}`);
+    }
+  } catch (e) {
+    console.log(e);
+  }
+}
+async function putNote(uuid) {
+  console.log('syncing note', uuid, 'to server');
+  const response = await fetch("/api/put/" + uuid, {
+    method: "PUT", // *GET, POST, PUT, DELETE, etc.
+    headers: {
+      "Content-Type": "text/plain",
+    },
+    body: await global_notes.readFile(uuid), // body data type must match "Content-Type" header
+  });
+  return response.text();
+}
+async function putAllNotes() {
+  for (let file of await global_notes.listFiles()) {
+    for (let i of [1, 2, 3]) {
+      try {
+        await putNote(file);
+        break;
+      } catch (e) {
+        console.log(`failed attempt #${i}: ${file}`)
+        if (i !== 3) {
+          console.log('trying again...');
+        } else {
+          console.log(e);
+          break;
+        }
+      }
+    }
+  }
+}
+
+// STATUS
+
+async function sha256sum(input_string) {
+  const encoder = new TextEncoder('utf-8');
+  const bytes = encoder.encode(input_string);
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return hashToString(hash);
+}
+
+async function hashToString(arraybuffer) {
+  const bytes = new Uint8Array(arraybuffer);
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function getStatus(repo) {
+  let statuses = await fetch('https://10.50.50.2:5000/api/status/core').then(x => x.json());
+}
+
 // MAIN
 
-const files = new FileDB("temp-pipeline-db", "test");
+const other = new FileDB("pipeline-db-sync", "notes");
+const cache = new FileDB("pipeline-db-cache", "cache");
 
 async function gotoJournal() {
   let notes = await getNotesWithTitle(today());
@@ -651,6 +740,9 @@ async function handleRouting() {
   } else if (window.location.pathname.startsWith('/list')) {
     [main.innerHTML, footer.innerHTML] = await renderList();
 
+  } else if (window.location.pathname.startsWith('/sync')) {
+    [main.innerHTML, footer.innerHTML] = await renderSync();
+
   } else if (window.location.pathname.startsWith('/today')) {
     await gotoJournal();
 
@@ -661,6 +753,7 @@ async function handleRouting() {
 
 async function run() {
   await global_notes.init();
+  await cache.init();
   console.log('today is', today());
 
   // we can only handle messages once we know what current_uuid is
@@ -668,10 +761,12 @@ async function run() {
 
   await handleRouting();
 
-  await files.init();
-  console.time('test');
-  await getNoteTitleMap(files);
-  console.timeEnd('test');
-
-  // await getList();
+  /// perf 10k notes hashed, where notes are from 20-100k bytes.
+  // console.time('test');
+  // let array = [];
+  // for (let i = 0; i < 10 * 1000; ++i) {
+  //   array.push(i);
+  // }
+  // await Promise.allSettled(array.map(i => sha256sum((i + '').repeat(20000))));
+  // console.timeEnd('test');
 }

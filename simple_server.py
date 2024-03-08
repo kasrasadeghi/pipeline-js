@@ -31,8 +31,9 @@ print(f'Serving HTTP on port {PORT} ...')
 while True:
     client_connection, client_address = listen_socket.accept()
     request_data = client_connection.recv(1024)  # TODO receive more?
-    first_line, rest = request_data.decode('utf-8').split('\n', 1)
+    first_line, rest = request_data.split(b'\n', 1)
 
+    first_line = first_line.decode("utf-8")
     print(first_line)
     parts = first_line.split()
 
@@ -60,7 +61,9 @@ Hello, World!
 
     # Handle MPA paths
 
-    if path.startswith('/disc') or path.startswith('/edit') or path.startswith("/list") or path == '/' or path == '':
+    js_paths = ['disc', 'edit', 'list', 'sync']
+    is_js_path = any(path.startswith('/' + js_path) for js_path in js_paths)
+    if is_js_path or path == '/' or path == '':
         path = 'index.html'
 
     # Handle API paths
@@ -90,10 +93,10 @@ PUT /api/put/<note>
             print(rest)
             # TODO skip the headers in rest and write the body content to disk
             print(repr(rest))
-            if '\r\n\r\n' in rest:
-                headers, body = rest.split('\r\n\r\n', 1)
-            elif '\n\n' in rest:
-                headers, body = rest.split('\n\n', 1)
+            if b'\r\n\r\n' in rest:
+                headers, body = rest.split(b'\r\n\r\n', 1)
+            elif b'\n\n' in rest:
+                headers, body = rest.split(b'\n\n', 1)
             else:
                 print('empty line before body not found')
                 http_response = b"""\
@@ -104,14 +107,13 @@ HTTP 400: empty line between body and headers not found"""
                 client_connection.close()    
                 continue
 
-            content_length_header_line = next(line for line in headers.splitlines() if line.startswith('Content-Length'))
+            content_length_header_line = next(line for line in headers.splitlines() if line.startswith(b'Content-Length'))
             print(content_length_header_line)
-            content_length = int(content_length_header_line.removeprefix("Content-Length: "))
-            body += client_connection.recv(content_length - len(body.encode())).decode('utf-8')
-            # Content-Length is bytes: needs .encode() so len in byte-count
+            content_length = int(content_length_header_line.removeprefix(b"Content-Length: "))
+            body += client_connection.recv(content_length - len(body))
             
             print('body!:', body)
-            with open(os.path.join(os.path.expanduser('~'), "notes", note), 'w+') as f:
+            with open(os.path.join(os.path.expanduser('~'), "notes", note), 'wb+') as f:
                 f.write(body)
             http_response = b"""\
 HTTP/1.1 200 OK
