@@ -74,6 +74,7 @@ class FileDB {
 const global_notes = new FileDB();
 
 global = null;
+const LOCAL_REPO_NAME = 'bigmac-js';
 
 async function newNote(title) {
   let content = `--- METADATA ---
@@ -81,7 +82,7 @@ Date: ${new Date()}
 Title: ${title}
 Tags: Journal`;
 // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
-  let uuid = 'bigmac-js/' + crypto.randomUUID() + '.note';
+  let uuid = LOCAL_REPO_NAME + '/' + crypto.randomUUID() + '.note';
   await global_notes.writeFile(uuid, content);
   return uuid;
 }
@@ -541,7 +542,7 @@ async function renderList() {
   ];
 }
 
-// BACKGROUND
+// HIGHLIGHT SELECTED
 
 function updateSelected() {
   // clear selected
@@ -594,6 +595,7 @@ async function renderSync() {
   </div>
   `]
 }
+
 async function flushSyncStatus(cacheMap) {
   let notes = Object.keys(cacheMap);
   let done_count = notes.reduce((prev, curr) => prev + (cacheMap[curr] ? 1 : 0), 0);  // bool-to-int with ternary is apparently faster than unary+ cast
@@ -605,12 +607,14 @@ async function flushSyncStatus(cacheMap) {
 async function fetchNote(uuid) {
   return await fetch('https://10.50.50.2:5000/api/get/' + uuid).then(t => t.text());
 }
+
 async function cacheNote(uuid) {
   await global_notes.writeFile("core/" + uuid, await fetchNote(uuid));
   let cacheMap = JSON.parse(await cache.readFile(SYNC_FILE));
   cacheMap[uuid] = true;
   flushSyncStatus(cacheMap);
 }
+
 async function getAllNotes() {
   console.log('getting notes');
 
@@ -636,6 +640,7 @@ async function getAllNotes() {
     console.log(e);
   }
 }
+
 async function putNote(uuid) {
   console.log('syncing note', uuid, 'to server');
   const response = await fetch("/api/put/" + uuid, {
@@ -647,6 +652,7 @@ async function putNote(uuid) {
   });
   return response.text();
 }
+
 async function putAllNotes() {
   for (let file of await global_notes.listFiles()) {
     for (let i of [1, 2, 3]) {
@@ -680,8 +686,65 @@ async function hashToString(arraybuffer) {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function getStatus(repo) {
-  let statuses = await fetch('https://10.50.50.2:5000/api/status/core').then(x => x.json());
+// a non symmetric set difference, that also compares hashes.
+// tells you the number of things in `right` that are not in `left`, or have different hashes.
+function statusDiff(left, right) {
+  let diff = {};
+  let left_keys = Object.keys(left);
+  for (let note in right) {
+    if (left_keys.includes(note)) {
+      if (left[note] !== right[note]) {
+        diff[note] = right[note];
+      } else {
+        // otherwise, the statuses are the same, so do nothing
+        console.log(`${note} up to date!`)
+      }
+    } else {
+      // `note` isn't even in `left`, whatever status it has is new.
+      diff[note] = right[note];
+    }
+  }
+  return diff;
+}
+
+async function getRemoteStatus(repo) {
+  let statuses = await fetch('https://10.50.50.2:5000/api/status/' + repo).then(x => x.json());
+  return statuses;
+}
+
+async function getLocalStatus(repo) {
+  const notes = await getLocalNotes(repo);
+  let status = {};
+  for (let note of notes) {
+    status[note] = await sha256sum(await global_notes.readFile(note));
+  }
+  return status;
+}
+
+async function getLocalNotes(repo) {
+  const notes = await global_notes.listFiles();
+  return notes.filter(note => note.startsWith(repo + "/"));
+}
+
+async function perfChecksum() {
+  // perf 10k notes hashed, where notes are from 20-100k bytes.
+  console.time('test');
+  let array = [];
+  for (let i = 0; i < 10 * 1000; ++i) {
+    array.push(i);
+  }
+  await Promise.allSettled(array.map(i => sha256sum((i + '').repeat(20000))));
+  console.timeEnd('test');
+}
+
+async function perfStatus() {
+  console.time('remote status');
+  await getRemoteStatus('core');
+  console.timeEnd('remote status');
+
+  console.time('local status');
+  await getLocalStatus('core');
+  console.timeEnd('local status');
 }
 
 // MAIN
@@ -760,13 +823,4 @@ async function run() {
   global = {};
 
   await handleRouting();
-
-  /// perf 10k notes hashed, where notes are from 20-100k bytes.
-  // console.time('test');
-  // let array = [];
-  // for (let i = 0; i < 10 * 1000; ++i) {
-  //   array.push(i);
-  // }
-  // await Promise.allSettled(array.map(i => sha256sum((i + '').repeat(20000))));
-  // console.timeEnd('test');
 }
