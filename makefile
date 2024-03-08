@@ -4,3 +4,6 @@ default:
 
 style:
 	curl https://10.50.50.2:5000/api/style.css > style.css
+
+curltime:
+	curl -w "@curl-format.txt" -o /dev/null -s "http://localhost:8000/api/status/core"
