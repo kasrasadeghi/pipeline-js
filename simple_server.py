@@ -7,6 +7,10 @@
 # Python3.7+
 import socket
 import os
+import hashlib
+import json
+
+NOTES_ROOT = os.path.join(os.path.expanduser('~'), "notes")
 
 HOST, PORT = '', 8000
 
@@ -23,8 +27,10 @@ redirect = """
 </html>   
 """
 
-def HTTP_OK(body):
-    return b"HTTP/1.1 200 OK\n\n" + body
+def HTTP_OK(body: bytes, headers=b"") -> bytes:
+    if headers:
+        assert headers.endswith(b"\n")
+    return b"HTTP/1.1 200 OK\n" + headers + b"\n" + body
 
 def HTTP_NOT_FOUND(msg):
     return b"HTTP/1.1 400 NOT_FOUND\n\n HTTP 400:" + msg
@@ -99,7 +105,7 @@ GET /api/status/<repo>
             elif b'\n\n' in rest:
                 headers, body = rest.split(b'\n\n', 1)
             else:
-                print('empty line before body not found')
+                print('ERROR: empty line before body not found')
                 http_response = HTTP_NOT_FOUND(b"empty line between body and headers not found")
                 client_connection.sendall(http_response)
                 client_connection.close()    
@@ -111,13 +117,21 @@ GET /api/status/<repo>
             body += client_connection.recv(content_length - len(body))
             
             print('body!:', body)
-            with open(os.path.join(os.path.expanduser('~'), "notes", note), 'wb+') as f:
+            # the note is of format <repo>/<uuid>.note
+            with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
                 f.write(body)
             http_response = HTTP_OK(b"wrote notes/" + note.encode())
         elif path.startswith('/status/') and method == 'GET':
             repo = path.removeprefix('/status/')
-            
-
+            repo_path = os.path.join(NOTES_ROOT, repo)
+            def hash(note_path):
+                with open(note_path, "rb") as f:
+                    return hashlib.sha256(f.read()).hexdigest()
+            status = {os.path.join(repo, uuid): hash(os.path.join(repo_path, uuid)) for uuid in os.listdir(repo_path)}
+            http_response = HTTP_OK(json.dumps(status).encode('utf-8') + b"\n", headers=b"Content-Type: application/json; charset=utf-8\n")
+            client_connection.sendall(http_response)
+            client_connection.close()
+            continue
         
         client_connection.sendall(http_response)
         client_connection.close()
