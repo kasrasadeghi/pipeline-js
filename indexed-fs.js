@@ -133,6 +133,7 @@ async function getNotesWithTitle(title) {
 }
 
 // PARSE
+
 async function parseFile(filepath) {
   let content = await global_notes.readFile(filepath);
   return parseContent(content);
@@ -235,7 +236,9 @@ function parseTree(block) {
   return roots;
 }
 
-// REWRITE
+//#endregion PARSE
+
+//#region REWRITE
 
 // page -> *section
 // section -> {title: METADATA, lines: *str} | {title,blocks: *block} | {title,roots: *root}
@@ -585,7 +588,7 @@ async function renderSync() {
     await cache.writeFile(SYNC_FILE, '{}');
   }
   return [`<pre id='${SYNC_ELEMENT_ID}'>
-    ${await cache.readFile(SYNC_FILE)}
+${await cache.readFile(SYNC_FILE)}
   </pre>`,
   `<div>
     <button onclick="gotoList()">list</button>
@@ -601,24 +604,28 @@ async function flushSyncStatus(cacheMap) {
   let done_count = notes.reduce((prev, curr) => prev + (cacheMap[curr] ? 1 : 0), 0);  // bool-to-int with ternary is apparently faster than unary+ cast
   let progress = `${done_count}/${notes.length}`;
   document.getElementById(SYNC_ELEMENT_ID).innerHTML = progress + "\n" + JSON.stringify(cacheMap, undefined, 2);
-  await cache.writeFile(SYNC_FILE, JSON.stringify(cacheMap));
+  await cache.writeFile(SYNC_FILE, JSON.stringify(cacheMap, undefined, 2));
 }
 
-async function fetchNote(uuid) {
-  return await fetch('https://10.50.50.2:5000/api/get/' + uuid).then(t => t.text());
-}
-
-async function cacheNote(uuid) {
-  await global_notes.writeFile("core/" + uuid, await fetchNote(uuid));
+async function fetchNotes(repo, uuids) {
+  // can either be single note: <repo>/<uuid>
+  // or multiple: <repo>/<uuid>(/<uuid>)*
+  if (repo.endsWith('/')) {
+    repo = repo.slice(0, -1);
+  }
+  let result = await fetch('http://10.50.50.2:8000/api/get/' + repo + "/" + uuids.join(",")).then(t => t.json());
   let cacheMap = JSON.parse(await cache.readFile(SYNC_FILE));
-  cacheMap[uuid] = true;
+  for (let note in result) {
+    await global_notes.writeFile(note, result[note]);
+    cacheMap[note] = true;
+  }
   flushSyncStatus(cacheMap);
 }
 
 async function getAllNotes() {
   console.log('getting notes');
 
-  let list = await fetch('https://10.50.50.2:5000/api/list/core').then(x => x.json());
+  let list = await fetch('http://localhost:8000/api/list/core').then(x => x.json());
   let cacheMap = {};
   for (let uuid of list) {
     cacheMap[uuid] = false;
@@ -631,10 +638,10 @@ async function getAllNotes() {
   // - maybe a single big request with one big batch?
   // NB: this is intentionally slowed down, because the server crashes when you send it requests too fast/ multithreaded.
   try {
-    for (let i = 0; i < list.length; i++) {
-      const uuid = list[i];
-      await cacheNote(uuid);
-      console.log(`${i+1}/${list.length}: ${uuid}`);
+    const BATCH_SIZE = 1;
+    for (let i = 0; i < list.length; i += BATCH_SIZE) {
+      const uuids = list.slice(i, i + BATCH_SIZE);
+      await fetchNotes('core', uuids);
     }
   } catch (e) {
     console.log(e);
@@ -708,7 +715,7 @@ function statusDiff(left, right) {
 }
 
 async function getRemoteStatus(repo) {
-  let statuses = await fetch('https://10.50.50.2:5000/api/status/' + repo).then(x => x.json());
+  let statuses = await fetch('http://10.50.50.2:8000/api/status/' + repo).then(x => x.json());
   return statuses;
 }
 

@@ -42,13 +42,15 @@ def HTTP_NOT_FOUND(msg):
 def get_repo_path(repo):
     return os.path.join(NOTES_ROOT, repo)
 
-listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-listen_socket.bind((HOST, PORT))
-listen_socket.listen(1)
-print(f'Serving HTTP on port {PORT} ...')
-while True:
-    client_connection, client_address = listen_socket.accept()
+def allow_cors_for_localhost(headers):
+    if 'Origin' in headers:
+        from urllib.parse import urlparse
+        origin = urlparse(headers['Origin'])
+        if 'localhost' in origin.netloc:
+            response.headers['Access-Control-Allow-Origin'] = headers['Origin']
+    return response
+
+def receive_headers_and_content(client_connection):
     request_data = client_connection.recv(1024)  # TODO receive more?
     first_line, rest = request_data.split(b'\n', 1)
 
@@ -65,16 +67,53 @@ while True:
     elif len(parts) == 3: # GET /disc/bigmac-js/24b1bb0d-3148-4d3d-addb-3b44e4259a8e HTTP/1.1
         method, path, httpver = parts
     else:
-        print('huh')
         method, path, httpver = None, None, None
 
     if method == None:
         http_response = HTTP_OK(b"Hello, World!\n")
         client_connection.sendall(http_response)
         client_connection.close()
-        continue
+        return
 
-    # Handle MPA paths
+    # parse headers, newline, then body
+    if b'\r\n\r\n' in rest:
+        headers, body = rest.split(b'\r\n\r\n', 1)
+    elif b'\n\n' in rest:
+        headers, body = rest.split(b'\n\n', 1)
+    else:
+        print('ERROR: empty line before body not found')
+        http_response = HTTP_NOT_FOUND(b"empty line between body and headers not found")
+        client_connection.sendall(http_response)
+        client_connection.close()    
+        return
+    
+    headers = [line.split(': ', 1) for line in headers.decode().splitlines()]
+    headers = {key: value for key, value in headers}
+    print(headers)
+    if 'Content-Length' in headers:
+        content_length = int(headers['Content-Length'])
+        body += client_connection.recv(content_length - len(body))
+    return {'method': method, 'path': path, 'httpver': httpver, 'headers': headers, 'body': body}
+
+
+listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+listen_socket.bind((HOST, PORT))
+listen_socket.listen(1)
+print(f'Serving HTTP on port {PORT} ...')
+while True:
+    client_connection, client_address = listen_socket.accept()
+    print(client_address) # (address: string, port: int)
+    request = receive_headers_and_content(client_connection)
+    if request is None:
+        continue
+    
+    method = request['method']
+    path = request['path']
+    headers = request['headers']
+    body = request['body']
+
+    # Handle paths for frontend pages
 
     js_paths = ['disc', 'edit', 'list', 'sync']
     is_js_path = any(path.startswith('/' + js_path) for js_path in js_paths)
@@ -115,25 +154,7 @@ while True:
         elif path.startswith('/put/') and method == 'PUT':
             note = path.removeprefix('/put/')
             print(note)
-            print(rest)
-            # TODO skip the headers in rest and write the body content to disk
-            print(repr(rest))
-            if b'\r\n\r\n' in rest:
-                headers, body = rest.split(b'\r\n\r\n', 1)
-            elif b'\n\n' in rest:
-                headers, body = rest.split(b'\n\n', 1)
-            else:
-                print('ERROR: empty line before body not found')
-                http_response = HTTP_NOT_FOUND(b"empty line between body and headers not found")
-                client_connection.sendall(http_response)
-                client_connection.close()    
-                continue
 
-            content_length_header_line = next(line for line in headers.splitlines() if line.startswith(b'Content-Length'))
-            print(content_length_header_line)
-            content_length = int(content_length_header_line.removeprefix(b"Content-Length: ").decode('utf-8'))
-            body += client_connection.recv(content_length - len(body))
-            
             print('body!:', body)
             # the note is of format <repo>/<uuid>.note
             with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
