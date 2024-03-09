@@ -58,7 +58,7 @@ def receive_headers_and_content(client_connection):
     first_line, rest = request_data.split(b'\n', 1)
 
     print(first_line)
-    first_line = first_line.decode("utf-8")g
+    first_line = first_line.decode("utf-8")
     parts = first_line.split()
 
     # this almost never happens
