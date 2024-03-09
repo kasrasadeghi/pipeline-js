@@ -52,11 +52,13 @@ def allow_cors_for_localhost(headers):
     return b""
 
 def receive_headers_and_content(client_connection):
-    request_data = client_connection.recv(2048)  # TODO receive more?
+    request_data = client_connection.recv(4096)  # TODO receive more?
+    if b'\r\n\r\n' not in request_data and b'\n\n' not in request_data:
+        request_data += client_connection.recv(4096)
     first_line, rest = request_data.split(b'\n', 1)
 
     print(first_line)
-    first_line = first_line.decode("utf-8")
+    first_line = first_line.decode("utf-8")g
     parts = first_line.split()
 
     # this almost never happens
@@ -75,6 +77,8 @@ def receive_headers_and_content(client_connection):
         client_connection.sendall(http_response)
         client_connection.close()
         return
+    
+    # TODO keep getting more until it's empty?
 
     # parse headers, newline, then body
     if b'\r\n\r\n' in rest:
