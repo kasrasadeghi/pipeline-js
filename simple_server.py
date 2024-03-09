@@ -52,9 +52,12 @@ def allow_cors_for_localhost(headers):
     return b""
 
 def receive_headers_and_content(client_connection):
-    request_data = client_connection.recv(4096)  # TODO receive more?
-    if b'\r\n\r\n' not in request_data and b'\n\n' not in request_data:
-        request_data += client_connection.recv(4096)
+    request_data = client_connection.recv(1024)  # TODO receive more?
+    while True:  # TODO make this a generator and only get more when we actually need it
+        more = client_connection.recv(1024)
+        if len(more) == 0:
+            break
+        request_data += more
     first_line, rest = request_data.split(b'\n', 1)
 
     print(first_line)
