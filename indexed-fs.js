@@ -595,6 +595,7 @@ ${await cache.readFile(SYNC_FILE)}
     <button onclick="gotoJournal()">journal</button>
     <button onclick="putAllNotes()">put all</button>
     <button onclick="getAllNotes()">get all</button>
+    <button onclick="updateRemoteNotes('core')">update core</button>
   </div>
   `]
 }
@@ -648,9 +649,25 @@ async function getAllNotes(useSingleBatch) {
     console.log(e);
   }
 }
+
+async function updateRemoteNotes(repo) {
+  let local_status = await getLocalStatus(repo);
+  let remote_status = await getRemoteStatus(repo);
+  let updated = statusDiff(local_status, remote_status);
+  let updated_notes = Object.keys(updated)
+  console.assert(updated_notes.every(x => x.startsWith(repo + '/')));
+
+  let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
+  console.log('updated uuids', updated_uuids);
+  await fetchNotes(repo, updated_uuids);
+}
+
 async function perfGetAllNotes() {
+  // for 2k notes, batch_size = 1 takes 384s
+  // batch_size = 2k takes 16s
+
   console.time("get all notes in one batch")
-  await getAllNotes(true)
+  await getAllNotes(true) 
   console.timeEnd("get all notes in one batch")
 
   console.time("get all notes in one batch")
