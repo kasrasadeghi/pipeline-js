@@ -27,13 +27,20 @@ redirect = """
 </html>   
 """
 
-def HTTP_OK(body: bytes, headers=b"") -> bytes:
-    if headers:
-        assert headers.endswith(b"\n")
-    return b"HTTP/1.1 200 OK\n" + headers + b"\n" + body
+def HTTP_OK(body: bytes) -> bytes:
+    return b"HTTP/1.1 200 OK\n\n" + body
+
+def HTTP_OK_JSON(obj) -> bytes:
+    return (b"HTTP/1.1 200 OK\n"
+        + b"Content-Type: application/json; charset=utf-8\n"
+        + b"\n"
+        + json.dumps(obj).encode('utf-8') + b"\n")
 
 def HTTP_NOT_FOUND(msg):
     return b"HTTP/1.1 400 NOT_FOUND\n\n HTTP 400:" + msg
+
+def get_repo_path(repo):
+    return os.path.join(NOTES_ROOT, repo)
 
 listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -45,8 +52,8 @@ while True:
     request_data = client_connection.recv(1024)  # TODO receive more?
     first_line, rest = request_data.split(b'\n', 1)
 
-    first_line = first_line.decode("utf-8")
     print(first_line)
+    first_line = first_line.decode("utf-8")
     parts = first_line.split()
 
     # this almost never happens
@@ -78,22 +85,33 @@ while True:
 
     if path.startswith('/api'):
         path = path.removeprefix('/api')
-        http_response = HTTP_OK(b"""\
-The Pipeline API listing:
-GET /api/list/<repo>
-GET /api/get/<note>
-PUT /api/put/<note>
-GET /api/status/<repo>
-""")
-
         if path.startswith('/list/') and method == 'GET':
+            print('listing notes')
             repo = path.removeprefix('/list/')
-            print(repo)
-            print(rest)
+            repo_path = get_repo_path(repo)
+            http_response = HTTP_OK_JSON(os.listdir(repo_path))
+            client_connection.sendall(http_response)
+            client_connection.close()
+            continue
         elif path.startswith('/get/') and method == 'GET':
             note = path.removeprefix('/get/')
-            print(note)
-            print(rest)
+
+            # consider making this a POST request and putting the uuids in the body as a json.
+            # - maybe not, though.  i like not parsing the content of the body here, but i might just be being lazy.
+            # - also like, within the spirit of http, we're "getting" the notes.  we _should_ use a 'GET' request.
+            repo_notes = path.removeprefix('/get/')
+            # <repo>/<note>(,<note>)*
+            repo, notes = repo_notes.split('/', 1)
+            notes = notes.split(',')
+            repo_path = get_repo_path(repo)
+            def read_file(path):
+                with open(path) as f:
+                    return f.read()
+            read_notes = {repo + '/' + note: read_file(os.path.join(repo_path, note)) for note in notes}
+            http_response = HTTP_OK_JSON(read_notes)
+            client_connection.sendall(http_response)
+            client_connection.close()
+            continue
         elif path.startswith('/put/') and method == 'PUT':
             note = path.removeprefix('/put/')
             print(note)
@@ -113,7 +131,7 @@ GET /api/status/<repo>
 
             content_length_header_line = next(line for line in headers.splitlines() if line.startswith(b'Content-Length'))
             print(content_length_header_line)
-            content_length = int(content_length_header_line.removeprefix(b"Content-Length: "))
+            content_length = int(content_length_header_line.removeprefix(b"Content-Length: ").decode('utf-8'))
             body += client_connection.recv(content_length - len(body))
             
             print('body!:', body)
@@ -121,21 +139,26 @@ GET /api/status/<repo>
             with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
                 f.write(body)
             http_response = HTTP_OK(b"wrote notes/" + note.encode())
+            client_connection.sendall(http_response)
+            client_connection.close()
+            continue
         elif path.startswith('/status/') and method == 'GET':
             repo = path.removeprefix('/status/')
-            repo_path = os.path.join(NOTES_ROOT, repo)
+            repo_path = get_repo_path(repo)
             def hash(note_path):
                 with open(note_path, "rb") as f:
                     return hashlib.sha256(f.read()).hexdigest()
             status = {os.path.join(repo, uuid): hash(os.path.join(repo_path, uuid)) for uuid in os.listdir(repo_path)}
-            http_response = HTTP_OK(json.dumps(status).encode('utf-8') + b"\n", headers=b"Content-Type: application/json; charset=utf-8\n")
+            http_response = HTTP_OK_JSON(status)
             client_connection.sendall(http_response)
             client_connection.close()
             continue
-        
-        client_connection.sendall(http_response)
-        client_connection.close()
-        continue
+        else:
+            http_response = HTTP_NOT_FOUND(b"api not found: " + path.encode())
+            client_connection.sendall(http_response)
+            client_connection.close()
+            continue
+
 
     # Handle Static paths
     
