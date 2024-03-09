@@ -52,7 +52,7 @@ def allow_cors_for_localhost(headers):
     return b""
 
 def receive_headers_and_content(client_connection):
-    request_data = client_connection.recv(1024)  # TODO receive more?
+    request_data = client_connection.recv(2048)  # TODO receive more?
     first_line, rest = request_data.split(b'\n', 1)
 
     print(first_line)
