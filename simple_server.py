@@ -30,9 +30,10 @@ redirect = """
 def HTTP_OK(body: bytes) -> bytes:
     return b"HTTP/1.1 200 OK\n\n" + body
 
-def HTTP_OK_JSON(obj) -> bytes:
+def HTTP_OK_JSON(obj, extra_header=b"") -> bytes:
     return (b"HTTP/1.1 200 OK\n"
         + b"Content-Type: application/json; charset=utf-8\n"
+        + extra_header
         + b"\n"
         + json.dumps(obj).encode('utf-8') + b"\n")
 
@@ -45,10 +46,10 @@ def get_repo_path(repo):
 def allow_cors_for_localhost(headers):
     if 'Origin' in headers:
         from urllib.parse import urlparse
-        origin = urlparse(headers['Origin'])
-        if 'localhost' in origin.netloc:
-            response.headers['Access-Control-Allow-Origin'] = headers['Origin']
-    return response
+        print(headers['Origin'])
+        if 'localhost' == headers['Origin'].split("//", 1)[1].split(":", 1)[0]:
+            return b"Access-Control-Allow-Origin: " + headers['Origin'].encode() + b"\n"
+    return b""
 
 def receive_headers_and_content(client_connection):
     request_data = client_connection.recv(1024)  # TODO receive more?
@@ -128,7 +129,8 @@ while True:
             print('listing notes')
             repo = path.removeprefix('/list/')
             repo_path = get_repo_path(repo)
-            http_response = HTTP_OK_JSON(os.listdir(repo_path))
+            cors_header = allow_cors_for_localhost(headers)
+            http_response = HTTP_OK_JSON(os.listdir(repo_path), extra_header=cors_header)
             client_connection.sendall(http_response)
             client_connection.close()
             continue
@@ -147,7 +149,8 @@ while True:
                 with open(path) as f:
                     return f.read()
             read_notes = {repo + '/' + note: read_file(os.path.join(repo_path, note)) for note in notes}
-            http_response = HTTP_OK_JSON(read_notes)
+            cors_header = allow_cors_for_localhost(headers)
+            http_response = HTTP_OK_JSON(read_notes, extra_header=cors_header)
             client_connection.sendall(http_response)
             client_connection.close()
             continue
