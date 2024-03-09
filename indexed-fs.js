@@ -622,30 +622,40 @@ async function fetchNotes(repo, uuids) {
   flushSyncStatus(cacheMap);
 }
 
-async function getAllNotes() {
+const BATCH_SIZE = 20;
+async function getAllNotes(useSingleBatch) {
   console.log('getting notes');
 
-  let list = await fetch('http://localhost:8000/api/list/core').then(x => x.json());
+  let list = await fetch('http://10.50.50.2:8000/api/list/core').then(x => x.json());
   let cacheMap = {};
   for (let uuid of list) {
-    cacheMap[uuid] = false;
+    cacheMap['core' + '/' + uuid] = false;
   }
   flushSyncStatus(cacheMap);
 
-  console.log('list of notes to receive:', list);
+  // console.log('list of notes to receive:', list);
 
   // this takes around 2 minutes.  it's only 57 megs on disk, can we do better?
   // - maybe a single big request with one big batch?
   // NB: this is intentionally slowed down, because the server crashes when you send it requests too fast/ multithreaded.
+  const batch_size = useSingleBatch ? list.length : BATCH_SIZE;
   try {
-    const BATCH_SIZE = 1;
-    for (let i = 0; i < list.length; i += BATCH_SIZE) {
-      const uuids = list.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < list.length; i += batch_size) {
+      const uuids = list.slice(i, i + batch_size);
       await fetchNotes('core', uuids);
     }
   } catch (e) {
     console.log(e);
   }
+}
+async function perfGetAllNotes() {
+  console.time("get all notes in one batch")
+  await getAllNotes(true)
+  console.timeEnd("get all notes in one batch")
+
+  console.time("get all notes in one batch")
+  await getAllNotes()
+  console.timeEnd("get all notes in one batch")
 }
 
 async function putNote(uuid) {
