@@ -675,14 +675,14 @@ async function perfGetAllNotes() {
   console.timeEnd("get all notes in one batch")
 }
 
-async function putNote(uuid) {
-  console.log('syncing note', uuid, 'to server');
-  const response = await fetch("/api/put/" + uuid, {
+async function putNote(note) {
+  console.log('syncing note', note, 'to server');
+  const response = await fetch("/api/put/" + note, {
     method: "PUT", // *GET, POST, PUT, DELETE, etc.
     headers: {
       "Content-Type": "text/plain",
     },
-    body: await global_notes.readFile(uuid), // body data type must match "Content-Type" header
+    body: await global_notes.readFile(note), // body data type must match "Content-Type" header
   });
   return response.text();
 }
