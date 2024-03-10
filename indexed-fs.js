@@ -731,7 +731,7 @@ function statusDiff(left, right) {
         diff[note] = right[note];
       } else {
         // otherwise, the statuses are the same, so do nothing
-        console.log(`${note} up to date!`)
+        // console.log(`${note} up to date!`)
       }
     } else {
       // `note` isn't even in `left`, whatever status it has is new.
