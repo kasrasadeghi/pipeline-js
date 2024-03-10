@@ -29,17 +29,17 @@ redirect = """
 """
 
 def HTTP_OK(body: bytes) -> bytes:
-    return b"HTTP/0.9 200 OK\n\n" + body
+    return b"HTTP/1.1 200 OK\n\n" + body
 
 def HTTP_OK_JSON(obj, extra_header=b"") -> bytes:
-    return (b"HTTP/0.9 200 OK\n"
+    return (b"HTTP/1.1 200 OK\n"
         + b"Content-Type: application/json; charset=utf-8\n"
         + extra_header
         + b"\n"
         + json.dumps(obj).encode('utf-8') + b"\n")
 
 def HTTP_NOT_FOUND(msg):
-    return b"HTTP/0.9 400 NOT_FOUND\n\n HTTP 400:" + msg
+    return b"HTTP/1.1 400 NOT_FOUND\n\n HTTP 400:" + msg
 
 def get_repo_path(repo):
     return os.path.join(NOTES_ROOT, repo)
@@ -75,10 +75,10 @@ def receive_headers_and_content(client_connection):
     # this almost never happens
     if len(parts) == 2: # GET /disc/bigmac-js/24b1bb0d-3148-4d3d-addb-3b44e4259a8e
         method, path = parts
-        httpver = "HTTP/0.9"
+        httpver = "HTTP/1.1"
 
     # usually this one happens
-    elif len(parts) == 3: # GET /disc/bigmac-js/24b1bb0d-3148-4d3d-addb-3b44e4259a8e HTTP/0.9
+    elif len(parts) == 3: # GET /disc/bigmac-js/24b1bb0d-3148-4d3d-addb-3b44e4259a8e HTTP/1.1
         method, path, httpver = parts
     else:
         method, path, httpver = None, None, None
