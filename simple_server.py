@@ -9,6 +9,7 @@ import socket
 import os
 import hashlib
 import json
+import time
 
 NOTES_ROOT = os.path.join(os.path.expanduser('~'), "notes")
 
@@ -53,7 +54,7 @@ def allow_cors_for_localhost(headers):
 
 def receive_headers_and_content(client_connection):
     request_data = client_connection.recv(1024)  # TODO receive more?
-    if len(request_data) == 1024:
+    if len(request_data) == 1024 and request_data.startswith(b"GET "):  # only support long 'GET's for now
         print('requesting more')
         while True:  # TODO make this a generator and only get more when we actually need it
             more = client_connection.recv(1024)
@@ -177,6 +178,7 @@ while True:
             with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
                 f.write(body)
             http_response = HTTP_OK(b"wrote notes/" + note.encode())
+            print("wrote notes/" + note, time.time())
             client_connection.sendall(http_response)
             client_connection.close()
             continue
