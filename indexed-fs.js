@@ -516,7 +516,7 @@ async function renderEdit(uuid) {
   console.log('editing content: ', content);
   const submitEdit = async () => {
     let textarea = document.getElementsByTagName('textarea')[0];
-    let content = textarea.value;
+    let content = textarea.value.split("\r\n").join("\n");  // dos2unix because textarea.value is dos by default
     await global_notes.writeFile(uuid, content);
     gotoDisc(uuid);
   };
