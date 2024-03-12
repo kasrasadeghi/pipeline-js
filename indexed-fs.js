@@ -596,6 +596,7 @@ ${await cache.readFile(SYNC_FILE)}
     <button onclick="putAllNotes()">put all</button>
     <button onclick="getAllNotes()">get all</button>
     <button onclick="updateRemoteNotes('core')">update core</button>
+    <button onclick="updateRemoteNotes('core', true)">check for update</button>
   </div>
   `]
 }
@@ -650,7 +651,7 @@ async function getAllNotes(useSingleBatch) {
   }
 }
 
-async function updateRemoteNotes(repo) {
+async function updateRemoteNotes(repo, dry_run) {
   let local_status = await getLocalStatus(repo);
   let remote_status = await getRemoteStatus(repo);
   let updated = statusDiff(local_status, remote_status);
@@ -658,8 +659,16 @@ async function updateRemoteNotes(repo) {
   console.assert(updated_notes.every(x => x.startsWith(repo + '/')));
 
   let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
-  console.log('updated uuids', updated_uuids);
-  await fetchNotes(repo, updated_uuids);
+  
+  if (dry_run) {
+    console.log('update (dry run)', updated);
+    return;
+  } else {
+    console.log('updated uuids', updated_uuids);
+  }
+  if (updated_uuids.length > 0) {
+    await fetchNotes(repo, updated_uuids);
+  }
 }
 
 async function perfGetAllNotes() {
@@ -728,14 +737,14 @@ function statusDiff(left, right) {
   for (let note in right) {
     if (left_keys.includes(note)) {
       if (left[note] !== right[note]) {
-        diff[note] = right[note];
+        diff[note] = {status: 'modified', sha: right[note]};
       } else {
         // otherwise, the statuses are the same, so do nothing
         // console.log(`${note} up to date!`)
       }
     } else {
       // `note` isn't even in `left`, whatever status it has is new.
-      diff[note] = right[note];
+      diff[note] = {status: 'created', sha: right[note]};
     }
   }
   return diff;
