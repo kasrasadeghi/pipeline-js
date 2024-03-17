@@ -227,5 +227,5 @@ while True:
         http_response = HTTP_OK(content)
         client_connection.sendall(http_response)
         client_connection.close()
-    except e:
+    except Exception as e:
         traceback.print_exc()
