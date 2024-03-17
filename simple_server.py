@@ -10,6 +10,7 @@ import os
 import hashlib
 import json
 import time
+import ssl
 
 NOTES_ROOT = os.path.join(os.path.expanduser('~'), "notes")
 
@@ -112,7 +113,10 @@ def receive_headers_and_content(client_connection):
     return {'method': method, 'path': path, 'httpver': httpver, 'headers': headers, 'body': body}
 
 
-listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+context.load_cert_chain(certfile="cert/cert.pem", keyfile="cert/key.pem")
+raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+listen_socket = context.wrap_socket(raw_socket, server_side=True)
 listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 listen_socket.bind((HOST, PORT))
 listen_socket.listen(1)
