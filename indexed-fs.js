@@ -136,6 +136,9 @@ async function getNotesWithTitle(title) {
 
 async function parseFile(filepath) {
   let content = await global_notes.readFile(filepath);
+  if (content === null) {
+    return null;
+  }
   return parseContent(content);
 }
 
@@ -146,7 +149,7 @@ function parseContent(content) {
   let sections = [{title: 'entry', lines: []}];
   for (let L of content.split("\n")) {
     if (L.startsWith("--- ") && L.endsWith(" ---") && L.length > 9) {
-      sections.push({title: L.slice(4, -4), lines: []})
+      sections.push({title: L.slice(4, -4), lines: []});
     } else {
       // console.log('append ', L, 'to section', sections);
       sections.slice(-1)[0].lines.push(L);
@@ -399,7 +402,10 @@ function tagParse(line) {
 async function htmlNote(uuid) {
   console.log('rendering note for', uuid);
   let page = await parseFile(uuid);
-  let rewritten = rewrite(page);
+  if (page === null) {
+    return `couldn't find file '${uuid}'`;
+  }
+  let rewritten = rewrite(page, uuid);
   let rendered = rewritten.map(htmlSection).join("\n");
   return "<div class='msglist'>" + rendered + "</div>";
 }
@@ -420,7 +426,7 @@ function htmlSection(section, i) {
 }
 
 function htmlBlock(block) {
-  console.log('render block', block, block instanceof Msg);
+  // console.log('render block', block, block instanceof Msg);
   if (block instanceof Msg) {
     return htmlMsg(block);
   }
@@ -453,7 +459,6 @@ async function renderDisc(uuid) {
 
   const handleMsg = async (event) => {
 
-    console.log(event);
     event.preventDefault();
 
     let msg_input = document.getElementById('msg_input');
@@ -513,7 +518,9 @@ async function gotoEdit(uuid) {
 async function renderEdit(uuid) {
   console.log('rendering /edit/ for ', uuid);
   let content = await global_notes.readFile(uuid);
-  console.log('editing content: ', content);
+  if (content === null) {
+    return `couldn't find file '${uuid}'`;
+  }
   const submitEdit = async () => {
     let textarea = document.getElementsByTagName('textarea')[0];
     let content = textarea.value.split("\r\n").join("\n");  // dos2unix because textarea.value is dos by default
