@@ -261,11 +261,11 @@ function pageIsJournal(page) {
     .split(",").map(x => x.trim()).includes("Journal") !== undefined;
 }
 
-function rewrite(page) {
-  return page.map(rewriteSection, pageIsJournal(page));
+function rewrite(page, note) {
+  return page.map(x => rewriteSection(x, note));
 }
 
-function rewriteSection(section, isJournal) {
+function rewriteSection(section, note) {
   if (['METADATA', 'HTML'].includes(section.title)) {
     return section;
   }
@@ -273,7 +273,7 @@ function rewriteSection(section, isJournal) {
   let new_blocks = [];
   for (let i = 0; i < section.blocks.length; ++i) {
     let block = section.blocks[i];
-    new_blocks.push(rewriteBlock(block));
+    new_blocks.push(rewriteBlock(block, note));
     if (block.length === 0) {
       i ++;
     }
@@ -301,13 +301,14 @@ class Msg {
   msg;
   content;
   date;
+  origin;
   constructor(properties) {
-    console.assert(['content', 'date', 'msg'].every(x => Object.keys(properties).includes(x)), properties, 'huh');
+    console.assert(['content', 'date', 'msg', 'origin'].every(x => Object.keys(properties).includes(x)), properties, 'huh');
     Object.assign(this, properties);
   }
 }
 
-function rewriteBlock(block) {
+function rewriteBlock(block, note) {
   if (block.length === 0) { // newline
     return block;
   }
@@ -321,7 +322,8 @@ function rewriteBlock(block) {
           return new Msg({
             msg: rewriteLine(item.value.slice("msg: ".length)),
             content: item.value, 
-            date: child.value.slice("Date: ".length)
+            date: child.value.slice("Date: ".length),
+            origin: note,
           });
         }
       }
@@ -493,6 +495,7 @@ async function renderDisc(uuid) {
     <button onclick="gotoJournal()">journal</button>
     <button onclick="putNote('${uuid}')">put</button>
     <button onclick="gotoSync()">sync</button>
+    <button onclick="gotoSearch()">search</button>
     `
   ];
 }
@@ -797,6 +800,79 @@ async function perfStatus() {
   console.timeEnd('local status');
 }
 
+// SEARCH
+
+async function search(text) {
+  if (text === '') {
+    return [];
+  }
+  let notes = await global_notes.listFiles();
+  let cache_log = console.log;
+  console.log = (x) => {};
+  let pages = await Promise.all(notes.map(async note => rewrite(await parseFile(note), note)));
+
+  let messages = [];
+  console.log = cache_log;
+
+  pages.forEach(sections => 
+    sections.filter(s => s.blocks).forEach(section =>
+      section.blocks.filter(b => b instanceof Msg && b.content.includes(text)).forEach(message =>
+        messages.push(message))));
+
+  messages.sort((a, b) => new Date(b.date) - new Date(a.date));
+  return messages;
+}
+
+async function runSearch() {
+  console.assert(window.location.pathname.startsWith("/search/"));
+  let main = document.getElementsByTagName('main')[0];
+  main.innerHTML = 'searching...';
+  const urlParams = new URLSearchParams(window.location.search);
+  const text = urlParams.get('q');
+  searchResults = search(text).then(x => {
+    const WINDOW_SIZE = 100;
+    let messages = x.slice(0, WINDOW_SIZE);
+    main.innerHTML = `<h3>${messages.length} of ${x.length} results</h3><div class='msglist'>${messages.map(htmlMsg).join("")}</div>`;
+  });
+}
+
+async function renderSearchFooter() {
+  let menu = `
+    <button onclick="gotoJournal()">journal</button>
+    <input onkeydown="return global.handlers.handleSearchEnter(event)" type='text' id='search_query'></input>
+    <button onclick="return global.handlers.handleSearch()">search</button>
+  `;
+
+  const handleSearchEnter = (event) => {
+    console.log(event);
+    if (event.key === 'Enter') {
+      let text = document.getElementById('search_query').value;
+      console.log('handling search', text);
+      window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text));
+      runSearch(text);
+      return false;
+    }
+  };
+
+  const handleSearch = () => {
+    let text = document.getElementById('search_query').value;
+    console.log('handling search', text);
+    window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text));
+    runSearch(text);
+    return false;
+  };
+  global.handlers = {handleSearch, handleSearchEnter};
+  return menu;
+}
+
+async function gotoSearch() {
+  let footer = document.getElementsByTagName('footer')[0];
+  window.history.pushState({}, "", "/search/");
+  footer.innerHTML = await renderSearchFooter();
+  runSearch();
+  return false;
+}
+
 // MAIN
 
 const other = new FileDB("pipeline-db-sync", "notes");
@@ -855,6 +931,10 @@ async function handleRouting() {
 
   } else if (window.location.pathname.startsWith('/sync')) {
     [main.innerHTML, footer.innerHTML] = await renderSync();
+
+  } else if (window.location.pathname.startsWith('/search')) {
+    footer.innerHTML = await renderSearchFooter();
+    runSearch();
 
   } else if (window.location.pathname.startsWith('/today')) {
     await gotoJournal();

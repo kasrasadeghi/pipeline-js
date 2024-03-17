@@ -131,7 +131,7 @@ while True:
 
     # Handle paths for frontend pages
 
-    js_paths = ['disc', 'edit', 'list', 'sync']
+    js_paths = ['disc', 'edit', 'list', 'sync', 'search']
     is_js_path = any(path.startswith('/' + js_path) for js_path in js_paths)
     if is_js_path or path == '/' or path == '':
         path = 'index.html'
