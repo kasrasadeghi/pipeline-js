@@ -706,7 +706,14 @@ async function putNote(note) {
   return response.text();
 }
 
+function delay(millis) {
+  return new Promise((resolve, reject) => {
+    setTimeout(_ => resolve(), millis)
+  });
+}
+
 async function putAllNotes() {
+  let failures = [];
   for (let file of await global_notes.listFiles()) {
     for (let i of [1, 2, 3]) {
       try {
@@ -716,13 +723,16 @@ async function putAllNotes() {
         console.log(`failed attempt #${i}: ${file}`)
         if (i !== 3) {
           console.log('trying again...');
+          await delay(100 * i);
         } else {
+          failures.push(file);
           console.log(e);
           break;
         }
       }
     }
   }
+  return failures;
 }
 
 // STATUS
