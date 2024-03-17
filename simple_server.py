@@ -11,6 +11,7 @@ import hashlib
 import json
 import time
 import ssl
+import traceback
 
 NOTES_ROOT = os.path.join(os.path.expanduser('~'), "notes")
 
@@ -122,101 +123,104 @@ listen_socket.bind((HOST, PORT))
 listen_socket.listen(1)
 print(f'Serving HTTP on port {PORT} ...')
 while True:
-    client_connection, client_address = listen_socket.accept()
-    print(client_address) # (address: string, port: int)
-    request = receive_headers_and_content(client_connection)
-    if request is None:
-        continue
-    
-    method = request['method']
-    path = request['path']
-    headers = request['headers']
-    body = request['body']
-
-    # Handle paths for frontend pages
-
-    js_paths = ['disc', 'edit', 'list', 'sync', 'search']
-    is_js_path = any(path.startswith('/' + js_path) for js_path in js_paths)
-    if is_js_path or path == '/' or path == '':
-        path = 'index.html'
-
-    # Handle API paths
-
-    if path.startswith('/api'):
-        path = path.removeprefix('/api')
-        if path.startswith('/list/') and method == 'GET':
-            print('listing notes')
-            repo = path.removeprefix('/list/')
-            repo_path = get_repo_path(repo)
-            cors_header = allow_cors_for_localhost(headers)
-            http_response = HTTP_OK_JSON(os.listdir(repo_path), extra_header=cors_header)
-            client_connection.sendall(http_response)
-            client_connection.close()
+    try:
+        client_connection, client_address = listen_socket.accept()
+        print(client_address) # (address: string, port: int)
+        request = receive_headers_and_content(client_connection)
+        if request is None:
             continue
-        elif path.startswith('/get/') and method == 'GET':
-            note = path.removeprefix('/get/')
+        
+        method = request['method']
+        path = request['path']
+        headers = request['headers']
+        body = request['body']
 
-            # consider making this a POST request and putting the uuids in the body as a json.
-            # - maybe not, though.  i like not parsing the content of the body here, but i might just be being lazy.
-            # - also like, within the spirit of http, we're "getting" the notes.  we _should_ use a 'GET' request.
-            repo_notes = path.removeprefix('/get/')
-            # <repo>/<note>(,<note>)*
-            repo, notes = repo_notes.split('/', 1)
-            notes = notes.split(',')
-            repo_path = get_repo_path(repo)
-            def read_file(path):
-                with open(path) as f:
-                    return f.read()
-            read_notes = {repo + '/' + note: read_file(os.path.join(repo_path, note)) for note in notes}
-            cors_header = allow_cors_for_localhost(headers)
-            http_response = HTTP_OK_JSON(read_notes, extra_header=cors_header)
-            client_connection.sendall(http_response)
-            client_connection.close()
-            continue
-        elif path.startswith('/put/') and method == 'PUT':
-            note = path.removeprefix('/put/')
-            print(note)
+        # Handle paths for frontend pages
 
-            print('body!:', body)
-            # the note is of format <repo>/<uuid>.note
-            with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
-                f.write(body)
-            http_response = HTTP_OK(b"wrote notes/" + note.encode())
-            print("wrote notes/" + note, time.time())
-            client_connection.sendall(http_response)
-            client_connection.close()
-            continue
-        elif path.startswith('/status/') and method == 'GET':
-            repo = path.removeprefix('/status/')
-            repo_path = get_repo_path(repo)
-            def hash(note_path):
-                with open(note_path, "rb") as f:
-                    return hashlib.sha256(f.read()).hexdigest()
-            status = {os.path.join(repo, uuid): hash(os.path.join(repo_path, uuid)) for uuid in os.listdir(repo_path)}
-            http_response = HTTP_OK_JSON(status)
-            client_connection.sendall(http_response)
-            client_connection.close()
-            continue
-        else:
-            http_response = HTTP_NOT_FOUND(b"api not found: " + path.encode())
-            client_connection.sendall(http_response)
-            client_connection.close()
-            continue
+        js_paths = ['disc', 'edit', 'list', 'sync', 'search']
+        is_js_path = any(path.startswith('/' + js_path) for js_path in js_paths)
+        if is_js_path or path == '/' or path == '':
+            path = 'index.html'
+
+        # Handle API paths
+
+        if path.startswith('/api'):
+            path = path.removeprefix('/api')
+            if path.startswith('/list/') and method == 'GET':
+                print('listing notes')
+                repo = path.removeprefix('/list/')
+                repo_path = get_repo_path(repo)
+                cors_header = allow_cors_for_localhost(headers)
+                http_response = HTTP_OK_JSON(os.listdir(repo_path), extra_header=cors_header)
+                client_connection.sendall(http_response)
+                client_connection.close()
+                continue
+            elif path.startswith('/get/') and method == 'GET':
+                note = path.removeprefix('/get/')
+
+                # consider making this a POST request and putting the uuids in the body as a json.
+                # - maybe not, though.  i like not parsing the content of the body here, but i might just be being lazy.
+                # - also like, within the spirit of http, we're "getting" the notes.  we _should_ use a 'GET' request.
+                repo_notes = path.removeprefix('/get/')
+                # <repo>/<note>(,<note>)*
+                repo, notes = repo_notes.split('/', 1)
+                notes = notes.split(',')
+                repo_path = get_repo_path(repo)
+                def read_file(path):
+                    with open(path) as f:
+                        return f.read()
+                read_notes = {repo + '/' + note: read_file(os.path.join(repo_path, note)) for note in notes}
+                cors_header = allow_cors_for_localhost(headers)
+                http_response = HTTP_OK_JSON(read_notes, extra_header=cors_header)
+                client_connection.sendall(http_response)
+                client_connection.close()
+                continue
+            elif path.startswith('/put/') and method == 'PUT':
+                note = path.removeprefix('/put/')
+                print(note)
+
+                print('body!:', body)
+                # the note is of format <repo>/<uuid>.note
+                with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
+                    f.write(body)
+                http_response = HTTP_OK(b"wrote notes/" + note.encode())
+                print("wrote notes/" + note, time.time())
+                client_connection.sendall(http_response)
+                client_connection.close()
+                continue
+            elif path.startswith('/status/') and method == 'GET':
+                repo = path.removeprefix('/status/')
+                repo_path = get_repo_path(repo)
+                def hash(note_path):
+                    with open(note_path, "rb") as f:
+                        return hashlib.sha256(f.read()).hexdigest()
+                status = {os.path.join(repo, uuid): hash(os.path.join(repo_path, uuid)) for uuid in os.listdir(repo_path)}
+                http_response = HTTP_OK_JSON(status)
+                client_connection.sendall(http_response)
+                client_connection.close()
+                continue
+            else:
+                http_response = HTTP_NOT_FOUND(b"api not found: " + path.encode())
+                client_connection.sendall(http_response)
+                client_connection.close()
+                continue
 
 
-    # Handle Static paths
-    
-    path = path.removeprefix('/')
-    if not os.path.exists(path):
-        http_response = HTTP_NOT_FOUND(b"could not handle path: " + path.encode())
+        # Handle Static paths
+        
+        path = path.removeprefix('/')
+        if not os.path.exists(path):
+            http_response = HTTP_NOT_FOUND(b"could not handle path: " + path.encode())
+            client_connection.sendall(http_response)
+            client_connection.close()    
+            continue
+
+        with open(path, 'rb') as f:
+            print('reading', path)
+            content = f.read()
+        
+        http_response = HTTP_OK(content)
         client_connection.sendall(http_response)
-        client_connection.close()    
-        continue
-
-    with open(path, 'rb') as f:
-        print('reading', path)
-        content = f.read()
-    
-    http_response = HTTP_OK(content)
-    client_connection.sendall(http_response)
-    client_connection.close()
+        client_connection.close()
+    except e:
+        traceback.print_exc()
