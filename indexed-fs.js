@@ -625,7 +625,7 @@ async function fetchNotes(repo, uuids) {
   if (repo.endsWith('/')) {
     repo = repo.slice(0, -1);
   }
-  let result = await fetch('http://10.50.50.2:8000/api/get/' + repo + "/" + uuids.join(",")).then(t => t.json());
+  let result = await fetch('https://10.50.50.2:8000/api/get/' + repo + "/" + uuids.join(",")).then(t => t.json());
   let cacheMap = JSON.parse(await cache.readFile(SYNC_FILE));
   for (let note in result) {
     await global_notes.writeFile(note, result[note]);
@@ -638,7 +638,7 @@ const BATCH_SIZE = 20;
 async function getAllNotes(useSingleBatch) {
   console.log('getting notes');
 
-  let list = await fetch('http://10.50.50.2:8000/api/list/core').then(x => x.json());
+  let list = await fetch('https://10.50.50.2:8000/api/list/core').then(x => x.json());
   let cacheMap = {};
   for (let uuid of list) {
     cacheMap['core' + '/' + uuid] = false;
@@ -761,7 +761,7 @@ function statusDiff(left, right) {
 }
 
 async function getRemoteStatus(repo) {
-  let statuses = await fetch('http://10.50.50.2:8000/api/status/' + repo).then(x => x.json());
+  let statuses = await fetch('https://10.50.50.2:8000/api/status/' + repo).then(x => x.json());
   return statuses;
 }
 
