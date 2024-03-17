@@ -115,7 +115,7 @@ def receive_headers_and_content(client_connection):
 
 
 context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-context.load_cert_chain(certfile="cert/cert.pem", keyfile="cert/key.pem")
+context.load_cert_chain(certfile="../pipeline/cert/cert.pem", keyfile="../pipeline/cert/key.pem")
 raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 listen_socket = context.wrap_socket(raw_socket, server_side=True)
 listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
