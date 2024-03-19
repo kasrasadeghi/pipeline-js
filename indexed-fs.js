@@ -109,7 +109,7 @@ function today() {
   const day = today.getDate();
 
   const day_suffix =
-      [11, 12, 13].includes(day) === 11 ? 'th'
+      [11, 12, 13].includes(day) ? 'th'
     : day % 10 === 1 ? 'st'
     : day % 10 === 2 ? 'nd'
     : day % 10 === 3 ? 'rd'
@@ -584,6 +584,7 @@ window.addEventListener('load', () => {
 // SYNC
 
 const SYNC_FILE = 'sync_status';
+const SYNC_REMOTE_FILE = 'sync_remote';
 const SYNC_ELEMENT_ID = 'sync_output'
 
 async function gotoSync() {
@@ -593,30 +594,50 @@ async function gotoSync() {
   [main.innerHTML, footer.innerHTML] = await renderSync();
 }
 
+async function getRemote() {
+  if (! (await cache.exists(SYNC_REMOTE_FILE))) {
+    await cache.writeFile(SYNC_REMOTE_FILE, '');
+  }
+  return cache.readFile(SYNC_REMOTE_FILE);
+}
+
 async function renderSync() {
   if (! (await cache.exists(SYNC_FILE))) {
     await cache.writeFile(SYNC_FILE, '{}');
   }
-  return [`<pre id='${SYNC_ELEMENT_ID}'>
-${await cache.readFile(SYNC_FILE)}
-  </pre>`,
+
+  const handleRemote = async (event) => {
+    if (event.key === 'Enter') {
+      let text = document.getElementById('remote').value;
+      await cache.writeFile(SYNC_REMOTE_FILE, text);
+      return false;
+    }
+  };
+  global.handlers = {handleRemote};
+
+  const repo_sync_menu = (repo) => `<div style="min-width: 400px; border: 1px white solid; margin: 10px">
+    <div>
+      <h3 style="margin: 10px">${repo}</h3>
+      <button style="margin: 10px;" onclick="putAllNotes('${repo}')">put all</button>
+      <button style="margin: 10px;" onclick="getAllNotes('${repo}')">get all</button>
+      <button style="margin: 10px;" onclick="pullRemoteNotes('${repo}')">update</button>
+      <button style="margin: 10px;" onclick="pullRemoteNotes('${repo}', true)">check for update</button>
+      <button style="margin: 10px;" onclick="pushLocalNotes('${repo}')">push update</button>
+      <button style="margin: 10px;" onclick="pushLocalNotes('${repo}', true)">check for push update</button>
+    </div>
+    <pre id="${repo}_sync_output"></pre>
+  </div>`;
+
+  return [`
+  <div>
+    <input onkeydown="return global.handlers.handleRemote(event)" type='text' id='remote'></input>
+  </div>
+  <div style='display: flex;'>` + repo_sync_menu('core') + repo_sync_menu('bigmac-js') + `</div>`,
   `<div>
     <button onclick="gotoList()">list</button>
     <button onclick="gotoJournal()">journal</button>
-    <button onclick="putAllNotes()">put all</button>
-    <button onclick="getAllNotes()">get all</button>
-    <button onclick="updateRemoteNotes('core')">update core</button>
-    <button onclick="updateRemoteNotes('core', true)">check for update</button>
   </div>
   `]
-}
-
-async function flushSyncStatus(cacheMap) {
-  let notes = Object.keys(cacheMap);
-  let done_count = notes.reduce((prev, curr) => prev + (cacheMap[curr] ? 1 : 0), 0);  // bool-to-int with ternary is apparently faster than unary+ cast
-  let progress = `${done_count}/${notes.length}`;
-  document.getElementById(SYNC_ELEMENT_ID).innerHTML = progress + "\n" + JSON.stringify(cacheMap, undefined, 2);
-  await cache.writeFile(SYNC_FILE, JSON.stringify(cacheMap, undefined, 2));
 }
 
 async function fetchNotes(repo, uuids) {
@@ -625,43 +646,25 @@ async function fetchNotes(repo, uuids) {
   if (repo.endsWith('/')) {
     repo = repo.slice(0, -1);
   }
-  let result = await fetch('https://10.50.50.2:8000/api/get/' + repo + "/" + uuids.join(",")).then(t => t.json());
-  let cacheMap = JSON.parse(await cache.readFile(SYNC_FILE));
+  let result = await fetch((await getRemote()) +'/api/get/' + repo + "/" + uuids.join(",")).then(t => t.json());
   for (let note in result) {
     await global_notes.writeFile(note, result[note]);
-    cacheMap[note] = true;
   }
-  flushSyncStatus(cacheMap);
 }
 
-const BATCH_SIZE = 20;
-async function getAllNotes(useSingleBatch) {
+async function getAllNotes(repo) {
   console.log('getting notes');
 
-  let list = await fetch('https://10.50.50.2:8000/api/list/core').then(x => x.json());
-  let cacheMap = {};
-  for (let uuid of list) {
-    cacheMap['core' + '/' + uuid] = false;
-  }
-  flushSyncStatus(cacheMap);
+  let list = await fetch((await getRemote()) + '/api/list/' + repo).then(x => x.json());
 
-  // console.log('list of notes to receive:', list);
-
-  // this takes around 2 minutes.  it's only 57 megs on disk, can we do better?
-  // - maybe a single big request with one big batch?
-  // NB: this is intentionally slowed down, because the server crashes when you send it requests too fast/ multithreaded.
-  const batch_size = useSingleBatch ? list.length : BATCH_SIZE;
-  try {
-    for (let i = 0; i < list.length; i += batch_size) {
-      const uuids = list.slice(i, i + batch_size);
-      await fetchNotes('core', uuids);
-    }
+  try {    
+    await fetchNotes(repo, list);
   } catch (e) {
     console.log(e);
   }
 }
 
-async function updateRemoteNotes(repo, dry_run) {
+async function pullRemoteNotes(repo, dry_run) {
   let local_status = await getLocalStatus(repo);
   let remote_status = await getRemoteStatus(repo);
   let updated = statusDiff(local_status, remote_status);
@@ -671,9 +674,10 @@ async function updateRemoteNotes(repo, dry_run) {
   let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
   
   if (dry_run) {
-    console.log('update (dry run)', updated);
+    document.getElementById(repo + '_sync_output').innerHTML = "update found:\n" + JSON.stringify(updated, undefined, 2);
     return;
   } else {
+    document.getElementById(repo + '_sync_output').innerHTML = "update committed:\n" + JSON.stringify(updated, undefined, 2);
     console.log('updated uuids', updated_uuids);
   }
   if (updated_uuids.length > 0) {
@@ -681,17 +685,25 @@ async function updateRemoteNotes(repo, dry_run) {
   }
 }
 
-async function perfGetAllNotes() {
-  // for 2k notes, batch_size = 1 takes 384s
-  // batch_size = 2k takes 16s
+async function pushLocalNotes(repo, dry_run) {
+  let local_status = await getLocalStatus(repo);
+  let remote_status = await getRemoteStatus(repo);
+  let updated = statusDiff(remote_status, local_status);  // flipped
+  let updated_notes = Object.keys(updated)
+  console.assert(updated_notes.every(x => x.startsWith(repo + '/')));
 
-  console.time("get all notes in one batch")
-  await getAllNotes(true) 
-  console.timeEnd("get all notes in one batch")
-
-  console.time("get all notes in one batch")
-  await getAllNotes()
-  console.timeEnd("get all notes in one batch")
+  let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
+  
+  if (dry_run) {
+    document.getElementById(repo + '_sync_output').innerHTML = "push update found:\n" + JSON.stringify(updated, undefined, 2);
+    return;
+  } else {
+    document.getElementById(repo + '_sync_output').innerHTML = "push update committed:\n" + JSON.stringify(updated, undefined, 2);
+    console.log('updated uuids', updated_uuids);
+  }
+  if (updated_uuids.length > 0) {
+    await putNotes(repo, updated_uuids);
+  }
 }
 
 async function putNote(note) {
@@ -712,13 +724,9 @@ function delay(millis) {
   });
 }
 
-async function putAllNotes(repo) {
-  let files = await global_notes.listFiles();
-  if (repo) {
-    files = files.filter(file => file.startsWith(repo + "/"));
-  }
+async function putNotes(repo, uuids) {
   let failures = [];
-  for (let file of files) {
+  for (let file of uuids.map(x => repo + '/' + x)) {
     for (let i of [1, 2, 3]) {
       try {
         await putNote(file);
@@ -737,6 +745,13 @@ async function putAllNotes(repo) {
     }
   }
   return failures;
+}
+
+async function putAllNotes(repo) {
+  let files = await global_notes.listFiles();
+  repo_files = files.filter(file => file.startsWith(repo + "/"));
+  uuids = repo_files.map(x => x.slice((repo + '/').length));
+  return putNotes(repo, uuids);
 }
 
 // STATUS
@@ -775,7 +790,7 @@ function statusDiff(left, right) {
 }
 
 async function getRemoteStatus(repo) {
-  let statuses = await fetch('https://10.50.50.2:8000/api/status/' + repo).then(x => x.json());
+  let statuses = await fetch((await getRemote()) + '/api/status/' + repo).then(x => x.json());
   return statuses;
 }
 
@@ -889,7 +904,6 @@ async function gotoSearch() {
 
 // MAIN
 
-const other = new FileDB("pipeline-db-sync", "notes");
 const cache = new FileDB("pipeline-db-cache", "cache");
 
 async function gotoJournal() {
