@@ -615,24 +615,33 @@ async function renderSync() {
   };
   global.handlers = {handleRemote};
 
-  const repo_sync_menu = (repo) => `<div style="min-width: 400px; border: 1px white solid; margin: 10px">
+  const repo_sync_menu = (repo, type) => {
+    let menu_content = '';
+    if (type === 'local') {
+      menu_content = (
+        `<button style="margin: 10px;" onclick="pushLocalNotes('${repo}')">push update</button>`
+        + `<button style="margin: 10px;" onclick="pushLocalNotes('${repo}', true)">check for push update</button>`)
+    } else {
+      menu_content = (
+        `<button style="margin: 10px;" onclick="pullRemoteNotes('${repo}')">update</button>`
+        + `<button style="margin: 10px;" onclick="pullRemoteNotes('${repo}', true)">check for update</button>`)
+    }
+    return `<div style="min-width: 400px; border: 1px white solid; margin: 10px">
     <div>
       <h3 style="margin: 10px">${repo}</h3>
       <button style="margin: 10px;" onclick="putAllNotes('${repo}')">put all</button>
       <button style="margin: 10px;" onclick="getAllNotes('${repo}')">get all</button>
-      <button style="margin: 10px;" onclick="pullRemoteNotes('${repo}')">update</button>
-      <button style="margin: 10px;" onclick="pullRemoteNotes('${repo}', true)">check for update</button>
-      <button style="margin: 10px;" onclick="pushLocalNotes('${repo}')">push update</button>
-      <button style="margin: 10px;" onclick="pushLocalNotes('${repo}', true)">check for push update</button>
+      ${menu_content}
     </div>
     <pre id="${repo}_sync_output"></pre>
-  </div>`;
+  </div>`
+  };
 
   return [`
   <div>
     <input onkeydown="return global.handlers.handleRemote(event)" type='text' id='remote'></input>
   </div>
-  <div style='display: flex;'>` + repo_sync_menu('core') + repo_sync_menu('bigmac-js') + `</div>`,
+  <div style='display: flex;'>` + repo_sync_menu('bigmac-js', 'local') + repo_sync_menu('core', 'remote') + `</div>`,
   `<div>
     <button onclick="gotoList()">list</button>
     <button onclick="gotoJournal()">journal</button>
