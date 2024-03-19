@@ -712,9 +712,13 @@ function delay(millis) {
   });
 }
 
-async function putAllNotes() {
+async function putAllNotes(repo) {
+  let files = await global_notes.listFiles();
+  if (repo) {
+    files = files.filter(file => file.startsWith(repo + "/"));
+  }
   let failures = [];
-  for (let file of await global_notes.listFiles()) {
+  for (let file of files) {
     for (let i of [1, 2, 3]) {
       try {
         await putNote(file);
