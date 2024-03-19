@@ -708,7 +708,7 @@ async function pushLocalNotes(repo, dry_run) {
 
 async function putNote(note) {
   console.log('syncing note', note, 'to server');
-  const response = await fetch("/api/put/" + note, {
+  const response = await fetch((await getRemote()) + "/api/put/" + note, {
     method: "PUT", // *GET, POST, PUT, DELETE, etc.
     headers: {
       "Content-Type": "text/plain",
