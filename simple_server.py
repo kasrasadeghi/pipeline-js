@@ -200,7 +200,8 @@ while True:
                     with open(note_path, "rb") as f:
                         return hashlib.sha256(f.read()).hexdigest()
                 status = {os.path.join(repo, uuid): hash(os.path.join(repo_path, uuid)) for uuid in os.listdir(repo_path)}
-                http_response = HTTP_OK_JSON(status)
+                cors_header = allow_cors_for_localhost(headers)
+                http_response = HTTP_OK_JSON(status, extra_header=cors_header)
                 client_connection.sendall(http_response)
                 client_connection.close()
                 continue
