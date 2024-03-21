@@ -186,6 +186,16 @@ while True:
 
                 print('body!:', body)
                 # the note is of format <repo>/<uuid>.note
+                if '/' not in note:
+                    http_response = HTTP_NOT_FOUND(b"bad note: " + note.encode())
+                    client_connection.sendall(http_response)
+                    client_connection.close()
+                    continue
+                
+                # make folder if repo doesn't exist
+                repo, uuid = note.split('/')
+                os.mkdir(os.path.join(NOTES_ROOT, repo))
+
                 with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
                     f.write(body)
                 http_response = HTTP_OK(b"wrote notes/" + note.encode())
@@ -199,9 +209,16 @@ while True:
                 def hash(note_path):
                     with open(note_path, "rb") as f:
                         return hashlib.sha256(f.read()).hexdigest()
-                status = {os.path.join(repo, uuid): hash(os.path.join(repo_path, uuid)) for uuid in os.listdir(repo_path)}
-                cors_header = allow_cors_for_localhost(headers)
-                http_response = HTTP_OK_JSON(status, extra_header=cors_header)
+                if '/' in repo or '..' in repo:
+                    http_response = HTTP_NOT_FOUND(b"bad repo: " + repo.encode())
+                elif not os.exists(repo_path):
+                    cors_header = allow_cors_for_localhost(headers)
+                    http_response = HTTP_OK_JSON({}, extra_header=cors_header)
+                else:
+                    cors_header = allow_cors_for_localhost(headers)
+                    status = {os.path.join(repo, uuid): hash(os.path.join(repo_path, uuid)) for uuid in os.listdir(repo_path)}
+                    http_response = HTTP_OK_JSON(status, extra_header=cors_header)
+                
                 client_connection.sendall(http_response)
                 client_connection.close()
                 continue
