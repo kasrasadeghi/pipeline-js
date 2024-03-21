@@ -75,6 +75,7 @@ const global_notes = new FileDB();
 
 global = null;
 LOCAL_REPO_NAME_FILE = "local_repo_name";
+SUBBED_REPOS_FILE = "subbed_repos";
 
 async function get_local_repo_name() {
   let repo = await cache.readFile(LOCAL_REPO_NAME_FILE)
@@ -607,12 +608,9 @@ async function getRemote() {
 }
 
 async function getRepos() {
-  let files = await global_notes.listFiles();
-  let repos = files.map(x => x.split('/')[0]);
-  let set = new Set(repos);
   let local_repo_name = await get_local_repo_name();
-  set.delete(local_repo_name);
-  return [local_repo_name, ...set];;
+  let subbed_repos = (await cache.readFile(SUBBED_REPOS_FILE)).split(" ");
+  return [local_repo_name, ...subbed_repos];
 }
 
 async function renderSync() {
@@ -946,23 +944,56 @@ async function renderSetup() {
     }
   };
 
-  global.handlers = {handleSetup};
+  const handleSubscriptions = async (event) => {
+    if (event === true || event.key === 'Enter') {
+      let text = document.getElementById('subscriptions').value;
+      await cache.writeFile(SUBBED_REPOS_FILE, text);
 
+      let main = document.getElementsByTagName('main')[0];
+      let footer = document.getElementsByTagName('footer')[0];
+      [main.innerHTML, footer.innerHTML] = await renderSetup();
+      return false;
+    }
+  };
+
+  global.handlers = {handleSetup, handleSubscriptions};
+
+  const colorize_repo = (repo) => `<span style="color: #ffcc55; font-family: monospace">${repo}</span>`;
 
   let add_links = '<div style="margin: 10px">Please set a local repo name to continue.</div>';
   let local_repo_name_message = 'Local repo name is unset.';
   let local_repo_name = await cache.readFile(LOCAL_REPO_NAME_FILE);
-  if (local_repo_name !== null && local_repo_name.length > 0) {
-    local_repo_name_message = `Local repo name is <span style="color: #ffcc55; font-family: monospace">${local_repo_name}</span>`;
+  if (local_repo_name === null) {
+    local_repo_name = '';
+  }
+  if (local_repo_name.length > 0) {
+    local_repo_name_message = `Local repo name is ${colorize_repo(local_repo_name)}`;
     add_links = `<button onclick="gotoJournal()">journal</button>
     <button onclick="gotoList()">list</button>
     <button onclick="gotoSync()">sync</button>`;
   }
 
+  let subscribed_repos = await cache.readFile(SUBBED_REPOS_FILE);
+  let subscribed_repos_message = "Not subscribed to any repositories.";
+  if (subscribed_repos === null) {
+    subscribed_repos = '';
+  }
+  if (subscribed_repos.length > 0) {
+    subscribed_repos_message = "Subscribed to " + subscribed_repos.split(' ').map(colorize_repo).join(", ") + ".";
+  }
+
   return [
-    `<input onkeydown="return global.handlers.handleSetup(event)" type='text' id='local_repo_name'></input>
-     <button onclick="return global.handlers.handleSetup(true)">set local repo name</button>
-     <p id='local_repo_name'>${local_repo_name_message}</p>`,
+    `<div style="margin: 10px">
+       <input onkeydown="return global.handlers.handleSetup(event)" type='text' id='local_repo_name' value="${local_repo_name}"></input>
+       <button onclick="return global.handlers.handleSetup(true)">set local repo name</button>
+     </div>
+     <div style="margin: 10px">
+       <input onkeydown="return global.handlers.handleSubscriptions(event)" type='text' id='subscriptions' value="${subscribed_repos}"></input>
+       <button onclick="return global.handlers.handleSubscriptions(true)">subscribe to repos</button>
+       <label for='subscriptions'>subscribe to a list of (whitespace-separated) repositories</label>
+     </div>
+     <p>${local_repo_name_message}</p>
+     <p>${subscribed_repos_message}</p>`,
     add_links
   ];
 }
