@@ -498,7 +498,6 @@ async function renderDisc(uuid) {
     <button onclick="gotoEdit('${uuid}')">edit</button>
     <button onclick="gotoList()">list</button>
     <button onclick="gotoJournal()">journal</button>
-    <button onclick="putNote('${uuid}')">put</button>
     <button onclick="gotoSync()">sync</button>
     <button onclick="gotoSearch()">search</button>
     <button onclick="gotoSetup()">setup</button>
