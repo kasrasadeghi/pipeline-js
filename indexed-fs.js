@@ -445,7 +445,8 @@ function htmlBlock(block) {
 const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); 
 function htmlMsg(item) {
   let line = htmlLine(item.msg);
-  return `<div class='msg' id='${item.date}'><a class='msg_timestamp' href='${window.location.pathname}#${item.date}'>${timestamp_format.format(Date.parse(item.date))}</a><div class="msg_content">${line}</div></div>`
+  let href_id = `/disc/${item.origin}#${item.date}`;
+  return `<div class='msg' id='${item.date}'><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(item.date))}</a><div class="msg_content">${line}</div></div>`
 }
 
 function htmlLine(line) {
