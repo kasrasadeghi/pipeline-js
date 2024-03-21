@@ -188,7 +188,8 @@ while True:
                 # the note is of format <repo>/<uuid>.note
                 with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
                     f.write(body)
-                http_response = HTTP_OK(b"wrote notes/" + note.encode())
+                cors_header = allow_cors_for_localhost(headers)
+                http_response = HTTP_OK(b"wrote notes/" + note.encode(), extra_header=cors_header)
                 print("wrote notes/" + note, time.time())
                 client_connection.sendall(http_response)
                 client_connection.close()
