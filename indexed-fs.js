@@ -74,7 +74,16 @@ class FileDB {
 const global_notes = new FileDB();
 
 global = null;
-const LOCAL_REPO_NAME = 'bigmac-js';
+LOCAL_REPO_NAME_FILE = "local_repo_name";
+
+async function get_local_repo_name() {
+  let repo = await cache.readFile(LOCAL_REPO_NAME_FILE)
+  if (repo === null || repo.trim() === '') {
+    await gotoSetup();
+    throw new Error('no local repo defined, redirecting to setup');
+  }
+  return cache.readFile(LOCAL_REPO_NAME_FILE);
+}
 
 async function newNote(title) {
   let content = `--- METADATA ---
@@ -82,7 +91,7 @@ Date: ${new Date()}
 Title: ${title}
 Tags: Journal`;
 // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
-  let uuid = LOCAL_REPO_NAME + '/' + crypto.randomUUID() + '.note';
+  let uuid = (await get_local_repo_name()) + '/' + crypto.randomUUID() + '.note';
   await global_notes.writeFile(uuid, content);
   return uuid;
 }
@@ -496,6 +505,7 @@ async function renderDisc(uuid) {
     <button onclick="putNote('${uuid}')">put</button>
     <button onclick="gotoSync()">sync</button>
     <button onclick="gotoSearch()">search</button>
+    <button onclick="gotoSetup()">setup</button>
     `
   ];
 }
@@ -601,6 +611,17 @@ async function getRemote() {
   return cache.readFile(SYNC_REMOTE_FILE);
 }
 
+async function getRepos() {
+  let files = await global_notes.listFiles();
+  let repos = files.map(x => x.split('/')[0]);
+  console.log(repos);
+  let set = new Set(repos);
+  console.log(set);
+  let local_repo_name = await get_local_repo_name();
+  set.delete(local_repo_name);
+  return [local_repo_name, ...set];;
+}
+
 async function renderSync() {
   if (! (await cache.exists(SYNC_FILE))) {
     await cache.writeFile(SYNC_FILE, '{}');
@@ -636,14 +657,16 @@ async function renderSync() {
     <pre id="${repo}_sync_output"></pre>
   </div>`
   };
+  let [local, ...remotes] = await getRepos();
 
   return [`
   <div>
     <input onkeydown="return global.handlers.handleRemote(event)" type='text' id='remote'></input>
   </div>
-  <div style='display: flex;'>` + repo_sync_menu('bigmac-js', 'local') + repo_sync_menu('core', 'remote') + `</div>`,
+  <div style='display: flex;'>` + repo_sync_menu(local, 'local') + remotes.map(remote => repo_sync_menu(remote, 'remote')).join() + `</div>`,
   `<div>
     <button onclick="gotoList()">list</button>
+    <button onclick="gotoSetup()">setup</button>
     <button onclick="gotoJournal()">journal</button>
   </div>
   `]
@@ -911,6 +934,53 @@ async function gotoSearch() {
   return false;
 }
 
+// SETUP
+// used for first time setup and setup configuration
+
+async function renderSetup() {
+
+  // TODO allow setting local repo and also renaming local repo?
+
+  const handleSetup = async (event) => {
+    if (event === true || event.key === 'Enter') {
+      let text = document.getElementById('local_repo_name').value;
+      await cache.writeFile(LOCAL_REPO_NAME_FILE, text);
+
+      let main = document.getElementsByTagName('main')[0];
+      let footer = document.getElementsByTagName('footer')[0];
+      [main.innerHTML, footer.innerHTML] = await renderSetup();
+      return false;
+    }
+  };
+
+  global.handlers = {handleSetup};
+
+
+  let add_links = '<div style="margin: 10px">Please set a local repo name to continue.</div>';
+  let local_repo_name_message = 'Local repo name is unset.';
+  let local_repo_name = await cache.readFile(LOCAL_REPO_NAME_FILE);
+  if (local_repo_name !== null && local_repo_name.length > 0) {
+    local_repo_name_message = `Local repo name is <span style="color: #ffcc55; font-family: monospace">${local_repo_name}</span>`;
+    add_links = `<button onclick="gotoJournal()">journal</button>
+    <button onclick="gotoList()">list</button>
+    <button onclick="gotoSync()">sync</button>`;
+  }
+
+  return [
+    `<input onkeydown="return global.handlers.handleSetup(event)" type='text' id='local_repo_name'></input>
+     <button onclick="return global.handlers.handleSetup(true)">set local repo name</button>
+     <p id='local_repo_name'>${local_repo_name_message}</p>`,
+    add_links
+  ];
+}
+
+async function gotoSetup() {
+  let main = document.getElementsByTagName('main')[0];
+  let footer = document.getElementsByTagName('footer')[0];
+  [main.innerHTML, footer.innerHTML] = await renderSetup();
+  window.history.pushState({},"", "/setup");
+}
+
 // MAIN
 
 const cache = new FileDB("pipeline-db-cache", "cache");
@@ -972,6 +1042,8 @@ async function handleRouting() {
   } else if (window.location.pathname.startsWith('/search')) {
     footer.innerHTML = await renderSearchFooter();
     runSearch();
+  } else if (window.location.pathname.startsWith('/setup')) {
+    await gotoSetup();
 
   } else if (window.location.pathname.startsWith('/today')) {
     await gotoJournal();
