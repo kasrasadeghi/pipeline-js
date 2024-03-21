@@ -104,7 +104,7 @@ def receive_headers_and_content(client_connection):
         client_connection.sendall(http_response)
         client_connection.close()    
         return
-    
+
     headers = [line.split(': ', 1) for line in headers.decode().splitlines()]
     headers = {key: value for key, value in headers}
     print(headers)
@@ -134,7 +134,7 @@ while True:
         request = receive_headers_and_content(client_connection)
         if request is None:
             continue
-        
+
         method = request['method']
         path = request['path']
         headers = request['headers']
@@ -191,10 +191,11 @@ while True:
                     client_connection.sendall(http_response)
                     client_connection.close()
                     continue
-                
+
                 # make folder if repo doesn't exist
                 repo, uuid = note.split('/')
-                os.mkdir(os.path.join(NOTES_ROOT, repo))
+                if not os.path.isdir(os.path.join(NOTES_ROOT, repo)):
+                    os.mkdir(os.path.join(NOTES_ROOT, repo))
 
                 with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
                     f.write(body)
@@ -211,14 +212,14 @@ while True:
                         return hashlib.sha256(f.read()).hexdigest()
                 if '/' in repo or '..' in repo:
                     http_response = HTTP_NOT_FOUND(b"bad repo: " + repo.encode())
-                elif not os.exists(repo_path):
+                elif not os.path.isdir(repo_path):
                     cors_header = allow_cors_for_localhost(headers)
                     http_response = HTTP_OK_JSON({}, extra_header=cors_header)
                 else:
                     cors_header = allow_cors_for_localhost(headers)
                     status = {os.path.join(repo, uuid): hash(os.path.join(repo_path, uuid)) for uuid in os.listdir(repo_path)}
                     http_response = HTTP_OK_JSON(status, extra_header=cors_header)
-                
+
                 client_connection.sendall(http_response)
                 client_connection.close()
                 continue
@@ -230,7 +231,7 @@ while True:
 
 
         # Handle Static paths
-        
+
         path = path.removeprefix('/')
         if not os.path.exists(path):
             http_response = HTTP_NOT_FOUND(b"could not handle path: " + path.encode())
@@ -241,7 +242,7 @@ while True:
         with open(path, 'rb') as f:
             print('reading', path)
             content = f.read()
-        
+
         http_response = HTTP_OK(content)
         client_connection.sendall(http_response)
         client_connection.close()
