@@ -129,16 +129,12 @@ function today() {
 
 async function getNoteTitleMap() {
   const notes = await global_notes.listFiles();
-  console.log('all notes', notes);
   return await Promise.all(notes.map(async uuid => { return {uuid, title: await getTitle(uuid)}; }));
 }
 
-async function getNotesWithTitle(title) {
-  const files = await global_notes.listFiles();
-  console.log('all files', files);
-  const files_with_names = await Promise.all(files.map(async uuid => { return {uuid, title: await getTitle(uuid)}; }));
-  console.log('all files with names', files_with_names);
-  return files_with_names.filter(note => note.title === title).map(note => note.uuid);
+async function getNotesWithTitle(title, repo) {
+  const files_with_names = await getNoteTitleMap();
+  return files_with_names.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
 }
 
 // PARSE
@@ -614,9 +610,7 @@ async function getRemote() {
 async function getRepos() {
   let files = await global_notes.listFiles();
   let repos = files.map(x => x.split('/')[0]);
-  console.log(repos);
   let set = new Set(repos);
-  console.log(set);
   let local_repo_name = await get_local_repo_name();
   set.delete(local_repo_name);
   return [local_repo_name, ...set];;
@@ -649,7 +643,7 @@ async function renderSync() {
     }
     return `<div style="min-width: 400px; border: 1px white solid; margin: 10px">
     <div>
-      <h3 style="margin: 10px">${repo}</h3>
+      <h3 style="margin: 10px">${repo}${type === 'local' ? " (local)" : ""}</h3>
       <button style="margin: 10px;" onclick="putAllNotes('${repo}')">put all</button>
       <button style="margin: 10px;" onclick="getAllNotes('${repo}')">get all</button>
       ${menu_content}
@@ -663,7 +657,7 @@ async function renderSync() {
   <div>
     <input onkeydown="return global.handlers.handleRemote(event)" type='text' id='remote'></input>
   </div>
-  <div style='display: flex;'>` + repo_sync_menu(local, 'local') + remotes.map(remote => repo_sync_menu(remote, 'remote')).join() + `</div>`,
+  <div style='display: flex;'>` + repo_sync_menu(local, 'local') + remotes.map(remote => repo_sync_menu(remote, 'remote')).join("") + `</div>`,
   `<div>
     <button onclick="gotoList()">list</button>
     <button onclick="gotoSetup()">setup</button>
@@ -986,7 +980,7 @@ async function gotoSetup() {
 const cache = new FileDB("pipeline-db-cache", "cache");
 
 async function gotoJournal() {
-  let notes = await getNotesWithTitle(today());
+  let notes = await getNotesWithTitle(today(), await get_local_repo_name());
   if (notes.length === 0) {
     let uuid = await newNote(today());
     notes = [uuid];
@@ -1016,7 +1010,7 @@ function getCurrentNoteUuid() {
 }
 
 async function handleRouting() {
-  console.log("notes that match today's date:", await getNotesWithTitle(today()));
+  console.log("notes that match today's date:", await getNotesWithTitle(today(), await get_local_repo_name()));
 
   let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
