@@ -138,6 +138,11 @@ async function getNotesWithTitle(title, repo) {
   return files_with_names.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
 }
 
+async function getAllNotesWithTitle(title) {
+  const files_with_names = await getNoteTitleMap();
+  return files_with_names.filter(note => note.title === title).map(note => note.uuid);
+}
+
 // PARSE
 
 async function parseFile(filepath) {
