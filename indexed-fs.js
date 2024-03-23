@@ -504,7 +504,7 @@ async function renderDisc(uuid) {
       const old_content = content_lines.join("\n");
       const metadata = metadata_lines.join("\n");
   
-      const new_content = old_content + `\n- msg: ${msg}` + '\n' + `  - Date: ${new Date}` + '\n\n';
+      const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
       await global_notes.writeFile(uuid, new_content + metadata);
     
       let main = document.getElementsByTagName('main')[0];
