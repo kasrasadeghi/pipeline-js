@@ -97,6 +97,15 @@ Tags: Journal`;
   return uuid;
 }
 
+async function getDate(uuid) {
+  const note = await global_notes.readFile(uuid);
+  const lines = note.split("\n");
+  const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---") + 1);
+  const date_line = metadata_lines.find(line => line.startsWith("Date: "));
+  const date = date_line.split(": ", 2)[1];  // 2 is number of chunks, not number of splits
+  return date;
+}
+
 async function getTitle(uuid, storage) {
   if (storage === undefined) {
     storage = global_notes;
@@ -131,6 +140,12 @@ function today() {
 async function getNoteTitleMap() {
   const notes = await global_notes.listFiles();
   return await Promise.all(notes.map(async uuid => { return {uuid, title: await getTitle(uuid)}; }));
+}
+
+async function getNoteMetadataMap() {
+  const notes = await global_notes.listFiles();
+  // TODO an easy optimization would be to gather the metadata from a single read instead of doing it twice
+  return await Promise.all(notes.map(async uuid => { return {uuid, title: await getTitle(uuid), date: await getDate(uuid)}; }));
 }
 
 async function getNotesWithTitle(title, repo) {
@@ -560,10 +575,10 @@ async function gotoList() {
 }
 
 async function renderList() {
-  let content = "<pre>" + (await getNoteTitleMap()).map(x => `<a href="/disc/${x.uuid}">${x.title}</a>`).join("\n") + "</pre>";
+  let content = (await getNoteMetadataMap()).sort((a, b) => new Date(b.date) - new Date(a.date)).map(x => `<a href="/disc/${x.uuid}">${x.title}</a><br/>`).join("\n");
   return [
-    content, 
-    undefined
+    content,
+    `<button onclick="gotoJournal()">journal</button>`
   ];
 }
 
