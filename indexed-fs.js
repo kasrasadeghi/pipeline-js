@@ -486,38 +486,43 @@ function htmlLine(line) {
 async function renderDisc(uuid) {
   let note = await htmlNote(uuid);
 
-  const handleMsg = async (event) => {
+  let modify_form = "";
+  if (uuid.startsWith(await get_local_repo_name())) {
+    const handleMsg = async (event) => {
 
-    event.preventDefault();
-
-    let msg_input = document.getElementById('msg_input');
-    let msg = msg_input.value;
-    console.log('msg', msg);
-    msg_input.value = '';
-
-    let content = await global_notes.readFile(uuid);
-    let lines = content.split("\n");
-    const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
-    const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
-    const old_content = content_lines.join("\n");
-    const metadata = metadata_lines.join("\n");
-
-    const new_content = old_content + `\n- msg: ${msg}` + '\n' + `  - Date: ${new Date}` + '\n\n';
-    await global_notes.writeFile(uuid, new_content + metadata);
+      event.preventDefault();
   
-    let main = document.getElementsByTagName('main')[0];
-    // let footer = document.getElementsByTagName('footer')[0];
-    main.innerHTML = (await renderDisc(uuid))[0];
-    main.scrollTop = main.scrollHeight;
-    return false;
-  };
-  global.handlers = {handleMsg};
-  return [
-    note, 
-    `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
+      let msg_input = document.getElementById('msg_input');
+      let msg = msg_input.value;
+      console.log('msg', msg);
+      msg_input.value = '';
+  
+      let content = await global_notes.readFile(uuid);
+      let lines = content.split("\n");
+      const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
+      const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
+      const old_content = content_lines.join("\n");
+      const metadata = metadata_lines.join("\n");
+  
+      const new_content = old_content + `\n- msg: ${msg}` + '\n' + `  - Date: ${new Date}` + '\n\n';
+      await global_notes.writeFile(uuid, new_content + metadata);
+    
+      let main = document.getElementsByTagName('main')[0];
+      // let footer = document.getElementsByTagName('footer')[0];
+      main.innerHTML = (await renderDisc(uuid))[0];
+      main.scrollTop = main.scrollHeight;
+      return false;
+    };
+    global.handlers = {handleMsg};
+    modify_form = `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
       <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
     </form>
-    <button onclick="gotoEdit('${uuid}')">edit</button>
+    <button onclick="gotoEdit('${uuid}')">edit</button>`
+  }
+  
+  return [
+    note, 
+    `${modify_form}
     <button onclick="gotoList()">list</button>
     <button onclick="gotoJournal()">journal</button>
     <button onclick="gotoSync()">sync</button>
