@@ -297,13 +297,27 @@ function rewriteSection(section, note) {
   }
 
   let new_blocks = [];
-  for (let i = 0; i < section.blocks.length; ++i) {
-    let block = section.blocks[i];
+  for (let block of section.blocks) {
+    if (block.length === 0) {  // TODO i should maybe actually render blocks like [] as newlines
+      continue;
+    }
     new_blocks.push(rewriteBlock(block, note));
-    if (block.length === 0) {
-      i ++;
+  }
+  
+  // push blocks that aren't messages onto messages
+  let blocks = new_blocks;
+  new_blocks = [];
+  for (let block of blocks) {
+    let not_msg = !(block instanceof Msg);
+    let prev_back = new_blocks.slice(-1);
+    let prev_is_msg = prev_back.length === 1 && prev_back[0] instanceof Msg;
+    if (not_msg && prev_is_msg) {
+      prev_back[0].blocks.push(block);
+    } else {
+      new_blocks.push(block);
     }
   }
+
   section.blocks = new_blocks;
   return section;
   // return rewriteDiscSection(section, isJournal);
@@ -328,9 +342,11 @@ class Msg {
   content;
   date;
   origin;
+  blocks;
   constructor(properties) {
     console.assert(['content', 'date', 'msg', 'origin'].every(x => Object.keys(properties).includes(x)), properties, 'huh');
     Object.assign(this, properties);
+    this.blocks = [];
   }
 }
 
@@ -466,7 +482,10 @@ const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', min
 function htmlMsg(item) {
   let line = htmlLine(item.msg);
   let href_id = `/disc/${item.origin}#${item.date}`;
-  return `<div class='msg' id='${item.date}'><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(item.date))}</a><div class="msg_content">${line}</div></div>`
+  return (
+    `<div class='msg' id='${item.date}'><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(item.date))}</a><div class="msg_content">${line}</div></div>
+    ${item.blocks.map(block => JSON.stringify(block, undefined, 2)).join("")}`
+  ) 
 }
 
 function htmlLine(line) {
@@ -483,8 +502,58 @@ function htmlLine(line) {
 
 // DISC
 
+const MIX_FILE = 'disc mix state';
+
 async function renderDisc(uuid) {
-  let note = await htmlNote(uuid);
+  let mix_state = await cache.readFile(MIX_FILE);
+  if (mix_state === null) {
+    mix_state = "false";
+    await cache.writeFile(MIX_FILE, mix_state);
+  }
+  const mix = async () => {
+    // toggle mix state in the file
+    await cache.writeFile(MIX_FILE, (await cache.readFile(MIX_FILE)) === "true" ? "false" : "true");
+    let main = document.getElementsByTagName('main')[0];
+    let footer = document.getElementsByTagName('footer')[0];
+    [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
+    return false;
+  };
+  mix_button_value = mix_state === 'true' ? "unmix" : "mix";
+  let mix_button = `<button onclick="return global.handlers.mix(event)" id='mix_button'>${mix_button_value}</button>`;
+
+  console.log('mix state', mix_state);
+  let rendered_note = '';
+  if (mix_state === "true") {
+    let current_page = rewrite(await parseFile(uuid), uuid);
+
+    // notes that share our title
+    let sibling_notes = await getAllNotesWithTitle(await getTitle(uuid));
+    console.log('mixing entry sections of', sibling_notes, "with current note", uuid);
+    let siblings = await Promise.all(sibling_notes.map(async (sibling_id) => { return {sibling_id, rewritten_page: rewrite(await parseFile(sibling_id), sibling_id)}; }));
+    
+    let entry_sections = siblings.map(note => note.rewritten_page.filter(section => section.title === 'entry')[0]);
+    let entry_blocks = entry_sections.map(entry_section => entry_section.blocks);
+    let entry_nonmessage_blocks = entry_blocks.map(blocks => {
+      let first_msg_idx = blocks.findIndex(b => b instanceof Msg);
+      if (first_msg_idx !== -1) {
+        return blocks.slice(0, first_msg_idx);
+      }
+      return [];
+    });
+    let entry_nonmessages = entry_nonmessage_blocks.reduce((a, b) => [...a, ...b], []);
+    let entry_message_blocks = entry_blocks.map((blocks, i) => blocks.slice(entry_nonmessage_blocks[i].length));
+    let entry_messages = entry_message_blocks.reduce((a, b) => [...a, ...b], []);
+    entry_messages.sort((a, b) => new Date(a.date) - new Date(b.date));
+    let new_blocks = [...entry_nonmessages, ...entry_messages];
+
+    let current_entry_section = current_page.filter(section => section.title === 'entry')[0];
+    current_entry_section.blocks = new_blocks;
+
+    let rendered = current_page.map(htmlSection).join("\n");
+    rendered_note = "<div class='msglist'>" + rendered + "</div>";
+  } else {
+    rendered_note = await htmlNote(uuid);
+  }
 
   let modify_form = "";
   if (uuid.startsWith(await get_local_repo_name())) {
@@ -513,22 +582,24 @@ async function renderDisc(uuid) {
       main.scrollTop = main.scrollHeight;
       return false;
     };
-    global.handlers = {handleMsg};
+    global.handlers = {handleMsg, mix};
     modify_form = `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
       <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
     </form>
     <button onclick="gotoEdit('${uuid}')">edit</button>`
+  } else {
+    global.handlers = {mix};
   }
   
   return [
-    note, 
+    rendered_note, 
     `${modify_form}
     <button onclick="gotoList()">list</button>
     <button onclick="gotoJournal()">journal</button>
     <button onclick="gotoSync()">sync</button>
     <button onclick="gotoSearch()">search</button>
     <button onclick="gotoSetup()">setup</button>
-    `
+    ${mix_button}`
   ];
 }
 
