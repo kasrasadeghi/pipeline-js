@@ -97,25 +97,35 @@ Tags: Journal`;
   return uuid;
 }
 
-async function getDate(uuid) {
+async function getMetadata(uuid) {
   const note = await global_notes.readFile(uuid);
-  const lines = note.split("\n");
-  const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---") + 1);
-  const date_line = metadata_lines.find(line => line.startsWith("Date: "));
-  const date = date_line.split(": ", 2)[1];  // 2 is number of chunks, not number of splits
-  return date;
+  try {
+    const lines = note.split("\n");
+    const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---") + 1);
+    let metadata = {};
+    metadata_lines.forEach(line => {
+      let [first, ...rest] = line.split(": ");
+      metadata[first.trim()] = rest.join(": ");
+    });
+    return metadata;
+  } catch (e) {
+    console.log('could not find metadata in', uuid, e);
+    throw Error("could not find metadata");
+  }
 }
 
-async function getTitle(uuid, storage) {
-  if (storage === undefined) {
-    storage = global_notes;
+async function getTitle(uuid) {
+  const note = await global_notes.readFile(uuid);
+  try {
+    const lines = note.split("\n");
+    const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---") + 1);
+    const title_line = metadata_lines.find(line => line.startsWith("Title: "));
+    const title = title_line.split(": ", 2)[1];  // 2 is number of chunks, not number of splits
+    return title;
+  } catch(e) {
+    console.log(e);
+    return 'broken metadata, no title';
   }
-  const note = await storage.readFile(uuid);
-  const lines = note.split("\n");
-  const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---") + 1);
-  const title_line = metadata_lines.find(line => line.startsWith("Title: "));
-  const title = title_line.split(": ", 2)[1];  // 2 is number of chunks, not number of splits
-  return title;
 }
 
 // JOURNAL
@@ -144,8 +154,16 @@ async function getNoteTitleMap() {
 
 async function getNoteMetadataMap() {
   const notes = await global_notes.listFiles();
-  // TODO an easy optimization would be to gather the metadata from a single read instead of doing it twice
-  return await Promise.all(notes.map(async uuid => { return {uuid, title: await getTitle(uuid), date: await getDate(uuid)}; }));
+  return await Promise.all(notes.map(async uuid => { 
+    let metadata = null;
+    try {
+      metadata = await getMetadata(uuid);
+    } catch (e) {
+      console.log('broken metadata', uuid, e);
+      metadata = {Title: "broken metadata", Date: `${new Date()}`};
+    }
+    return {uuid, title: metadata.Title, date: metadata.Date}; 
+  }));
 }
 
 async function getNotesWithTitle(title, repo) {
@@ -225,7 +243,7 @@ function parseTree(block) {
     }
   }
 
-  console.log('indent_lines', indent_lines);
+  // console.log('indent_lines', indent_lines);
 
   let roots = [];
   let stack = [];
@@ -356,7 +374,7 @@ function rewriteBlock(block, note) {
   }
   if (block.length === 1) {
     try {
-      console.log('rewrite block', block);
+      // console.log('rewrite block', block);
       let item = block[0];
       if (item.value.startsWith("msg: ") && item.indent === 0 && item.children.length === 1) {
         let child = item.children[0];
