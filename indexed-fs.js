@@ -593,12 +593,14 @@ async function renderDisc(uuid) {
   
       const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
       await global_notes.writeFile(uuid, new_content + metadata);
-      await pushLocalSimple();
-      await pullRemoteSimple();
-    
+      
       let main = document.getElementsByTagName('main')[0];
       main.innerHTML = (await renderDisc(uuid))[0]; // the parentheses around the `await` here are super important
       main.scrollTop = main.scrollHeight;
+
+      await pushLocalSimple();
+      await pullRemoteSimple();
+    
       return false;
     };
     global.handlers = {handleMsg, mix};
