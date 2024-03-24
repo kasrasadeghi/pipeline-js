@@ -370,7 +370,7 @@ function rewriteBlock(block, note) {
         }
       }
     } catch (e) {
-      console.log("failed to rewrite block:", e);
+      console.log("failed to rewrite block:", block, e);
       return block;
     }
   }
@@ -575,10 +575,11 @@ async function renderDisc(uuid) {
   
       const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
       await global_notes.writeFile(uuid, new_content + metadata);
+      await pushLocalSimple();
+      await pullRemoteSimple();
     
       let main = document.getElementsByTagName('main')[0];
-      // let footer = document.getElementsByTagName('footer')[0];
-      main.innerHTML = (await renderDisc(uuid))[0];
+      main.innerHTML = (await renderDisc(uuid))[0]; // the parentheses around the `await` here are super important
       main.scrollTop = main.scrollHeight;
       return false;
     };
@@ -788,41 +789,61 @@ async function pullRemoteNotes(repo, dry_run) {
   let local_status = await getLocalStatus(repo);
   let remote_status = await getRemoteStatus(repo);
   let updated = statusDiff(local_status, remote_status);
-  let updated_notes = Object.keys(updated)
+  let updated_notes = Object.keys(updated);
   console.assert(updated_notes.every(x => x.startsWith(repo + '/')));
 
   let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
   
   if (dry_run) {
-    document.getElementById(repo + '_sync_output').innerHTML = "update found:\n" + JSON.stringify(updated, undefined, 2);
-    return;
+    writeOutputIfElementIsPresent(repo + '_sync_output', "update found:\n" + JSON.stringify(updated, undefined, 2));
   } else {
-    document.getElementById(repo + '_sync_output').innerHTML = "update committed:\n" + JSON.stringify(updated, undefined, 2);
+    writeOutputIfElementIsPresent(repo + '_sync_output', "update committed:\n" + JSON.stringify(updated, undefined, 2));
     console.log('updated uuids', updated_uuids);
+    if (updated_uuids.length > 0) {
+      await fetchNotes(repo, updated_uuids);
+    }
   }
-  if (updated_uuids.length > 0) {
-    await fetchNotes(repo, updated_uuids);
+}
+
+async function pullRemoteSimple() {
+  let [ignored_local, ...remotes] = await getRepos();
+  for (let subscribed_remote of remotes) {
+    await pullRemoteNotes(subscribed_remote);
   }
+}
+
+async function pushLocalSimple() {
+  let [local, ...ignored_remotes] = await getRepos();
+  await pushLocalNotes(local);
+}
+
+function writeOutputIfElementIsPresent(element_id, content) {
+  let element = document.getElementById(element_id);
+  if (element === null) {
+    return;
+  }
+  element.innerHTML = content;
 }
 
 async function pushLocalNotes(repo, dry_run) {
   let local_status = await getLocalStatus(repo);
   let remote_status = await getRemoteStatus(repo);
-  let updated = statusDiff(remote_status, local_status);  // flipped
-  let updated_notes = Object.keys(updated)
+  let updated = statusDiff(remote_status, local_status);  // flipped, so it is what things in local aren't yet in the remote.
+  // local is the new state, remote is the old state, this computes the diff to get from the old state to the new.
+  
+  let updated_notes = Object.keys(updated);
   console.assert(updated_notes.every(x => x.startsWith(repo + '/')));
 
   let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
   
   if (dry_run) {
-    document.getElementById(repo + '_sync_output').innerHTML = "push update found:\n" + JSON.stringify(updated, undefined, 2);
-    return;
+    writeOutputIfElementIsPresent(repo + '_sync_output', "push update found:\n" + JSON.stringify(updated, undefined, 2));
   } else {
-    document.getElementById(repo + '_sync_output').innerHTML = "push update committed:\n" + JSON.stringify(updated, undefined, 2);
+    writeOutputIfElementIsPresent(repo + '_sync_output', "push update committed:\n" + JSON.stringify(updated, undefined, 2));
     console.log('updated uuids', updated_uuids);
-  }
-  if (updated_uuids.length > 0) {
-    await putNotes(repo, updated_uuids);
+    if (updated_uuids.length > 0) {
+      await putNotes(repo, updated_uuids);
+    }
   }
 }
 
@@ -890,6 +911,8 @@ async function hashToString(arraybuffer) {
 
 // a non symmetric set difference, that also compares hashes.
 // tells you the number of things in `right` that are not in `left`, or have different hashes.
+// we can think of `right` as the `source` of possible changes, and `left` as the `destination`,
+// as the result must contain all elements in `right` that are not in `left` or are updated.
 function statusDiff(left, right) {
   let diff = {};
   let left_keys = Object.keys(left);
