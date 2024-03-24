@@ -110,7 +110,10 @@ def receive_headers_and_content(client_connection):
     print(headers)
     if 'Content-Length' in headers:
         content_length = int(headers['Content-Length'])
-        body += client_connection.recv(content_length - len(body))
+        while content_length - len(body) > 0:
+            print(f'{len(body)=} {content_length=}')
+            body += client_connection.recv(content_length - len(body))
+        print(f'{len(body)=} {content_length=}')
     return {'method': method, 'path': path, 'httpver': httpver, 'headers': headers, 'body': body}
 
 
@@ -184,7 +187,6 @@ while True:
                 note = path.removeprefix('/put/')
                 print(note)
 
-                print('body!:', body)
                 # the note is of format <repo>/<uuid>.note
                 if '/' not in note:
                     http_response = HTTP_NOT_FOUND(b"bad note: " + note.encode())
