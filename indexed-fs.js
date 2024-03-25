@@ -588,25 +588,31 @@ async function renderDisc(uuid) {
   
       let msg_input = document.getElementById('msg_input');
       let msg = msg_input.value;
-      console.log('msg', msg);
-      msg_input.value = '';
-  
-      let content = await global_notes.readFile(uuid);
-      let lines = content.split("\n");
-      const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
-      const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
-      const old_content = content_lines.join("\n");
-      const metadata = metadata_lines.join("\n");
-  
-      const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
-      await global_notes.writeFile(uuid, new_content + metadata);
+      if (msg.trim().length > 0) {
+        console.log('msg', msg);
+        msg_input.value = '';
+    
+        let content = await global_notes.readFile(uuid);
+        let lines = content.split("\n");
+        const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
+        const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
+        const old_content = content_lines.join("\n");
+        const metadata = metadata_lines.join("\n");
+    
+        const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
+        await global_notes.writeFile(uuid, new_content + metadata);
+        
+        let main = document.getElementsByTagName('main')[0];
+        main.innerHTML = (await renderDisc(uuid))[0]; // the parentheses around the `await` here are super important
+        main.scrollTop = main.scrollHeight;
+      }
       
+      await pushLocalSimple();
+      await pullRemoteSimple();
+
       let main = document.getElementsByTagName('main')[0];
       main.innerHTML = (await renderDisc(uuid))[0]; // the parentheses around the `await` here are super important
       main.scrollTop = main.scrollHeight;
-
-      await pushLocalSimple();
-      await pullRemoteSimple();
     
       return false;
     };
