@@ -500,8 +500,15 @@ const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', min
 function htmlMsg(item) {
   let line = htmlLine(item.msg);
   let href_id = `/disc/${item.origin}#${item.date}`;
-  return (
-    `<div class='msg' id='${item.date}'><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(item.date))}</a><div class="msg_content">${line}</div></div>
+  let style_option = "";
+  if (item.origin !== getCurrentNoteUuid()) {
+    style_option = " style='background: #5f193f'";
+  }
+  return (`
+    <div class='msg' id='${item.date}'>
+      <a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(item.date))}</a>
+      <div class="msg_content"${style_option}>${line}</div>
+    </div>
     ${item.blocks.map(block => JSON.stringify(block, undefined, 2)).join("")}`
   ) 
 }
