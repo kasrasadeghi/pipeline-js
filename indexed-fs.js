@@ -629,7 +629,7 @@ async function renderDisc(uuid) {
     rendered_note, 
     `${modify_form}
     <button onclick="gotoList()">list</button>
-    <button onclick="gotoJournal()">journal</button>
+    <button onclick="gotoJournal()">jour</button>
     <button onclick="gotoSync()">sync</button>
     <button onclick="gotoSearch()">search</button>
     <button onclick="gotoSetup()">setup</button>

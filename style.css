@@ -1,6 +1,5 @@
 :root {
-  --footer_menu_size: 80px;
-  --navbar_size: 40px;
+  --footer_menu_size: 100px;
   --header_color: #bb6;
   --link_button_main_color: orange;
   --link_button_hover_color: red;
@@ -22,21 +21,13 @@
 
 :root {
   --main_padding: 10px;
-  --main_height: calc(100dvh - var(--navbar_size) - var(--footer_menu_size) - 2*var(--main_padding));
+  --main_height: calc(100dvh - var(--footer_menu_size) - 2*var(--main_padding));
 }
 
 /* initial layout */
 body {
   margin: 0;
   background: var(--body_background_color);
-}
-header {
-  display: flex; align-items: center;
-  width: 100%;
-  position: absolute; top: 0; left: 0;
-  height: var(--navbar_size);
-  margin: 0px;
-  z-index: 12;
 }
 footer {
   background: #552909;
@@ -51,20 +42,6 @@ main {
   width: -webkit-fill-available;
   padding: var(--main_padding);
   overflow-y: auto;
-}
-
-/* colored layout */
-header {
-  box-shadow: 0px 0px 11px 2px var(--header_color);
-  background: var(--header_color);
-}
-header > a, label#sidebar-toggler_label {
-  margin: 5px;
-  padding: 0px 5px 0 0;
-  color: var(--nav_button_color);
-}
-header > label#sidebar-toggler_label {
-  margin-left: 15px;
 }
 
 /* forms */
