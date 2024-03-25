@@ -506,7 +506,7 @@ function htmlMsg(item) {
   }
   return (`
     <div class='msg' id='${item.date}'>
-      <a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(item.date))}</a>
+      <div><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(item.date))}</a> ${item.origin.split('/')[0]}</div>
       <div class="msg_content"${style_option}>${line}</div>
     </div>
     ${item.blocks.map(block => JSON.stringify(block, undefined, 2)).join("")}`
