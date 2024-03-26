@@ -46,6 +46,31 @@ def HTTP_NOT_FOUND(msg):
 def get_repo_path(repo):
     return os.path.join(NOTES_ROOT, repo)
 
+def compute_status(repos, headers) -> "http_response":
+    def hash(note_path):
+        with open(note_path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    
+    def hash_repo(repo):
+        repo_path = get_repo_path(repo)
+        if not os.path.isdir(repo_path):
+            return {}
+        else:
+            return {os.path.join(repo, uuid): hash(os.path.join(repo_path, uuid)) for uuid in os.listdir(repo_path)}
+
+    for repo in repos:
+        if '/' in repo or '..' in repo:
+            return HTTP_NOT_FOUND(b"bad repo: " + repo.encode())
+    
+    cors_header = allow_cors_for_localhost(headers)
+    if len(repos) == 1:
+        status = hash_repo(repo)
+        return HTTP_OK_JSON(status, extra_header=cors_header)
+    else:
+        status = {repo: hash_repo(repo) for repo in repos}
+        return HTTP_OK_JSON(status, extra_header=cors_header)
+
+
 def allow_cors_for_localhost(headers):
     if 'Origin' in headers:
         from urllib.parse import urlparse
@@ -207,21 +232,8 @@ while True:
                 client_connection.close()
                 continue
             elif path.startswith('/status/') and method == 'GET':
-                repo = path.removeprefix('/status/')
-                repo_path = get_repo_path(repo)
-                def hash(note_path):
-                    with open(note_path, "rb") as f:
-                        return hashlib.sha256(f.read()).hexdigest()
-                if '/' in repo or '..' in repo:
-                    http_response = HTTP_NOT_FOUND(b"bad repo: " + repo.encode())
-                elif not os.path.isdir(repo_path):
-                    cors_header = allow_cors_for_localhost(headers)
-                    http_response = HTTP_OK_JSON({}, extra_header=cors_header)
-                else:
-                    cors_header = allow_cors_for_localhost(headers)
-                    status = {os.path.join(repo, uuid): hash(os.path.join(repo_path, uuid)) for uuid in os.listdir(repo_path)}
-                    http_response = HTTP_OK_JSON(status, extra_header=cors_header)
-
+                repos = path.removeprefix('/status/')
+                http_response = compute_status(repos.split(','), headers)
                 client_connection.sendall(http_response)
                 client_connection.close()
                 continue

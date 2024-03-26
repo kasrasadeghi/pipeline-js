@@ -544,7 +544,21 @@ function htmlLine(line) {
 
 const MIX_FILE = 'disc mix state';
 
+async function paintDisc(uuid, flag) {
+  let main = document.getElementsByTagName('main')[0];
+  let footer = document.getElementsByTagName('footer')[0];
+  if (flag === 'only main') {
+    main.innerHTML = (await renderDisc(uuid))[0];
+  } else {
+    [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
+  }
+  main.scrollTop = main.scrollHeight;
+  updateSelected();
+}
+
 async function renderDisc(uuid) {
+  const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
+
   let mix_state = await cache.readFile(MIX_FILE);
   if (mix_state === null) {
     mix_state = "false";
@@ -553,9 +567,7 @@ async function renderDisc(uuid) {
   const mix = async () => {
     // toggle mix state in the file
     await cache.writeFile(MIX_FILE, (await cache.readFile(MIX_FILE)) === "true" ? "false" : "true");
-    let main = document.getElementsByTagName('main')[0];
-    let footer = document.getElementsByTagName('footer')[0];
-    [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
+    paintDisc(uuid);
     return false;
   };
   mix_button_value = mix_state === 'true' ? "unmix" : "mix";
@@ -595,7 +607,8 @@ async function renderDisc(uuid) {
     rendered_note = await htmlNote(uuid);
   }
 
-  let modify_form = "";
+  let msg_form = "";
+  let edit_button = "";
   if (uuid.startsWith(await get_local_repo_name())) {
     const handleMsg = async (event) => {
 
@@ -617,47 +630,47 @@ async function renderDisc(uuid) {
         const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
         await global_notes.writeFile(uuid, new_content + metadata);
         
-        let main = document.getElementsByTagName('main')[0];
-        main.innerHTML = (await renderDisc(uuid))[0]; // the parentheses around the `await` here are super important
-        main.scrollTop = main.scrollHeight;
+        paintDisc(uuid, 'only main');
       }
       
-      await pushLocalSimple();
-      await pullRemoteSimple();
+      let repos = await getRepos();
+      let combined_remote_status = await getRemoteStatus(repos.join(",")); 
+      displayState("syncing...");
+      await pullRemoteSimple(combined_remote_status);
 
-      let main = document.getElementsByTagName('main')[0];
-      main.innerHTML = (await renderDisc(uuid))[0]; // the parentheses around the `await` here are super important
-      main.scrollTop = main.scrollHeight;
-    
+      paintDisc(uuid, 'only main');
+      displayState("done");
+      await pushLocalSimple(combined_remote_status);
       return false;
     };
     global.handlers = {handleMsg, mix};
-    modify_form = `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
+    msg_form = `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
       <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
-    </form>
-    <button onclick="gotoEdit('${uuid}')">edit</button>`
+    </form>`;
+    edit_button = `<button onclick="gotoEdit('${uuid}')">edit</button>`;
   } else {
     global.handlers = {mix};
   }
   
   return [
     rendered_note, 
-    `${modify_form}
-    <button onclick="gotoList()">list</button>
-    <button onclick="gotoJournal()">jour</button>
-    <button onclick="gotoSync()">sync</button>
-    <button onclick="gotoSearch()">search</button>
-    <button onclick="gotoSetup()">setup</button>
-    ${mix_button}`
+    `${msg_form}
+    <div>
+      ${edit_button}
+      <button onclick="gotoList()">list</button>
+      <button onclick="gotoJournal()">jour</button>
+      <button onclick="gotoSync()">sync</button>
+      <button onclick="gotoSearch()">search</button>
+      <button onclick="gotoSetup()">setup</button>
+      ${mix_button}
+    </div>
+    <div id='state_display'></div>`
   ];
 }
 
 async function gotoDisc(uuid) {
-  let main = document.getElementsByTagName('main')[0];
-  let footer = document.getElementsByTagName('footer')[0];
   window.history.pushState({},"", "/disc/" + uuid);
-  [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
-  main.scrollTop = main.scrollHeight;
+  paintDisc(uuid);
   return false;
 }
 
@@ -834,9 +847,15 @@ async function getAllNotes(repo) {
   }
 }
 
-async function pullRemoteNotes(repo, dry_run) {
+async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
   let local_status = await getLocalStatus(repo);
-  let remote_status = await getRemoteStatus(repo);
+  let remote_status = undefined;
+  if (combined_remote_status !== undefined) {
+    console.log('using combined remote status');
+    remote_status = combined_remote_status[repo];
+  } else {
+    remote_status = await getRemoteStatus(repo);
+  } 
   let updated = statusDiff(local_status, remote_status);
   let updated_notes = Object.keys(updated);
   console.assert(updated_notes.every(x => x.startsWith(repo + '/')));
@@ -854,16 +873,15 @@ async function pullRemoteNotes(repo, dry_run) {
   }
 }
 
-async function pullRemoteSimple() {
+async function pullRemoteSimple(combined_remote_status) {
   let [ignored_local, ...remotes] = await getRepos();
-  for (let subscribed_remote of remotes) {
-    await pullRemoteNotes(subscribed_remote);
-  }
+  await Promise.all(remotes.map(async subscribed_remote => 
+    await pullRemoteNotes(subscribed_remote, /*dry run*/false, combined_remote_status)));
 }
 
-async function pushLocalSimple() {
+async function pushLocalSimple(combined_remote_status) {
   let [local, ...ignored_remotes] = await getRepos();
-  await pushLocalNotes(local);
+  await pushLocalNotes(local, /*dry run*/false, combined_remote_status);
 }
 
 function writeOutputIfElementIsPresent(element_id, content) {
@@ -874,9 +892,15 @@ function writeOutputIfElementIsPresent(element_id, content) {
   element.innerHTML = content;
 }
 
-async function pushLocalNotes(repo, dry_run) {
+async function pushLocalNotes(repo, dry_run, combined_remote_status) {
   let local_status = await getLocalStatus(repo);
-  let remote_status = await getRemoteStatus(repo);
+  let remote_status = undefined;
+  if (combined_remote_status !== undefined) {
+    console.log('using combined remote status');
+    remote_status = combined_remote_status[repo];
+  } else {
+    remote_status = await getRemoteStatus(repo);
+  } 
   let updated = statusDiff(remote_status, local_status);  // flipped, so it is what things in local aren't yet in the remote.
   // local is the new state, remote is the old state, this computes the diff to get from the old state to the new.
   
@@ -981,8 +1005,9 @@ function statusDiff(left, right) {
   return diff;
 }
 
-async function getRemoteStatus(repo) {
-  let statuses = await fetch((await getRemote()) + '/api/status/' + repo).then(x => x.json());
+async function getRemoteStatus(repo_or_repos) {
+  console.log('getting remote status for', repo_or_repos); // may be comma separated list
+  let statuses = await fetch((await getRemote()) + '/api/status/' + repo_or_repos).then(x => x.json());
   return statuses;
 }
 
@@ -1218,9 +1243,7 @@ async function handleRouting() {
 
   if (window.location.pathname.startsWith('/disc/')) {
     let uuid = window.location.pathname.slice("/disc/".length);
-    [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
-    main.scrollTop = main.scrollHeight;
-    updateSelected();
+    paintDisc(uuid);
 
   } else if (window.location.pathname.startsWith('/edit/')) {
     let uuid = window.location.pathname.slice("/edit/".length);
@@ -1257,7 +1280,6 @@ async function run() {
   await cache.init();
   console.log('today is', today());
 
-  // we can only handle messages once we know what current_uuid is
   global = {};
 
   await handleRouting();
