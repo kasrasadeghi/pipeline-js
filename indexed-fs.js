@@ -113,8 +113,13 @@ function parseMetadata(note_content) {
   const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---") + 1);
   let metadata = {};
   metadata_lines.forEach(line => {
-    let [first, ...rest] = line.split(": ");
-    metadata[first.trim()] = rest.join(": ");
+    let split_index = line.indexOf(": ");
+    if (split_index === -1) {
+      return;
+    }
+    let first = line.slice(0, split_index);
+    let rest = line.slice(split_index + 2); // ": ".length
+    metadata[first.trim()] = rest;
   });
   return metadata;
 }
@@ -162,11 +167,6 @@ function today() {
   return `${month} ${day}${day_suffix}, ${year}`;
 }
 
-async function getNoteTitleMap() {
-  const notes = await global_notes.listFiles();
-  return await Promise.all(notes.map(async uuid => { return {uuid, title: await getTitle(uuid)}; }));
-}
-
 async function getNoteMetadataMap() {
   const blobs = await global_notes.readAllFiles();
   return blobs.map(blob => { 
@@ -182,12 +182,12 @@ async function getNoteMetadataMap() {
 }
 
 async function getNotesWithTitle(title, repo) {
-  const files_with_names = await getNoteTitleMap();
+  const files_with_names = await getNoteMetadataMap();
   return files_with_names.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
 }
 
 async function getAllNotesWithTitle(title) {
-  const files_with_names = await getNoteTitleMap();
+  const files_with_names = await getNoteMetadataMap();
   return files_with_names.filter(note => note.title === title).map(note => note.uuid);
 }
 
