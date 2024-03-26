@@ -567,7 +567,7 @@ async function renderDisc(uuid) {
   const mix = async () => {
     // toggle mix state in the file
     await cache.writeFile(MIX_FILE, (await cache.readFile(MIX_FILE)) === "true" ? "false" : "true");
-    paintDisc(uuid);
+    await paintDisc(uuid);
     return false;
   };
   mix_button_value = mix_state === 'true' ? "unmix" : "mix";
@@ -630,15 +630,15 @@ async function renderDisc(uuid) {
         const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
         await global_notes.writeFile(uuid, new_content + metadata);
         
-        paintDisc(uuid, 'only main');
+        await paintDisc(uuid, 'only main');
       }
       
       let repos = await getRepos();
       let combined_remote_status = await getRemoteStatus(repos.join(",")); 
       displayState("syncing...");
       await pullRemoteSimple(combined_remote_status);
-
-      paintDisc(uuid, 'only main');
+      await paintDisc(uuid, 'only main');
+      
       displayState("done");
       await pushLocalSimple(combined_remote_status);
       return false;
@@ -1124,7 +1124,7 @@ async function gotoSearch() {
 
 async function renderSetup() {
 
-  // TODO allow setting local repo and also renaming local repo?
+  // TODO allow renaming local repo?
 
   const handleSetup = async (event) => {
     if (event === true || event.key === 'Enter') {
