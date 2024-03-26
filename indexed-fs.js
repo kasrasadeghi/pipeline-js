@@ -697,6 +697,7 @@ async function gotoList() {
   let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
   [main.innerHTML, footer.innerHTML] = await renderList();
+  main.scrollTop = 0;
 }
 
 async function renderList() {
