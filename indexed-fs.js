@@ -12,7 +12,7 @@ class FileDB {
       request.onupgradeneeded = event => {
         this.db = event.target.result;
         this.db.createObjectStore(this.storeName, { keyPath: "path" });
-        // TODO create index on uuid and other stuff
+        // maybe TODO create index on title and date and other metadata
       };
 
       request.onsuccess = event => {
@@ -70,6 +70,17 @@ class FileDB {
       request.onerror = () => reject(request.error);
     });
   }
+
+  async readAllFiles() {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.storeName]);
+      const objectStore = transaction.objectStore(this.storeName);
+      const request = objectStore.getAll();
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
 }
 const global_notes = new FileDB();
 
@@ -97,17 +108,21 @@ Tags: Journal`;
   return uuid;
 }
 
+function parseMetadata(note_content) {
+  const lines = note_content.split("\n");
+  const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---") + 1);
+  let metadata = {};
+  metadata_lines.forEach(line => {
+    let [first, ...rest] = line.split(": ");
+    metadata[first.trim()] = rest.join(": ");
+  });
+  return metadata;
+}
+
 async function getMetadata(uuid) {
   const note = await global_notes.readFile(uuid);
   try {
-    const lines = note.split("\n");
-    const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---") + 1);
-    let metadata = {};
-    metadata_lines.forEach(line => {
-      let [first, ...rest] = line.split(": ");
-      metadata[first.trim()] = rest.join(": ");
-    });
-    return metadata;
+    return parseMetadata(note);
   } catch (e) {
     console.log('could not find metadata in', uuid, e);
     throw Error("could not find metadata");
@@ -153,17 +168,17 @@ async function getNoteTitleMap() {
 }
 
 async function getNoteMetadataMap() {
-  const notes = await global_notes.listFiles();
-  return await Promise.all(notes.map(async uuid => { 
+  const blobs = await global_notes.readAllFiles();
+  return blobs.map(blob => { 
     let metadata = null;
     try {
-      metadata = await getMetadata(uuid);
+      metadata = parseMetadata(blob.content);
     } catch (e) {
-      console.log('broken metadata', uuid, e);
+      console.log('broken metadata', blob.path, e);
       metadata = {Title: "broken metadata", Date: `${new Date()}`};
     }
-    return {uuid, title: metadata.Title, date: metadata.Date}; 
-  }));
+    return {uuid: blob.path, title: metadata.Title, date: metadata.Date}; 
+  });
 }
 
 async function getNotesWithTitle(title, repo) {
@@ -1228,6 +1243,12 @@ async function handleRouting() {
   } else {
     await gotoJournal();
   }
+}
+
+async function perf(func) {
+  console.time('perf');
+  await func();
+  console.timeEnd('perf');
 }
 
 async function run() {
