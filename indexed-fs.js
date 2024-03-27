@@ -134,20 +134,6 @@ async function getMetadata(uuid) {
   }
 }
 
-async function getTitle(uuid) {
-  const note = await global_notes.readFile(uuid);
-  try {
-    const lines = note.split("\n");
-    const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---") + 1);
-    const title_line = metadata_lines.find(line => line.startsWith("Title: "));
-    const title = title_line.split(": ", 2)[1];  // 2 is number of chunks, not number of splits
-    return title;
-  } catch(e) {
-    console.log(e);
-    return 'broken metadata, no title';
-  }
-}
-
 // JOURNAL
 
 function today() {
@@ -177,7 +163,7 @@ async function getNoteMetadataMap() {
       console.log('broken metadata', blob.path, e);
       metadata = {Title: "broken metadata", Date: `${new Date()}`};
     }
-    return {uuid: blob.path, title: metadata.Title, date: metadata.Date}; 
+    return {uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content}; 
   });
 }
 
@@ -186,8 +172,9 @@ async function getNotesWithTitle(title, repo) {
   return files_with_names.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
 }
 
-async function getAllNotesWithTitle(title) {
+async function getAllNotesWithSameTitleAs(uuid) {
   const files_with_names = await getNoteMetadataMap();
+  let title = files_with_names.find(note => note.uuid == uuid).title;
   return files_with_names.filter(note => note.title === title).map(note => note.uuid);
 }
 
@@ -556,6 +543,36 @@ async function paintDisc(uuid, flag) {
   updateSelected();
 }
 
+async function renderDiscMixedBody(uuid) {
+  let current_page = rewrite(await parseFile(uuid), uuid);
+
+  // notes that share our title
+  let sibling_notes = await getAllNotesWithSameTitleAs(uuid);
+  console.log('mixing entry sections of', sibling_notes, "with current note", uuid);
+  let siblings = await Promise.all(sibling_notes.map(async (sibling_id) => { return {sibling_id, rewritten_page: rewrite(await parseFile(sibling_id), sibling_id)}; }));
+  
+  let entry_sections = siblings.map(note => note.rewritten_page.filter(section => section.title === 'entry')[0]);
+  let entry_blocks = entry_sections.map(entry_section => entry_section.blocks);
+  let entry_nonmessage_blocks = entry_blocks.map(blocks => {
+    let first_msg_idx = blocks.findIndex(b => b instanceof Msg);
+    if (first_msg_idx !== -1) {
+      return blocks.slice(0, first_msg_idx);
+    }
+    return [];
+  });
+  let entry_nonmessages = entry_nonmessage_blocks.reduce((a, b) => [...a, ...b], []);
+  let entry_message_blocks = entry_blocks.map((blocks, i) => blocks.slice(entry_nonmessage_blocks[i].length));
+  let entry_messages = entry_message_blocks.reduce((a, b) => [...a, ...b], []);
+  entry_messages.sort((a, b) => new Date(a.date) - new Date(b.date));
+  let new_blocks = [...entry_nonmessages, ...entry_messages];
+
+  let current_entry_section = current_page.filter(section => section.title === 'entry')[0];
+  current_entry_section.blocks = new_blocks;
+
+  let rendered = current_page.map(htmlSection).join("\n");
+  return "<div class='msglist'>" + rendered + "</div>";
+}
+
 async function renderDisc(uuid) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
 
@@ -576,33 +593,7 @@ async function renderDisc(uuid) {
   console.log('mix state', mix_state);
   let rendered_note = '';
   if (mix_state === "true") {
-    let current_page = rewrite(await parseFile(uuid), uuid);
-
-    // notes that share our title
-    let sibling_notes = await getAllNotesWithTitle(await getTitle(uuid));
-    console.log('mixing entry sections of', sibling_notes, "with current note", uuid);
-    let siblings = await Promise.all(sibling_notes.map(async (sibling_id) => { return {sibling_id, rewritten_page: rewrite(await parseFile(sibling_id), sibling_id)}; }));
-    
-    let entry_sections = siblings.map(note => note.rewritten_page.filter(section => section.title === 'entry')[0]);
-    let entry_blocks = entry_sections.map(entry_section => entry_section.blocks);
-    let entry_nonmessage_blocks = entry_blocks.map(blocks => {
-      let first_msg_idx = blocks.findIndex(b => b instanceof Msg);
-      if (first_msg_idx !== -1) {
-        return blocks.slice(0, first_msg_idx);
-      }
-      return [];
-    });
-    let entry_nonmessages = entry_nonmessage_blocks.reduce((a, b) => [...a, ...b], []);
-    let entry_message_blocks = entry_blocks.map((blocks, i) => blocks.slice(entry_nonmessage_blocks[i].length));
-    let entry_messages = entry_message_blocks.reduce((a, b) => [...a, ...b], []);
-    entry_messages.sort((a, b) => new Date(a.date) - new Date(b.date));
-    let new_blocks = [...entry_nonmessages, ...entry_messages];
-
-    let current_entry_section = current_page.filter(section => section.title === 'entry')[0];
-    current_entry_section.blocks = new_blocks;
-
-    let rendered = current_page.map(htmlSection).join("\n");
-    rendered_note = "<div class='msglist'>" + rendered + "</div>";
+    rendered_note = await renderDiscMixedBody(uuid);
   } else {
     rendered_note = await htmlNote(uuid);
   }
