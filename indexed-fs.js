@@ -5,18 +5,42 @@ class FileDB {
     this.storeName = storeName;
   }
 
-  async init() {
+  async init(versionChange) {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, 1);
 
-      request.onupgradeneeded = event => {
+      request.onupgradeneeded = async (event) => {
         this.db = event.target.result;
+        const old_version = event.oldVersion;
+        const new_version = event.newVersion;
+        console.log('updating database', this.dbName, 'from', old_version, 'to', new_version);
+        
+        switch (old_version) {
+          case 0:
+            // Create first object store:
+            this.db.createObjectStore(this.storeName, { keyPath: 'path' });
+    
+          case 1:
+            // Get the original object store, and create an index on it:
+            // const tx = await db.transaction(this.storeName, 'readwrite');
+            // tx.store.createIndex('title', 'title');
+        }
+      
+      
         this.db.createObjectStore(this.storeName, { keyPath: "path" });
         // maybe TODO create index on title and date and other metadata
       };
 
       request.onsuccess = event => {
         this.db = event.target.result;
+        this.db.onversionchange = () => {
+          this.db.close();
+          if (versionChange !== undefined) {
+            versionChange();
+          } else {
+            alert("Database is outdated, please reload the page.");
+          }
+        };
         resolve();
       };
 
@@ -175,7 +199,7 @@ async function getNotesWithTitle(title, repo) {
 async function getAllNotesWithSameTitleAs(uuid) {
   const files_with_names = await getNoteMetadataMap();
   let title = files_with_names.find(note => note.uuid == uuid).title;
-  return files_with_names.filter(note => note.title === title).map(note => note.uuid);
+  return files_with_names.filter(note => note.title === title);
 }
 
 // PARSE
@@ -548,10 +572,10 @@ async function renderDiscMixedBody(uuid) {
 
   // notes that share our title
   let sibling_notes = await getAllNotesWithSameTitleAs(uuid);
-  console.log('mixing entry sections of', sibling_notes, "with current note", uuid);
-  let siblings = await Promise.all(sibling_notes.map(async (sibling_id) => { return {sibling_id, rewritten_page: rewrite(await parseFile(sibling_id), sibling_id)}; }));
+  console.log('mixing entry sections of', sibling_notes.map(note => note.uuid), "with current note", uuid);
+  let sibling_pages = sibling_notes.map((sibling_note) => rewrite(parseContent(sibling_note.content), sibling_note.uuid));
   
-  let entry_sections = siblings.map(note => note.rewritten_page.filter(section => section.title === 'entry')[0]);
+  let entry_sections = sibling_pages.map(page => page.filter(section => section.title === 'entry')[0]);
   let entry_blocks = entry_sections.map(entry_section => entry_section.blocks);
   let entry_nonmessage_blocks = entry_blocks.map(blocks => {
     let first_msg_idx = blocks.findIndex(b => b instanceof Msg);
@@ -576,20 +600,26 @@ async function renderDiscMixedBody(uuid) {
 async function renderDisc(uuid) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
 
-  let mix_state = await cache.readFile(MIX_FILE);
-  if (mix_state === null) {
-    mix_state = "false";
-    await cache.writeFile(MIX_FILE, mix_state);
+  const has_remote = await hasRemote();
+  let mix_state = "false";
+  let mix_button = '';
+  let mix = () => {};
+  if (has_remote) {
+    let mix_state = await cache.readFile(MIX_FILE);
+    if (mix_state === null) {
+      mix_state = "false";
+      await cache.writeFile(MIX_FILE, mix_state);
+    }
+    const mix = async () => {
+      // toggle mix state in the file
+      await cache.writeFile(MIX_FILE, (await cache.readFile(MIX_FILE)) === "true" ? "false" : "true");
+      await paintDisc(uuid);
+      return false;
+    };
+    mix_button_value = mix_state === 'true' ? "unmix" : "mix";
+    mix_button = `<button onclick="return global.handlers.mix(event)" id='mix_button'>${mix_button_value}</button>`;
   }
-  const mix = async () => {
-    // toggle mix state in the file
-    await cache.writeFile(MIX_FILE, (await cache.readFile(MIX_FILE)) === "true" ? "false" : "true");
-    await paintDisc(uuid);
-    return false;
-  };
-  mix_button_value = mix_state === 'true' ? "unmix" : "mix";
-  let mix_button = `<button onclick="return global.handlers.mix(event)" id='mix_button'>${mix_button_value}</button>`;
-
+  
   console.log('mix state', mix_state);
   let rendered_note = '';
   if (mix_state === "true") {
@@ -634,13 +664,19 @@ async function renderDisc(uuid) {
       await pushLocalSimple(combined_remote_status);
       return false;
     };
-    global.handlers = {handleMsg, mix};
+    if (has_remote) {
+      global.handlers = {handleMsg, mix};
+    } else {
+      global.handlers = {mix};
+    }
     msg_form = `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
       <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
     </form>`;
     edit_button = `<button onclick="gotoEdit('${uuid}')">edit</button>`;
   } else {
-    global.handlers = {mix};
+    if (has_remote) {
+      global.handlers = {mix};
+    }
   }
   
   return [
@@ -650,7 +686,7 @@ async function renderDisc(uuid) {
       ${edit_button}
       <button onclick="gotoList()">list</button>
       <button onclick="gotoJournal()">jour</button>
-      <button onclick="gotoSync()">sync</button>
+      ${await syncButton()}
       <button onclick="gotoSearch()">search</button>
       <button onclick="gotoSetup()">setup</button>
       ${mix_button}
@@ -756,6 +792,26 @@ async function getRemote() {
     await cache.writeFile(SYNC_REMOTE_FILE, '');
   }
   return cache.readFile(SYNC_REMOTE_FILE);
+}
+
+async function hasRemote() {
+  return false;
+  let hostname = window.location.hostname;
+  let self_hosted = hostname.startsWith("10.") || hostname.startsWith("192.");
+  // if we're self_hosted, we have a remote, even if the remote is ''.
+  if (self_hosted) {
+    return true;
+  }
+  // otherwise, we need to check if the remote is set.
+  return (await getRemote()).trim() !== '';
+}
+
+async function syncButton() {
+  if (await hasRemote()) {
+    return `<button onclick="gotoSync()">sync</button>`;
+  } else {
+    return ``;
+  }
 }
 
 async function getRepos() {
@@ -1155,7 +1211,7 @@ async function renderSetup() {
     local_repo_name_message = `Local repo name is ${colorize_repo(local_repo_name)}`;
     add_links = `<button onclick="gotoJournal()">journal</button>
     <button onclick="gotoList()">list</button>
-    <button onclick="gotoSync()">sync</button>`;
+    ${await syncButton()}`;
   }
 
   let subscribed_repos = await cache.readFile(SUBBED_REPOS_FILE);
@@ -1267,11 +1323,129 @@ async function perf(func) {
 }
 
 async function run() {
-  await global_notes.init();
-  await cache.init();
+  
+  const reloadNecessary = () => {
+    alert("Database is outdated, please reload the page.");
+    // document.location.reload();
+    document.getElementsByTagName("body")[0].innerHTML = `Database is outdated, please <button onclick="window.location.reload(); return false;">reload the page</button>.`;
+  }
+
+  await global_notes.init(reloadNecessary);
+  await cache.init(reloadNecessary);
+
+  const testingDB = new FileDBTesting();
+  await testingDB.init(reloadNecessary);
+
   console.log('today is', today());
 
   global = {};
 
   await handleRouting();
+}
+
+class FileDBTesting {
+  constructor(dbName = "testing-upgrade", storeName = "huh") {
+    this.db = null;
+    this.dbName = dbName;
+    this.storeName = storeName;
+  }
+
+  async init(versionChange) {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, 2);
+
+      request.onupgradeneeded = async (event) => {
+        this.db = event.target.result;
+        const old_version = event.oldVersion;
+        const new_version = event.newVersion;
+        
+        switch (old_version) {
+          case 0:
+            // Create first object store:
+            this.db.createObjectStore(this.storeName, { keyPath: 'path' });
+    
+          case 1:
+            // Get the original object store, and create an index on it:
+            const tx = await db.transaction(this.storeName, 'readwrite');
+            tx.store.createIndex('title', 'title');
+        }
+      
+        this.db.createObjectStore(this.storeName, { keyPath: "path" });
+        // maybe TODO create index on title and date and other metadata
+      };
+
+      request.onsuccess = event => {
+        this.db = event.target.result;
+        this.db.onversionchange = () => {
+          this.db.close();
+          if (versionChange !== undefined) {
+            versionChange();
+          } else {
+            alert("Database is outdated, please reload the page.");
+          }
+        };
+        resolve();
+      };
+
+      request.onerror = event => {
+        console.error("Database error:", event.target.error);
+        reject(event.target.error);
+      };
+    });
+  }
+
+  async writeFile(path, content) {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.storeName], "readwrite");
+      const objectStore = transaction.objectStore(this.storeName);
+      const request = objectStore.put({ path, content });
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async readFile(path) {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.storeName]);
+      const objectStore = transaction.objectStore(this.storeName);
+      const request = objectStore.get(path);
+
+      request.onsuccess = () => resolve(request.result ? request.result.content : null);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async exists(path) {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.storeName]);
+      const objectStore = transaction.objectStore(this.storeName);
+      const request = objectStore.get(path);
+
+      request.onsuccess = () => resolve(!!request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async listFiles() {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.storeName]);
+      const objectStore = transaction.objectStore(this.storeName);
+      const request = objectStore.getAllKeys();
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async readAllFiles() {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.storeName]);
+      const objectStore = transaction.objectStore(this.storeName);
+      const request = objectStore.getAll();
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
 }
