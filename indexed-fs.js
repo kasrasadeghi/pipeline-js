@@ -14,19 +14,19 @@ class FileDB {
         const old_version = event.oldVersion;
         const new_version = event.newVersion;
         console.log('updating database', this.dbName, 'from', old_version, 'to', new_version);
-        
+
         switch (old_version) {
           case 0:
             // Create first object store:
             this.db.createObjectStore(this.storeName, { keyPath: 'path' });
-    
+
           case 1:
             // Get the original object store, and create an index on it:
             // const tx = await db.transaction(this.storeName, 'readwrite');
             // tx.store.createIndex('title', 'title');
         }
-      
-      
+
+
         this.db.createObjectStore(this.storeName, { keyPath: "path" });
         // maybe TODO create index on title and date and other metadata
       };
@@ -179,7 +179,7 @@ function today() {
 
 async function getNoteMetadataMap() {
   const blobs = await global_notes.readAllFiles();
-  return blobs.map(blob => { 
+  return blobs.map(blob => {
     let metadata = null;
     try {
       metadata = parseMetadata(blob.content);
@@ -187,7 +187,7 @@ async function getNoteMetadataMap() {
       console.log('broken metadata', blob.path, e);
       metadata = {Title: "broken metadata", Date: `${new Date()}`};
     }
-    return {uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content}; 
+    return {uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content};
   });
 }
 
@@ -242,7 +242,7 @@ function parseSection(lines) {
       blocks.push([])
     } else {
       // TODO what?  if there are no blocks or if the last block is a newline, add another one?
-      if (blocks.length === 0 
+      if (blocks.length === 0
       //|| blocks.slice(-1).length === 0
       ) {
         blocks.push([])
@@ -347,7 +347,7 @@ function rewriteSection(section, note) {
     }
     new_blocks.push(rewriteBlock(block, note));
   }
-  
+
   // push blocks that aren't messages onto messages
   let blocks = new_blocks;
   new_blocks = [];
@@ -407,7 +407,7 @@ function rewriteBlock(block, note) {
         if (child.value.startsWith("Date: ") && child.indent === 1 && child.children.length === 0) {
           return new Msg({
             msg: rewriteLine(item.value.slice("msg: ".length)),
-            content: item.value, 
+            content: item.value,
             date: child.value.slice("Date: ".length),
             origin: note,
           });
@@ -418,7 +418,7 @@ function rewriteBlock(block, note) {
       return block;
     }
   }
-  
+
   // TODO the rest of block rewrite
   return block;
 }
@@ -450,7 +450,7 @@ function tagParse(line) {
     acc.push(cmd);
   }
   const isUpperCase = (string) => /^[A-Z]*$/.test(string);
-  
+
   let i = 0;
   while(i < line.length) {
     if (isUpperCase(line[i])) {
@@ -522,7 +522,7 @@ function htmlBlock(block) {
 }
 
 // date timestamp
-const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); 
+const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 function htmlMsg(item) {
   let line = htmlLine(item.msg);
   let href_id = `/disc/${item.origin}#${item.date}`;
@@ -536,7 +536,7 @@ function htmlMsg(item) {
       <div class="msg_content"${style_option}>${line}</div>
     </div>
     ${item.blocks.map(block => JSON.stringify(block, undefined, 2)).join("")}`
-  ) 
+  )
 }
 
 function htmlLine(line) {
@@ -574,7 +574,7 @@ async function renderDiscMixedBody(uuid) {
   let sibling_notes = await getAllNotesWithSameTitleAs(uuid);
   console.log('mixing entry sections of', sibling_notes.map(note => note.uuid), "with current note", uuid);
   let sibling_pages = sibling_notes.map((sibling_note) => rewrite(parseContent(sibling_note.content), sibling_note.uuid));
-  
+
   let entry_sections = sibling_pages.map(page => page.filter(section => section.title === 'entry')[0]);
   let entry_blocks = entry_sections.map(entry_section => entry_section.blocks);
   let entry_nonmessage_blocks = entry_blocks.map(blocks => {
@@ -610,7 +610,7 @@ async function renderDisc(uuid) {
       mix_state = "false";
       await cache.writeFile(MIX_FILE, mix_state);
     }
-    const mix = async () => {
+    mix = async () => {
       // toggle mix state in the file
       await cache.writeFile(MIX_FILE, (await cache.readFile(MIX_FILE)) === "true" ? "false" : "true");
       await paintDisc(uuid);
@@ -619,7 +619,7 @@ async function renderDisc(uuid) {
     mix_button_value = mix_state === 'true' ? "unmix" : "mix";
     mix_button = `<button onclick="return global.handlers.mix(event)" id='mix_button'>${mix_button_value}</button>`;
   }
-  
+
   console.log('mix state', mix_state);
   let rendered_note = '';
   if (mix_state === "true") {
@@ -634,32 +634,32 @@ async function renderDisc(uuid) {
     const handleMsg = async (event) => {
 
       event.preventDefault();
-  
+
       let msg_input = document.getElementById('msg_input');
       let msg = msg_input.value;
       if (msg.trim().length > 0) {
         console.log('msg', msg);
         msg_input.value = '';
-    
+
         let content = await global_notes.readFile(uuid);
         let lines = content.split("\n");
         const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
         const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
         const old_content = content_lines.join("\n");
         const metadata = metadata_lines.join("\n");
-    
+
         const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
         await global_notes.writeFile(uuid, new_content + metadata);
-        
+
         await paintDisc(uuid, 'only main');
       }
-      
+
       let repos = await getRepos();
-      let combined_remote_status = await getRemoteStatus(repos.join(",")); 
+      let combined_remote_status = await getRemoteStatus(repos.join(","));
       displayState("syncing...");
       await pullRemoteSimple(combined_remote_status);
       await paintDisc(uuid, 'only main');
-      
+
       displayState("done");
       await pushLocalSimple(combined_remote_status);
       return false;
@@ -678,9 +678,9 @@ async function renderDisc(uuid) {
       global.handlers = {mix};
     }
   }
-  
+
   return [
-    rendered_note, 
+    rendered_note,
     `${msg_form}
     <div>
       ${edit_button}
@@ -724,7 +724,7 @@ async function renderEdit(uuid) {
   };
   global.handlers = {submitEdit};
   return [
-    `<textarea class='editor_textarea'>` + content + "</textarea>", 
+    `<textarea class='editor_textarea'>` + content + "</textarea>",
     `<button onclick="global.handlers.submitEdit()">submit</button>
      <button onclick="gotoDisc('${uuid}')">disc</button>`
   ];
@@ -886,7 +886,7 @@ async function getAllNotes(repo) {
 
   let list = await fetch((await getRemote()) + '/api/list/' + repo).then(x => x.json());
 
-  try {    
+  try {
     await fetchNotes(repo, list);
   } catch (e) {
     console.log(e);
@@ -901,13 +901,13 @@ async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
     remote_status = combined_remote_status[repo];
   } else {
     remote_status = await getRemoteStatus(repo);
-  } 
+  }
   let updated = statusDiff(local_status, remote_status);
   let updated_notes = Object.keys(updated);
   console.assert(updated_notes.every(x => x.startsWith(repo + '/')));
 
   let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
-  
+
   if (dry_run) {
     writeOutputIfElementIsPresent(repo + '_sync_output', "update found:\n" + JSON.stringify(updated, undefined, 2));
   } else {
@@ -921,7 +921,7 @@ async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
 
 async function pullRemoteSimple(combined_remote_status) {
   let [ignored_local, ...remotes] = await getRepos();
-  await Promise.all(remotes.map(async subscribed_remote => 
+  await Promise.all(remotes.map(async subscribed_remote =>
     await pullRemoteNotes(subscribed_remote, /*dry run*/false, combined_remote_status)));
 }
 
@@ -946,15 +946,15 @@ async function pushLocalNotes(repo, dry_run, combined_remote_status) {
     remote_status = combined_remote_status[repo];
   } else {
     remote_status = await getRemoteStatus(repo);
-  } 
+  }
   let updated = statusDiff(remote_status, local_status);  // flipped, so it is what things in local aren't yet in the remote.
   // local is the new state, remote is the old state, this computes the diff to get from the old state to the new.
-  
+
   let updated_notes = Object.keys(updated);
   console.assert(updated_notes.every(x => x.startsWith(repo + '/')));
 
   let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
-  
+
   if (dry_run) {
     writeOutputIfElementIsPresent(repo + '_sync_output', "push update found:\n" + JSON.stringify(updated, undefined, 2));
   } else {
@@ -1106,7 +1106,7 @@ async function search(text) {
   let messages = [];
   console.log = cache_log;
 
-  pages.forEach(sections => 
+  pages.forEach(sections =>
     sections.filter(s => s.blocks).forEach(section =>
       section.blocks.filter(b => b instanceof Msg && b.content.includes(text)).forEach(message =>
         messages.push(message))));
@@ -1322,7 +1322,7 @@ async function perf(func) {
 }
 
 async function run() {
-  
+
   const reloadNecessary = () => {
     alert("Database is outdated, please reload the page.");
     // document.location.reload();
@@ -1357,18 +1357,18 @@ class FileDBTesting {
         this.db = event.target.result;
         const old_version = event.oldVersion;
         const new_version = event.newVersion;
-        
+
         switch (old_version) {
           case 0:
             // Create first object store:
             this.db.createObjectStore(this.storeName, { keyPath: 'path' });
-    
+
           case 1:
             // Get the original object store, and create an index on it:
             const tx = await db.transaction(this.storeName, 'readwrite');
             tx.store.createIndex('title', 'title');
         }
-      
+
         this.db.createObjectStore(this.storeName, { keyPath: "path" });
         // maybe TODO create index on title and date and other metadata
       };
