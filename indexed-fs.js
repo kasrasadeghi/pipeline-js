@@ -667,7 +667,7 @@ async function renderDisc(uuid) {
     if (has_remote) {
       global.handlers = {handleMsg, mix};
     } else {
-      global.handlers = {mix};
+      global.handlers = {handleMsg};
     }
     msg_form = `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
       <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
