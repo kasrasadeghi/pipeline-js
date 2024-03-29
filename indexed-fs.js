@@ -795,7 +795,6 @@ async function getRemote() {
 }
 
 async function hasRemote() {
-  return false;
   let hostname = window.location.hostname;
   let self_hosted = hostname.startsWith("10.") || hostname.startsWith("192.");
   // if we're self_hosted, we have a remote, even if the remote is ''.
