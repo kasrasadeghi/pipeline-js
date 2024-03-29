@@ -9,4 +9,4 @@ curltime:
 	curl -w "@curl-format.txt" -o /dev/null -s "http://localhost:8000/api/status/core"
 
 deploy:
-	scp indexed-fs.js style.css index.html pubpipe:/web
+	scp 404.html indexed-fs.js style.css index.html pubpipe:/web
