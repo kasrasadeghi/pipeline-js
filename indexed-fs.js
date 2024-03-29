@@ -603,14 +603,15 @@ async function renderDisc(uuid) {
   const has_remote = await hasRemote();
   let mix_state = "false";
   let mix_button = '';
-  let mix = () => {};
+  let mix = async () => {};
   if (has_remote) {
-    let mix_state = await cache.readFile(MIX_FILE);
+    mix_state = await cache.readFile(MIX_FILE);
     if (mix_state === null) {
       mix_state = "false";
       await cache.writeFile(MIX_FILE, mix_state);
     }
     mix = async () => {
+      console.log('actually swapping mix state');
       // toggle mix state in the file
       await cache.writeFile(MIX_FILE, (await cache.readFile(MIX_FILE)) === "true" ? "false" : "true");
       await paintDisc(uuid);
