@@ -1164,7 +1164,9 @@ async function renderSetup() {
 
   // TODO allow renaming local repo?
 
-  const handleSetup = async (event) => {
+  global.handlers = {};
+
+  global.handlers.handleSetup = async (event) => {
     if (event === true || event.key === 'Enter') {
       let text = document.getElementById('local_repo_name').value;
       await cache.writeFile(LOCAL_REPO_NAME_FILE, text);
@@ -1174,7 +1176,7 @@ async function renderSetup() {
     }
   };
 
-  const handleSubscriptions = async (event) => {
+  global.handlers.handleSubscriptions = async (event) => {
     if (event === true || event.key === 'Enter') {
       let text = document.getElementById('subscriptions').value;
       await cache.writeFile(SUBBED_REPOS_FILE, text);
@@ -1183,8 +1185,6 @@ async function renderSetup() {
       return false;
     }
   };
-
-  global.handlers = {handleSetup, handleSubscriptions};
 
   const colorize_repo = (repo) => `<span style="color: #ffcc55; font-family: monospace">${repo}</span>`;
 
