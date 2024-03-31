@@ -109,8 +109,15 @@ class FileDB {
 const global_notes = new FileDB();
 
 global = null;
-LOCAL_REPO_NAME_FILE = "local_repo_name";
-SUBBED_REPOS_FILE = "subbed_repos";
+const LOCAL_REPO_NAME_FILE = "local_repo_name";
+const SUBBED_REPOS_FILE = "subbed_repos";
+
+function paintSimple(render_result) {
+  let main = document.getElementsByTagName('main')[0];
+  let footer = document.getElementsByTagName('footer')[0];
+  [main.innerHTML, footer.innerHTML] = render_result;
+  return {main, footer};
+}
 
 async function get_local_repo_name() {
   let repo = await cache.readFile(LOCAL_REPO_NAME_FILE)
@@ -704,10 +711,8 @@ async function gotoDisc(uuid) {
 // EDIT
 
 async function gotoEdit(uuid) {
-  let main = document.getElementsByTagName('main')[0];
-  let footer = document.getElementsByTagName('footer')[0];
   window.history.pushState({},"", "/edit/" + uuid);
-  [main.innerHTML, footer.innerHTML] = await renderEdit(uuid);
+  paintSimple(await renderEdit(uuid));
 }
 
 async function renderEdit(uuid) {
@@ -734,10 +739,8 @@ async function renderEdit(uuid) {
 
 async function gotoList() {
   window.history.pushState({}, "", "/list");
-  let main = document.getElementsByTagName('main')[0];
-  let footer = document.getElementsByTagName('footer')[0];
-  [main.innerHTML, footer.innerHTML] = await renderList();
-  main.scrollTop = 0;
+  let painted = paintSimple(await renderList());
+  painted.main.scrollTop = 0;
 }
 
 async function renderList() {
@@ -782,9 +785,7 @@ const SYNC_ELEMENT_ID = 'sync_output'
 
 async function gotoSync() {
   window.history.pushState({}, "", "/sync");
-  let main = document.getElementsByTagName('main')[0];
-  let footer = document.getElementsByTagName('footer')[0];
-  [main.innerHTML, footer.innerHTML] = await renderSync();
+  paintSimple(await renderSync());
 }
 
 async function getRemote() {
@@ -1177,9 +1178,7 @@ async function renderSetup() {
       let text = document.getElementById('local_repo_name').value;
       await cache.writeFile(LOCAL_REPO_NAME_FILE, text);
 
-      let main = document.getElementsByTagName('main')[0];
-      let footer = document.getElementsByTagName('footer')[0];
-      [main.innerHTML, footer.innerHTML] = await renderSetup();
+      paintSimple(await renderSetup());
       return false;
     }
   };
@@ -1189,9 +1188,7 @@ async function renderSetup() {
       let text = document.getElementById('subscriptions').value;
       await cache.writeFile(SUBBED_REPOS_FILE, text);
 
-      let main = document.getElementsByTagName('main')[0];
-      let footer = document.getElementsByTagName('footer')[0];
-      [main.innerHTML, footer.innerHTML] = await renderSetup();
+      paintSimple(await renderSetup());
       return false;
     }
   };
@@ -1239,9 +1236,7 @@ async function renderSetup() {
 }
 
 async function gotoSetup() {
-  let main = document.getElementsByTagName('main')[0];
-  let footer = document.getElementsByTagName('footer')[0];
-  [main.innerHTML, footer.innerHTML] = await renderSetup();
+  paintSimple(await renderSetup());
   window.history.pushState({},"", "/setup");
 }
 
@@ -1281,10 +1276,6 @@ function getCurrentNoteUuid() {
 
 async function handleRouting() {
   console.log("notes that match today's date:", await getNotesWithTitle(today(), await get_local_repo_name()));
-
-  let main = document.getElementsByTagName('main')[0];
-  let footer = document.getElementsByTagName('footer')[0];
-
   console.log("initializing from path", window.location.pathname);
 
   if (window.location.pathname.startsWith('/disc/')) {
@@ -1293,19 +1284,20 @@ async function handleRouting() {
 
   } else if (window.location.pathname.startsWith('/edit/')) {
     let uuid = window.location.pathname.slice("/edit/".length);
-    [main.innerHTML, footer.innerHTML] = await renderEdit(uuid);
+    paintSimple(await renderEdit(uuid));
 
   } else if (window.location.pathname.startsWith('/list')) {
-    [main.innerHTML, footer.innerHTML] = await renderList();
+    paintSimple(await renderList());
 
   } else if (window.location.pathname.startsWith('/sync')) {
-    [main.innerHTML, footer.innerHTML] = await renderSync();
+    paintSimple(await renderSync());
 
   } else if (window.location.pathname.startsWith('/search')) {
+    let footer = document.getElementsByTagName('footer')[0];
     footer.innerHTML = await renderSearchFooter();
     runSearch();
   } else if (window.location.pathname.startsWith('/setup')) {
-    await gotoSetup();
+    paintSimple(await renderSetup());
 
   } else if (window.location.pathname.startsWith('/today')) {
     await gotoJournal();
