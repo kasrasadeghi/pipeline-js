@@ -1,3 +1,5 @@
+// INDEXED DB WRAPPER
+
 class FileDB {
   constructor(dbName = "pipeline-db", storeName = "notes") {
     this.db = null;
@@ -106,11 +108,16 @@ class FileDB {
     });
   }
 }
+
+// GLOBALS
+
 const global_notes = new FileDB();
 
 global = null;
 const LOCAL_REPO_NAME_FILE = "local_repo_name";
 const SUBBED_REPOS_FILE = "subbed_repos";
+
+// GENERAL UTIL
 
 function paintSimple(render_result) {
   let main = document.getElementsByTagName('main')[0];
@@ -127,6 +134,8 @@ async function get_local_repo_name() {
   }
   return cache.readFile(LOCAL_REPO_NAME_FILE);
 }
+
+// FLAT NOTE UTIL
 
 async function newNote(title) {
   let content = `--- METADATA ---
