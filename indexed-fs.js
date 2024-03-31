@@ -600,17 +600,18 @@ async function renderDiscMixedBody(uuid) {
 async function renderDisc(uuid) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
 
+  global.handlers = {};
+
   const has_remote = await hasRemote();
   let mix_state = "false";
   let mix_button = '';
-  let mix = async () => {};
   if (has_remote) {
     mix_state = await cache.readFile(MIX_FILE);
     if (mix_state === null) {
       mix_state = "false";
       await cache.writeFile(MIX_FILE, mix_state);
     }
-    mix = async () => {
+    global.handlers.mix = async () => {
       console.log('actually swapping mix state');
       // toggle mix state in the file
       await cache.writeFile(MIX_FILE, (await cache.readFile(MIX_FILE)) === "true" ? "false" : "true");
@@ -632,7 +633,7 @@ async function renderDisc(uuid) {
   let msg_form = "";
   let edit_button = "";
   if (uuid.startsWith(await get_local_repo_name())) {
-    const handleMsg = async (event) => {
+    global.handlers.handleMsg = async (event) => {
 
       event.preventDefault();
 
@@ -665,19 +666,11 @@ async function renderDisc(uuid) {
       await pushLocalSimple(combined_remote_status);
       return false;
     };
-    if (has_remote) {
-      global.handlers = {handleMsg, mix};
-    } else {
-      global.handlers = {handleMsg};
-    }
+    
     msg_form = `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
       <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
     </form>`;
     edit_button = `<button onclick="gotoEdit('${uuid}')">edit</button>`;
-  } else {
-    if (has_remote) {
-      global.handlers = {mix};
-    }
   }
 
   return [
