@@ -1132,13 +1132,13 @@ async function runSearch() {
 async function renderSearchFooter() {
   let menu = `
     <button onclick="gotoJournal()">journal</button>
-    <input onkeydown="return global.handlers.handleSearchEnter(event)" type='text' id='search_query'></input>
-    <button onclick="return global.handlers.handleSearch()">search</button>
+    <input onkeydown="return global.handlers.handleSearch(event)" type='text' id='search_query'></input>
+    <button onclick="return global.handlers.handleSearch(true)">search</button>
   `;
-
-  const handleSearchEnter = (event) => {
+  global.handlers = {};
+  global.handlers.handleSearch = (event) => {
     console.log(event);
-    if (event.key === 'Enter') {
+    if (event == true || event.key === 'Enter') {
       let text = document.getElementById('search_query').value;
       console.log('handling search', text);
       window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text));
@@ -1146,15 +1146,6 @@ async function renderSearchFooter() {
       return false;
     }
   };
-
-  const handleSearch = () => {
-    let text = document.getElementById('search_query').value;
-    console.log('handling search', text);
-    window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text));
-    runSearch(text);
-    return false;
-  };
-  global.handlers = {handleSearch, handleSearchEnter};
   return menu;
 }
 
