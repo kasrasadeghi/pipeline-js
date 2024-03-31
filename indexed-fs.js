@@ -514,9 +514,15 @@ function htmlSection(section, i) {
 }
 
 function htmlBlock(block) {
-  // console.log('render block', block, block instanceof Msg);
   if (block instanceof Msg) {
     return htmlMsg(block);
+  }
+  return htmlTextBlock(block);
+}
+
+function htmlTextBlock(block) {
+  if (block instanceof Array) {
+    return "<pre>" + block.map(htmlLine).join("\n") + "</pre>";
   }
   return JSON.stringify(block, undefined, 2);
 }
@@ -535,7 +541,7 @@ function htmlMsg(item) {
       <div><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(item.date))}</a> ${item.origin.split('/')[0]}</div>
       <div class="msg_content"${style_option}>${line}</div>
     </div>
-    ${item.blocks.map(block => JSON.stringify(block, undefined, 2)).join("")}`
+    ${item.blocks.map(block => htmlTextBlock(block)).join("")}`
   )
 }
 
