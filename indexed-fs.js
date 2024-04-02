@@ -439,7 +439,22 @@ function rewriteBlock(block, note) {
   return block;
 }
 
+class Link {
+  link;
+  constructor(link) {
+    this.link = link;
+  }
+  toString() {
+    return `Link(${this.link})`;
+  }
+}
+
 function rewriteLine(line) {
+  if (line.indexOf(':') !== -1) {
+    let before = line.slice(0, line.indexOf(':'));
+    let after = line.slice(line.indexOf(':') + 1);
+    return [...tagParse(before), new Link(after)];
+  }
   return tagParse(line);
 }
 
@@ -524,6 +539,10 @@ function htmlSection(section, i) {
     return "<pre>" + output.join("\n") + "</pre>";
   }
 
+  if (section.blocks.length === 0) {
+    return '\n';
+  }
+
   output.push(...section.blocks.map(htmlBlock))
 
   return output.join("\n");
@@ -566,6 +585,9 @@ function htmlLine(line) {
     return line.map(x => {
       if (x instanceof Tag) {
         return "<emph class='tag'>" + x.tag + "</emph>";
+      }
+      if (x instanceof Link) {
+        return ": <a href='" + x.link + "'>" + x.link + "</a>";
       }
       return x;
     }).join("");
@@ -834,14 +856,7 @@ async function renderSync() {
     await cache.writeFile(SYNC_FILE, '{}');
   }
 
-  const handleRemote = async (event) => {
-    if (event.key === 'Enter') {
-      let text = document.getElementById('remote').value;
-      await cache.writeFile(SYNC_REMOTE_FILE, text);
-      return false;
-    }
-  };
-  global.handlers = {handleRemote};
+  let remote_addr = await cache.readFile(SYNC_REMOTE_FILE);
 
   const repo_sync_menu = (repo, type) => {
     let menu_content = '';
@@ -868,7 +883,7 @@ async function renderSync() {
 
   return [`
   <div>
-    <input onkeydown="return global.handlers.handleRemote(event)" type='text' id='remote'></input>
+    ${TextField({id:'remote', file_name: SYNC_REMOTE_FILE, label: 'set remote addr', value: remote_addr, rerender: 'renderSync'})}
   </div>
   <div style='display: flex;'>` + repo_sync_menu(local, 'local') + remotes.map(remote => repo_sync_menu(remote, 'remote')).join("") + `</div>`,
   `<div>
@@ -1166,8 +1181,27 @@ async function gotoSearch() {
   return false;
 }
 
-// SETUP
+// COMPONENT TEXTFIELD
+
 // used for first time setup and setup configuration
+async function handleTextField(event, id, file_name, rerender) {
+  if (event === true || event.key === 'Enter') {
+    let text = document.getElementById(id).value;
+    await cache.writeFile(file_name, text);
+
+    paintSimple(await rerender());
+    return false;
+  }
+};
+
+function TextField({id, file_name, label, value, rerender}) {
+  return (
+    `<input onkeydown="return handleTextField(event, '${id}', '${file_name}', ${rerender})" type='text' id='${id}' value="${value}"></input>
+    <button onclick="return handleTextField(true, '${id}', '${file_name}', ${rerender})">${label}</button>`
+  );
+}
+
+// SETUP
 
 async function renderSetup() {
 
