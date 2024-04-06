@@ -182,10 +182,10 @@ function timezoneCompatibility(datestring) {
 }
 
 function dateComp(a, b) {
-  if (a instanceof Msg) {
+  if (a instanceof Msg || Object.hasOwn(a, 'date')) {
     a = a.date;
   }
-  if (b instanceof Msg) {
+  if (b instanceof Msg || Object.hasOwn(b, 'date')) {
     b = b.date;
   }
   return new Date(timezoneCompatibility(a)) - new Date(timezoneCompatibility(b));
@@ -840,9 +840,10 @@ async function gotoList() {
 }
 
 async function renderList() {
-  let content = (await getNoteMetadataMap()).sort((a, b) => dateComp(b, a)).map(x => `<a href="/disc/${x.uuid}">${x.title}</a><br/>`).join("\n");
+  let rows = (await getNoteMetadataMap()).sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
+  let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
   return [
-    content,
+    table,
     `<button onclick="gotoJournal()">journal</button>`
   ];
 }
