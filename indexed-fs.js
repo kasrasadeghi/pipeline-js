@@ -107,6 +107,17 @@ class FileDB {
       request.onerror = () => reject(request.error);
     });
   }
+
+  async deleteFile(path) {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.storeName], "readwrite");
+      const objectStore = transaction.objectStore(this.storeName);
+      const request = objectStore.delete(path);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
 }
 
 // GLOBALS
