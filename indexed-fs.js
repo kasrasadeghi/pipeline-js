@@ -723,10 +723,9 @@ async function renderDisc(uuid) {
     <div>
       ${edit_button}
       <button onclick="gotoList()">list</button>
-      <button onclick="gotoJournal()">jour</button>
-      ${await syncButton()}
+      <button onclick="gotoJournal()">journal</button>
       <button onclick="gotoSearch()">search</button>
-      <button onclick="gotoSetup()">setup</button>
+      <button onclick="gotoMenu()">menu</button>
       ${mix_button}
     </div>
     <div id='state_display'></div>`
@@ -1274,6 +1273,26 @@ async function gotoSetup() {
   window.history.pushState({},"", "/setup");
 }
 
+// MENU
+
+async function gotoMenu() {
+  paintSimple(await renderMenu());
+  window.history.pushState({},"", "/menu");
+}
+
+async function renderMenu() {
+  return [
+    '', 
+    `<div>
+      <button onclick="gotoJournal()">journal</button>
+      <button onclick="gotoList()">list</button>
+      <button onclick="gotoSearch()">search</button>
+      <button onclick="gotoSync()">sync</button>
+      <button onclick="gotoSetup()">setup</button>
+    </div>`
+  ];
+}
+
 // MAIN
 
 const cache = new FileDB("pipeline-db-cache", "cache");
@@ -1332,6 +1351,9 @@ async function handleRouting() {
     runSearch();
   } else if (window.location.pathname.startsWith('/setup')) {
     paintSimple(await renderSetup());
+
+  } else if (window.location.pathname.startsWith('/menu')) {
+    paintSimple(await renderMenu());
 
   } else if (window.location.pathname.startsWith('/today')) {
     await gotoJournal();

@@ -170,9 +170,11 @@ while True:
 
         # Handle paths for frontend pages
 
-        js_paths = ['today', 'disc', 'edit', 'list', 'sync', 'search', 'setup']
-        is_js_path = any(path.startswith('/' + js_path) for js_path in js_paths)
-        if is_js_path or path == '/' or path == '':
+        if path == "/style.css":
+            path = "style.css"
+        elif path == "/indexed-fs.js":
+            path = "indexed-fs.js"
+        elif not path.startswith('/api'):
             path = 'index.html'
 
         # Handle API paths
