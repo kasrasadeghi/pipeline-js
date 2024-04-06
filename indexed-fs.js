@@ -626,7 +626,7 @@ async function renderDiscMixedBody(uuid) {
     if (first_msg_idx !== -1) {
       return blocks.slice(0, first_msg_idx);
     }
-    return [];
+    return blocks;
   });
   let entry_nonmessages = entry_nonmessage_blocks.reduce((a, b) => [...a, ...b], []);
   let entry_message_blocks = entry_blocks.map((blocks, i) => blocks.slice(entry_nonmessage_blocks[i].length));
