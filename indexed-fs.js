@@ -196,6 +196,16 @@ function dateComp(a, b) {
 async function newNote(title) {
   let content = `--- METADATA ---
 Date: ${new Date()}
+Title: ${title}`;
+// https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
+  let uuid = (await get_local_repo_name()) + '/' + crypto.randomUUID() + '.note';
+  await global_notes.writeFile(uuid, content);
+  return uuid;
+}
+
+async function newJournal(title) {
+  let content = `--- METADATA ---
+Date: ${new Date()}
 Title: ${title}
 Tags: Journal`;
 // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
@@ -1256,6 +1266,21 @@ function TextField({id, file_name, label, value, rerender}) {
   );
 }
 
+async function handleTextAction(event, id, action) {
+  if (event === true || event.key === 'Enter') {
+    let text = document.getElementById(id).value;
+    await action(text);
+    return false;
+  }
+};
+
+function TextAction({id, label, value, action}) {
+  return (
+    `<input onkeydown="return handleTextAction(event, '${id}', ${action})" type='text' id='${id}' value="${value}"></input>
+    <button onclick="return handleTextAction(true, '${id}', ${action})">${label}</button>`
+  );
+}
+
 // SETUP
 
 async function renderSetup() {
@@ -1336,9 +1361,14 @@ async function gotoMenu() {
   window.history.pushState({},"", "/menu");
 }
 
+async function gotoNewNote(title) {
+  let uuid = await newNote(title);
+  await gotoDisc(uuid);
+}
+
 async function renderMenu() {
   return [
-    '', 
+    `${TextAction({id: 'new_note', label: 'make new note', value: '', action: 'gotoNewNote'})}`,
     `<div>
       <button onclick="gotoJournal()">journal</button>
       <button onclick="gotoList()">list</button>
@@ -1356,7 +1386,7 @@ const cache = new FileDB("pipeline-db-cache", "cache");
 async function gotoJournal() {
   let notes = await getNotesWithTitle(today(), await get_local_repo_name());
   if (notes.length === 0) {
-    let uuid = await newNote(today());
+    let uuid = await newJournal(today());
     notes = [uuid];
   }
   await gotoDisc(notes[0]);
