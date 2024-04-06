@@ -146,6 +146,51 @@ async function get_local_repo_name() {
   return cache.readFile(LOCAL_REPO_NAME_FILE);
 }
 
+// DATE UTIL
+
+function timezoneCompatibility(datestring) {
+  // old dates look like: Wed Jan 17 22:02:44 PST 2024
+  // new dates look like: Thu Jan 17 2024 22:02:44 GMT-0800 (Pacific Standard Time)
+  // NB: they end in ')'
+  if (datestring.endsWith(")")) {
+    return datestring; // no compatibility needed
+  }
+
+  const compatibility_timezones = {
+    'PST': 'GMT-0800 (Pacific Standard Time)',
+    'PDT': 'GMT-0700 (Pacific Daylight Time)',
+    'EST': 'GMT-0500 (Eastern Standard Time)',
+    'EDT': 'GMT-0400 (Eastern Daylight Time)',
+    'CST': 'GMT-0600 (Central Standard Time)',
+    'CDT': 'GMT-0500 (Central Daylight Time)',
+    'MST': 'GMT-0700 (Mountain Standard Time)',
+    'MDT': 'GMT-0600 (Mountain Daylight Time)',
+    'HST': 'GMT-1000 (Hawaiian Standard Time)',
+    // european timezones
+    'CET': 'GMT+0100 (Central European Time)',
+    'CEST': 'GMT+0200 (Central European Summer Time)',
+  }
+  let chunks = datestring.split(" ").filter(x => x !== '');
+  console.assert(chunks.length == 6, chunks, "datestring should have 6 chunks: weekday, month, monthday, time, timezone, year");
+  let time = chunks[3];
+  let timezone = chunks[4];
+  console.assert(timezone in compatibility_timezones, timezone, "timezone should be in compatibility_timezones", compatibility_timezones);
+  let year = chunks[5];
+  let new_chunks = chunks.slice(0, 3);  // first three are the same.
+  new_chunks.push(year, time, compatibility_timezones[timezone]);
+  return new_chunks.join(" ");
+}
+
+function dateComp(a, b) {
+  if (a instanceof Msg) {
+    a = a.date;
+  }
+  if (b instanceof Msg) {
+    b = b.date;
+  }
+  return new Date(timezoneCompatibility(a)) - new Date(timezoneCompatibility(b));
+}
+
 // FLAT NOTE UTIL
 
 async function newNote(title) {
@@ -584,7 +629,7 @@ function htmlMsg(item) {
   }
   return (`
     <div class='msg' id='${item.date}'>
-      <div><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(item.date))}</a> ${item.origin.split('/')[0]}</div>
+      <div><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(timezoneCompatibility(item.date)))}</a> ${item.origin.split('/')[0]} ${Date.parse(timezoneCompatibility(item.date))}</div>
       <div class="msg_content"${style_option}>${line}</div>
     </div>
     ${item.blocks.map(block => htmlTextBlock(block)).join("")}`
@@ -642,7 +687,7 @@ async function renderDiscMixedBody(uuid) {
   let entry_nonmessages = entry_nonmessage_blocks.reduce((a, b) => [...a, ...b], []);
   let entry_message_blocks = entry_blocks.map((blocks, i) => blocks.slice(entry_nonmessage_blocks[i].length));
   let entry_messages = entry_message_blocks.reduce((a, b) => [...a, ...b], []);
-  entry_messages.sort((a, b) => new Date(a.date) - new Date(b.date));
+  entry_messages.sort(dateComp);
   let new_blocks = [...entry_nonmessages, ...entry_messages];
 
   let current_entry_section = current_page.filter(section => section.title === 'entry')[0];
@@ -785,7 +830,7 @@ async function gotoList() {
 }
 
 async function renderList() {
-  let content = (await getNoteMetadataMap()).sort((a, b) => new Date(b.date) - new Date(a.date)).map(x => `<a href="/disc/${x.uuid}">${x.title}</a><br/>`).join("\n");
+  let content = (await getNoteMetadataMap()).sort((a, b) => dateComp(b, a)).map(x => `<a href="/disc/${x.uuid}">${x.title}</a><br/>`).join("\n");
   return [
     content,
     `<button onclick="gotoJournal()">journal</button>`
@@ -1146,7 +1191,7 @@ async function search(text) {
       section.blocks.filter(b => b instanceof Msg && b.content.includes(text)).forEach(message =>
         messages.push(message))));
 
-  messages.sort((a, b) => new Date(b.date) - new Date(a.date));
+  messages.sort((a, b) => dateComp(b, a));
   return messages;
 }
 
