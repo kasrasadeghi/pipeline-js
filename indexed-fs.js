@@ -623,6 +623,9 @@ function htmlBlock(block) {
 
 function htmlTextBlock(block) {
   if (block instanceof Array) {
+    if (block[0] == 'QUOTE') {
+      return "<blockquote>" + block.slice(1).map(x => "<p>" + htmlLine(x) + "</p>").join("") + "</blockquote>";
+    }
     return "<pre>" + block.map(htmlLine).join("\n") + "</pre>";
   }
   return JSON.stringify(block, undefined, 2);

@@ -226,6 +226,13 @@ details[open] > summary > .tags-summary {
   margin: 5px;
   width: -webkit-fill-available;
 }
+blockquote {
+  /* background: var(--input_background_color);
+  border-left: 5px solid var(--msg_color);
+  padding: 5px;
+  margin: 5px; */
+  max-width: 600px;
+}
 
 /* phones */
 /* @media (max-width: 1117px) { */
