@@ -834,9 +834,18 @@ async function gotoDisc(uuid) {
 
 // EDIT
 
+async function paintEdit(uuid) {
+  let main = document.getElementsByTagName('main')[0];
+  let footer = document.getElementsByTagName('footer')[0];
+  [main.innerHTML, footer.innerHTML] = await renderEdit(uuid);
+
+  let el = document.getElementsByClassName("editor_textarea")[0];
+  el.scrollTop = el.scrollHeight;
+}
+
 async function gotoEdit(uuid) {
   window.history.pushState({},"", "/edit/" + uuid);
-  paintSimple(await renderEdit(uuid));
+  await paintEdit(uuid);
 }
 
 async function renderEdit(uuid) {
@@ -1250,6 +1259,10 @@ function renderSearchMain(all_messages) {
   let main = document.getElementsByTagName('main')[0];
   const urlParams = new URLSearchParams(window.location.search);
   let page = urlParams.get('page');
+  if (page === 'all') {
+    main.innerHTML = `<h3>render all ${all_messages.length} results</h3><div class='msglist'>${all_messages.map(htmlMsg).join("")}</div>`;
+    return;
+  }
   page = (page === null ? 0 : parseInt(page));
   let messages = all_messages.slice(page * SEARCH_RESULTS_PER_PAGE, (page + 1) * SEARCH_RESULTS_PER_PAGE);
   main.innerHTML = `<h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3><div class='msglist'>${messages.map(htmlMsg).join("")}</div>`;
@@ -1257,8 +1270,16 @@ function renderSearchMain(all_messages) {
 
 function renderSearchPagination(all_messages) {
   global.handlers.paginate = (delta) => {
+    if (delta === 'all') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const text = urlParams.get('q');
+      window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=all");
+      renderSearchMain(all_messages);
+      return;
+    }
     // delta is an integer, probably +1 or -1
     const urlParams = new URLSearchParams(window.location.search);
+    const text = urlParams.get('q');
     let page = urlParams.get('page');
     page = (page === null ? 0 : parseInt(page));
     page = clamp(page + delta, 0, Math.floor(all_messages.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
@@ -1269,6 +1290,7 @@ function renderSearchPagination(all_messages) {
   pagination.innerHTML = `
     <button onclick="return global.handlers.paginate(1)">next</button>
     <button onclick="return global.handlers.paginate(-1)">prev</button>
+    <button onclick="return global.handlers.paginate('all')">all</button>
   `;
 }
 
@@ -1493,7 +1515,7 @@ async function handleRouting() {
 
   } else if (window.location.pathname.startsWith('/edit/')) {
     let uuid = window.location.pathname.slice("/edit/".length);
-    paintSimple(await renderEdit(uuid));
+    paintEdit(uuid);
 
   } else if (window.location.pathname.startsWith('/list')) {
     paintSimple(await renderList());
