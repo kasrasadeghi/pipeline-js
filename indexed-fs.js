@@ -506,22 +506,47 @@ function rewriteBlock(block, note) {
 }
 
 class Link {
-  link;
-  constructor(link) {
-    this.link = link;
+  url;
+  constructor(url) {
+    this.url = url;
   }
   toString() {
-    return `Link(${this.link})`;
+    return `Link(${this.url})`;
   }
 }
 
 function rewriteLine(line) {
-  if (line.indexOf(':') !== -1) {
-    let before = line.slice(0, line.indexOf(':'));
-    let after = line.slice(line.indexOf(':') + 1);
-    return [...tagParse(before), new Link(after)];
+  if (! (line.includes(": ") || line.includes("http://") || line.includes("https://"))) {
+    return tagParse(line); 
   }
-  return tagParse(line);
+  let result = [];
+  // we're just gonna look for https:// and http:// initially,
+  // but maybe internal links should be old-style single links per line?
+  // old style was only one link per line, and the line had to end in ": " and what could conditionally be a link
+
+  // parse URL if line starts with http(s)://, URLs end in space or end-of-line.
+  while (line !== '') {
+    if (line.startsWith('https://') || line.startsWith('http://')) {
+      let end_of_url = line.search(' ');
+      if (end_of_url === -1) {  // ideally this wouldn't need a special case but i can't think of how to handle it on this flight
+        result.push(new Link(line));
+        line = '';
+      } else {
+        result.push(new Link(line.slice(0, end_of_url)));
+        line = line.slice(end_of_url);
+      }
+      continue;
+    }
+
+    if (result.slice(-1).length > 0 && typeof result.slice(-1)[0] === 'string') {
+      // for some reason `instanceof String` doesn't work??
+      result[result.length - 1] += line[0];
+    } else {
+      result.push(line[0]);
+    }
+    line = line.slice(1);
+  }
+  return result;
 }
 
 // TAG
@@ -656,7 +681,7 @@ function htmlLine(line) {
         return "<emph class='tag'>" + x.tag + "</emph>";
       }
       if (x instanceof Link) {
-        return ": <a href='" + x.link + "'>" + x.link + "</a>";
+        return `<a href="${x.url}">${x.url}</a>`
       }
       return x;
     }).join("");
