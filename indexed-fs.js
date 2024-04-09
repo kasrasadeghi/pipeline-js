@@ -1234,24 +1234,65 @@ async function search(text) {
   return messages;
 }
 
+function clamp(value, lower, upper) {
+  if (value < lower) {
+    return lower;
+  }
+  if (value > upper) {
+    return upper;
+  }
+  return value;
+}
+
+const SEARCH_RESULTS_PER_PAGE = 100;
+
+function renderSearchMain(all_messages) {
+  let main = document.getElementsByTagName('main')[0];
+  const urlParams = new URLSearchParams(window.location.search);
+  let page = urlParams.get('page');
+  page = (page === null ? 0 : parseInt(page));
+  let messages = all_messages.slice(page * SEARCH_RESULTS_PER_PAGE, (page + 1) * SEARCH_RESULTS_PER_PAGE);
+  main.innerHTML = `<h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3><div class='msglist'>${messages.map(htmlMsg).join("")}</div>`;
+}
+
+function renderSearchPagination() {
+  let pagination = document.getElementById('search-pagination');
+  pagination.innerHTML = `
+    <button onclick="return global.handlers.paginate(1)">next</button>
+    <button onclick="return global.handlers.paginate(-1)">prev</button>
+  `;
+}
+
 async function runSearch() {
   console.assert(window.location.pathname.startsWith("/search/"));
   let main = document.getElementsByTagName('main')[0];
   main.innerHTML = 'searching...';
   const urlParams = new URLSearchParams(window.location.search);
   const text = urlParams.get('q');
-  searchResults = search(text).then(x => {
-    const WINDOW_SIZE = 100;
-    let messages = x.slice(0, WINDOW_SIZE);
-    main.innerHTML = `<h3>${messages.length} of ${x.length} results</h3><div class='msglist'>${messages.map(htmlMsg).join("")}</div>`;
+  searchResults = search(text).then(all_messages => {
+    renderSearchMain(all_messages);
+    global.handlers.paginate = (delta) => {
+      // delta is an integer, probably +1 or -1
+      const urlParams = new URLSearchParams(window.location.search);
+      let page = urlParams.get('page');
+      page = (page === null ? 0 : parseInt(page));
+      page = clamp(page + delta, 0, Math.floor(all_messages.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
+      window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=" + page);
+      renderSearchMain(all_messages);
+    };
+    renderSearchPagination();
   });
 }
 
-async function renderSearchFooter() {
+function renderSearchFooter() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const text = urlParams.get('q');
   let menu = `
     <button onclick="gotoJournal()">journal</button>
     <input onkeydown="return global.handlers.handleSearch(event)" type='text' id='search_query'></input>
     <button onclick="return global.handlers.handleSearch(true)">search</button>
+    <br/>
+    <div id='search-pagination'></div>
   `;
   global.handlers = {};
   global.handlers.handleSearch = (event) => {
@@ -1270,7 +1311,7 @@ async function renderSearchFooter() {
 async function gotoSearch() {
   let footer = document.getElementsByTagName('footer')[0];
   window.history.pushState({}, "", "/search/");
-  footer.innerHTML = await renderSearchFooter();
+  footer.innerHTML = renderSearchFooter();
   runSearch();
   return false;
 }
