@@ -1255,7 +1255,16 @@ function renderSearchMain(all_messages) {
   main.innerHTML = `<h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3><div class='msglist'>${messages.map(htmlMsg).join("")}</div>`;
 }
 
-function renderSearchPagination() {
+function renderSearchPagination(all_messages) {
+  global.handlers.paginate = (delta) => {
+    // delta is an integer, probably +1 or -1
+    const urlParams = new URLSearchParams(window.location.search);
+    let page = urlParams.get('page');
+    page = (page === null ? 0 : parseInt(page));
+    page = clamp(page + delta, 0, Math.floor(all_messages.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
+    window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=" + page);
+    renderSearchMain(all_messages);
+  };
   let pagination = document.getElementById('search-pagination');
   pagination.innerHTML = `
     <button onclick="return global.handlers.paginate(1)">next</button>
@@ -1271,16 +1280,7 @@ async function runSearch() {
   const text = urlParams.get('q');
   searchResults = search(text).then(all_messages => {
     renderSearchMain(all_messages);
-    global.handlers.paginate = (delta) => {
-      // delta is an integer, probably +1 or -1
-      const urlParams = new URLSearchParams(window.location.search);
-      let page = urlParams.get('page');
-      page = (page === null ? 0 : parseInt(page));
-      page = clamp(page + delta, 0, Math.floor(all_messages.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
-      window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=" + page);
-      renderSearchMain(all_messages);
-    };
-    renderSearchPagination();
+    renderSearchPagination(all_messages);
   });
 }
 
@@ -1300,7 +1300,7 @@ function renderSearchFooter() {
     if (event == true || event.key === 'Enter') {
       let text = document.getElementById('search_query').value;
       console.log('handling search', text);
-      window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text));
+      window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=0");
       runSearch(text);
       return false;
     }
