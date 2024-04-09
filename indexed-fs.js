@@ -1294,7 +1294,7 @@ function renderSearchPagination(all_messages) {
   `;
 }
 
-async function runSearch() {
+function runSearch() {
   console.assert(window.location.pathname.startsWith("/search/"));
   let main = document.getElementsByTagName('main')[0];
   main.innerHTML = 'searching...';
@@ -1311,7 +1311,7 @@ function renderSearchFooter() {
   const text = urlParams.get('q');
   let menu = `
     <button onclick="gotoJournal()">journal</button>
-    <input onkeydown="return global.handlers.handleSearch(event)" type='text' id='search_query'></input>
+    <input onkeydown="return global.handlers.handleSearch(event)" type='text' id='search_query' value="${text}"></input>
     <button onclick="return global.handlers.handleSearch(true)">search</button>
     <br/>
     <div id='search-pagination'></div>
@@ -1323,7 +1323,7 @@ function renderSearchFooter() {
       let text = document.getElementById('search_query').value;
       console.log('handling search', text);
       window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=0");
-      runSearch(text);
+      runSearch();
       return false;
     }
   };
@@ -1524,9 +1524,8 @@ async function handleRouting() {
     paintSimple(await renderSync());
 
   } else if (window.location.pathname.startsWith('/search')) {
-    let footer = document.getElementsByTagName('footer')[0];
-    footer.innerHTML = await renderSearchFooter();
-    runSearch();
+    footer.innerHTML = renderSearchFooter();
+    await runSearch();
   } else if (window.location.pathname.startsWith('/setup')) {
     paintSimple(await renderSetup());
 
