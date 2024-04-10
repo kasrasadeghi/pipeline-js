@@ -546,7 +546,15 @@ function rewriteLine(line) {
     }
     line = line.slice(1);
   }
-  return result;
+  let acc = [];
+  for (let i = 0; i < result.length; i++) {
+    if (typeof result[i] === 'string') {
+      acc.push(...tagParse(result[i]));
+    } else {
+      acc.push(result[i]);
+    }
+  }
+  return acc;
 }
 
 // TAG
