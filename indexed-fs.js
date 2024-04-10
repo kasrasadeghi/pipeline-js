@@ -1577,9 +1577,6 @@ async function run() {
   await global_notes.init(reloadNecessary);
   await cache.init(reloadNecessary);
 
-  const testingDB = new FileDBTesting();
-  await testingDB.init(reloadNecessary);
-
   console.log('today is', today());
 
   global = {};
