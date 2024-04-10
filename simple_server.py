@@ -174,6 +174,8 @@ while True:
             path = "style.css"
         elif path == "/indexed-fs.js":
             path = "indexed-fs.js"
+        elif path == '/service-worker.js':
+            path = "service-worker.js"
         elif not path.startswith('/api'):
             path = 'index.html'
 
