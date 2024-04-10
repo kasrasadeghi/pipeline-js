@@ -1554,7 +1554,19 @@ async function perf(func) {
   console.timeEnd('perf');
 }
 
+function registerServiceWorker() {
+  if ('serviceWorker' in nagivigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/service-worker.js').then(
+        (registration) => { console.log("ServiceWorker registration successful with scope: ", registration.scope); },
+        (err) => { console.log("ServiceWorker registration failed: ", err); }
+      );
+    });
+  }
+}
+
 async function run() {
+  registerServiceWorker();
 
   const reloadNecessary = () => {
     alert("Database is outdated, please reload the page.");
