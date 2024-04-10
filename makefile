@@ -10,3 +10,16 @@ curltime:
 
 deploy:
 	scp 404.html indexed-fs.js style.css index.html pubpipe:/web
+
+systemd:
+	sudo cp pipeline-notes.service /etc/systemd/system/
+	sudo systemctl daemon-reload
+	sudo systemctl enable pipeline-notes
+	sudo systemctl restart pipeline-notes
+	sudo systemctl status pipeline-notes
+
+restart:
+	sudo systemctl restart pipeline-notes
+
+logs:
+	journalctl -u pipeline-notes -f
