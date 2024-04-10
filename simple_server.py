@@ -30,8 +30,10 @@ redirect = """
 </html>   
 """
 
-def HTTP_OK(body: bytes) -> bytes:
-    return b"HTTP/1.1 200 OK\n\n" + body
+def HTTP_OK(body: bytes, mimetype: bytes) -> bytes:
+    return (b"HTTP/1.1 200 OK\n"
+          + b"Content-Type: " + mimetype + "; charset=utf-8\n"
+          + body)
 
 def HTTP_OK_JSON(obj, extra_header=b"") -> bytes:
     return (b"HTTP/1.1 200 OK\n"
@@ -111,7 +113,7 @@ def receive_headers_and_content(client_connection):
         method, path, httpver = None, None, None
 
     if method == None:
-        http_response = HTTP_OK(b"Hello, World!\n")
+        http_response = HTTP_OK(b"Hello, World!\n", mimetype=b"text/plain")
         client_connection.sendall(http_response)
         client_connection.close()
         return
@@ -172,12 +174,16 @@ while True:
 
         if path == "/style.css":
             path = "style.css"
+            mimetype = b"text/css"
         elif path == "/indexed-fs.js":
             path = "indexed-fs.js"
+            mimetype = b"text/javascript"
         elif path == '/service-worker.js':
             path = "service-worker.js"
+            mimetype = b"text/javascript"
         elif not path.startswith('/api'):
             path = 'index.html'
+            mimetype = b"text/html"
 
         # Handle API paths
 
@@ -230,7 +236,7 @@ while True:
 
                 with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
                     f.write(body)
-                http_response = HTTP_OK(b"wrote notes/" + note.encode())
+                http_response = HTTP_OK(b"wrote notes/" + note.encode(), mimetype=b"text/plain")
                 print("wrote notes/" + note, time.time())
                 client_connection.sendall(http_response)
                 client_connection.close()
@@ -261,7 +267,7 @@ while True:
             print('reading', path)
             content = f.read()
 
-        http_response = HTTP_OK(content)
+        http_response = HTTP_OK(content, mimetype)
         client_connection.sendall(http_response)
         client_connection.close()
     except Exception as e:
