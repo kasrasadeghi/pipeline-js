@@ -190,6 +190,12 @@ while True:
         elif path == '/manifest.json':
             path = 'manifest.json'
             mimetype = b"application/manifest+json"
+        elif path == '/favicon.ico':
+            path = 'favicon.ico'
+            mimetype = b"image/x-icon"
+        elif path == '/icon512.png':
+            path = 'icon512.png'
+            mimetype = b"image/png"
         elif not path.startswith('/api'):
             path = 'index.html'
             mimetype = b"text/html"
