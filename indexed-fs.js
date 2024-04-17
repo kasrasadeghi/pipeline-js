@@ -1532,7 +1532,7 @@ async function handleRouting() {
     paintSimple(await renderSync());
 
   } else if (window.location.pathname.startsWith('/search')) {
-    footer.innerHTML = renderSearchFooter();
+    document.getElementsByTagName("footer")[0] = renderSearchFooter();
     await runSearch();
   } else if (window.location.pathname.startsWith('/setup')) {
     paintSimple(await renderSetup());
