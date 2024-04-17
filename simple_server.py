@@ -12,6 +12,7 @@ import json
 import time
 import ssl
 import traceback
+from datetime import datetime
 
 NOTES_ROOT = os.path.join(os.path.expanduser('~'), "notes")
 
@@ -161,7 +162,8 @@ print(f'Serving HTTP on port {PORT} ...')
 while True:
     try:
         client_connection, client_address = listen_socket.accept()
-        print(client_address) # (address: string, port: int)
+        print()
+        print(datetime.now(), client_address) # (address: string, port: int)
         request = receive_headers_and_content(client_connection)
         if request is None:
             continue
@@ -182,6 +184,9 @@ while True:
         elif path == '/service-worker.js':
             path = "service-worker.js"
             mimetype = b"text/javascript"
+        elif path == '/sw-index.html':
+            path = 'index.html'
+            mimetype = b"text/html"
         elif not path.startswith('/api'):
             path = 'index.html'
             mimetype = b"text/html"
@@ -265,10 +270,11 @@ while True:
             continue
 
         with open(path, 'rb') as f:
-            print('reading', path)
             content = f.read()
+            print(f"read {path} ({len(content)})")
 
         http_response = HTTP_OK(content, mimetype)
+        # print("RESPONSE:", http_response)
         client_connection.sendall(http_response)
         client_connection.close()
     except Exception as e:

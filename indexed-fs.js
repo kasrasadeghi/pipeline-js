@@ -496,7 +496,7 @@ function rewriteBlock(block, note) {
         }
       }
     } catch (e) {
-      console.log("failed to rewrite block:", block, e);
+      // console.log("failed to rewrite block:", block, e);
       return block;
     }
   }
@@ -1501,7 +1501,7 @@ window.addEventListener("popstate", (event) => {
 
 // may return null iff not /edit/ or /disc/
 function getCurrentNoteUuid() {
-  console.log("getting note uuid from path", window.location.pathname);
+  // console.log("getting note uuid from path", window.location.pathname);
 
   if (window.location.pathname.startsWith('/disc/')) {
     let uuid = window.location.pathname.slice("/disc/".length);
