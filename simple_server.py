@@ -187,6 +187,9 @@ while True:
         elif path == '/sw-index.html':
             path = 'index.html'
             mimetype = b"text/html"
+        elif path == '/manifest.json':
+            path = 'manifest.json'
+            mimetype = b"application/manifest+json"
         elif not path.startswith('/api'):
             path = 'index.html'
             mimetype = b"text/html"
