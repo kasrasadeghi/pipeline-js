@@ -958,6 +958,14 @@ async function syncButton() {
 
 async function getRepos() {
   let local_repo_name = await get_local_repo_name();
+  let subbed_repo_content = await cache.readFile(SUBBED_REPOS_FILE);
+  if (subbed_repo_content === null) {
+    await cache.writeFile(SUBBED_REPOS_FILE, '');
+    return [local_repo_name];
+  }
+  if (subbed_repo_content.trim() === '') {
+    return [local_repo_name];
+  }
   let subbed_repos = (await cache.readFile(SUBBED_REPOS_FILE)).split(" ");
   return [local_repo_name, ...subbed_repos];
 }
