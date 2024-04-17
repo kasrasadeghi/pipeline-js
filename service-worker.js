@@ -1,13 +1,33 @@
+const CACHE_VERSION = 'pipeline-notes-v1';
+const baseFile = 'sw-index.html';
+const assets = [
+  'favicon.ico',
+  'manifest.json',
+  'indexed-fs.js',
+  'style.css',
+];
+
+function LOG(...data) {
+  console.log('SERVICE WORKER', ...data);
+}
+
+async function fillServiceWorkerCache() {
+  const cache = await caches.open(CACHE_VERSION);
+  for (let asset of [baseFile, ...assets]) {
+    LOG(asset);
+    try {
+      await cache.add(asset);
+      LOG('CACHED', asset);
+    } catch (e) {
+      LOG('failed to cache', asset, e);
+    }
+  }
+}
+
 // Install event
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open('pipeline-service-worker-cache').then((cache) => {
-      return cache.addAll([
-        '/index.html',
-        '/style.css',
-        '/indexed-fs.js',
-      ]);
-    })
+    fillServiceWorkerCache().then(() => self.skipWaiting())
   );
 });
 
@@ -15,15 +35,54 @@ self.addEventListener('install', (event) => {
 // returns either a cached file if it exists
 //         or just index.html if it doesn't
 self.addEventListener('fetch', (event) => {
+  LOG('handling fetch request', event.request.url);
+
   if (event.request.url.includes('/api/')) {
-    event.respondWith(new Response('Failure', { status: 500, statusText: 'Internal Server Error' }));
+    return; // don't use the cache for /api/ subpaths
   } else {
     event.respondWith(
-      caches.match(event.request).then((response) => {
-        return fetch(event.request).catch(() => response);
-      }).catch(() => {
-        return caches.match('index.html');
-      })
+      (async () => {
+        const cache = await caches.open(CACHE_VERSION);
+
+        const is_asset = assets.some((asset) => event.request.url.endsWith(asset));
+        LOG(`${event.request.url}: is_asset: ${is_asset}`)
+
+        // fetch
+        try {
+          LOG(`attempting fetch ${event.request.url}`);
+          const fetchedResponse = await fetch(event.request);
+          if (!fetchedResponse.ok) {
+            throw new Error('response status is not ok');
+          } else {
+            LOG(`fetch succeeded! ${event.request.url}`)
+            if (is_asset) {
+              cache.put(event.request.url, fetchedResponse.clone());
+            } else {
+              cache.put(baseFile, fetchedResponse.clone());
+            }
+            return fetchedResponse;
+          }
+
+        // use cache if fetch fails
+        } catch (e) {
+          LOG("network failed, loading from cache")
+          // fetch timeout and other errors
+          let cachedResponse = null;
+          let file_to_find = null;
+          if (is_asset) {
+            cachedResponse = await cache.match(event.request.url);
+            file_to_find = event.request.url;
+          } else {
+            cachedResponse = await cache.match(baseFile);
+            file_to_find = baseFile;
+          }
+          if (cachedResponse) {
+            LOG(`found in cache! ${event.request.url} -> ${file_to_find}`);
+            return cachedResponse;
+          }
+          throw new Error(`cache miss '${event.request.url}' for file '${file_to_find}' after network failure`);
+        }
+      })()
     );
   }
 });
