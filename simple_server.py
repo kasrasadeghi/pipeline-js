@@ -32,7 +32,8 @@ redirect = """
 
 def HTTP_OK(body: bytes, mimetype: bytes) -> bytes:
     return (b"HTTP/1.1 200 OK\n"
-          + b"Content-Type: " + mimetype + "; charset=utf-8\n"
+          + b"Content-Type: " + mimetype + b"; charset=utf-8\n"
+          + b"\n"
           + body)
 
 def HTTP_OK_JSON(obj, extra_header=b"") -> bytes:
