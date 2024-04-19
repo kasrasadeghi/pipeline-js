@@ -169,6 +169,9 @@ function timezoneCompatibility(datestring) {
     // european timezones
     'CET': 'GMT+0100 (Central European Time)',
     'CEST': 'GMT+0200 (Central European Summer Time)',
+    // japan
+    'JST': 'GMT+0900 (Japan Standard Time)',
+    'JDT': 'GMT+1000 (Japan Daylight Time)',
   }
   let chunks = datestring.split(" ").filter(x => x !== '');
   console.assert(chunks.length == 6, chunks, "datestring should have 6 chunks: weekday, month, monthday, time, timezone, year");
