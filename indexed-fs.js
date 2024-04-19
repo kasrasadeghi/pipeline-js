@@ -177,7 +177,7 @@ function timezoneCompatibility(datestring) {
   console.assert(chunks.length == 6, chunks, "datestring should have 6 chunks: weekday, month, monthday, time, timezone, year");
   let time = chunks[3];
   let timezone = chunks[4];
-  console.assert(timezone in compatibility_timezones, timezone, "timezone should be in compatibility_timezones", compatibility_timezones);
+  console.assert(timezone in compatibility_timezones, timezone, "timezone should be in compatibility_timezones, from", datestring, compatibility_timezones);
   let year = chunks[5];
   let new_chunks = chunks.slice(0, 3);  // first three are the same.
   new_chunks.push(year, time, compatibility_timezones[timezone]);
