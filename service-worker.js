@@ -8,7 +8,7 @@ const assets = [
 ];
 
 function LOG(...data) {
-  console.log('SERVICE WORKER', ...data);
+  // console.log('SERVICE WORKER', ...data);
 }
 
 async function fillServiceWorkerCache() {
