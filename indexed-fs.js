@@ -1354,12 +1354,12 @@ function renderSearchPagination(all_messages) {
 
 function runSearch() {
   console.assert(window.location.pathname.startsWith("/search/"));
-  let main = document.getElementsByTagName('main')[0];
-  main.innerHTML = 'searching...';
+  document.getElementsByTagName('main')[0].innerHTML = 'searching...';
   const urlParams = new URLSearchParams(window.location.search);
   const text = urlParams.get('q');
   searchResults = search(text).then(all_messages => {
     renderSearchMain(all_messages);
+    document.getElementsByTagName("footer")[0].innerHTML = renderSearchFooter();
     renderSearchPagination(all_messages);
   });
 }
@@ -1583,7 +1583,7 @@ async function handleRouting() {
 
   } else if (window.location.pathname.startsWith('/search')) {
     document.getElementsByTagName("footer")[0] = renderSearchFooter();
-    await runSearch();
+    runSearch();
   } else if (window.location.pathname.startsWith('/setup')) {
     paintSimple(await renderSetup());
 
