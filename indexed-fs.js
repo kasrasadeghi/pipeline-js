@@ -725,7 +725,11 @@ async function paintDisc(uuid, flag) {
 }
 
 async function renderDiscMixedBody(uuid) {
-  let current_page = rewrite(await parseFile(uuid), uuid);
+  let page = await parseFile(uuid);
+  if (page === null) {
+    return `couldn't find file '${uuid}'`;
+  }
+  let current_page = rewrite(page, uuid);
 
   // notes that share our title
   let sibling_notes = await getAllNotesWithSameTitleAs(uuid);
