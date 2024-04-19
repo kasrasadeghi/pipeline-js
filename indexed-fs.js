@@ -712,8 +712,9 @@ async function paintDisc(uuid, flag) {
   } else {
     [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
   }
-  main.scrollTop = main.scrollHeight;
-  updateSelected();
+  if (updateSelected() !== null) {
+    main.scrollTop = main.scrollHeight;
+  }
 }
 
 async function renderDiscMixedBody(uuid) {
@@ -929,6 +930,9 @@ function updateSelected() {
   if (window.location.hash) {
     const selected = document.getElementById(decodeURI(window.location.hash.slice(1)));
     selected.classList.add('selected');
+    return selected;
+  } else {
+    return null;
   }
 };
 
