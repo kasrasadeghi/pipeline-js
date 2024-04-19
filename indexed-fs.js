@@ -479,15 +479,19 @@ class Msg {
   }
 }
 
+class Newline {
+  constructor() {}
+}
+
 function rewriteBlock(block, note) {
   if (block.length === 0) { // newline
-    return block;
+    return new Newline();
   }
   if (block.length === 1) {
     try {
       // console.log('rewrite block', block);
       let item = block[0];
-      if (item.value.startsWith("msg: ") && item.indent === 0 && item.children.length === 1) {
+      if (item instanceof Object && 'value' in item && item.value.startsWith("msg: ") && item.indent === 0 && item.children.length === 1) {
         let child = item.children[0];
         if (child.value.startsWith("Date: ") && child.indent === 1 && child.children.length === 0) {
           return new Msg({
@@ -653,6 +657,9 @@ function htmlSection(section, i) {
 function htmlBlock(block) {
   if (block instanceof Msg) {
     return htmlMsg(block);
+  }
+  if (block instanceof Newline) {
+    return "<br/>";
   }
   return htmlTextBlock(block);
 }
