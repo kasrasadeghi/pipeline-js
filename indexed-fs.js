@@ -1283,10 +1283,11 @@ async function search(text) {
   if (text === '') {
     return [];
   }
-  let notes = await global_notes.listFiles();
+  let notes = await getNoteMetadataMap();
   let cache_log = console.log;
   console.log = (x) => {};
-  let pages = await Promise.all(notes.map(async note => rewrite(await parseFile(note), note)));
+  let filtered_notes = notes.filter(note => note.content.includes(text));  // first pass filter without parsing using a hopefully fast impl-provided string-includes.
+  let pages = filtered_notes.map(note => rewrite(parseContent(note.content), note.uuid));
 
   let messages = [];
   console.log = cache_log;
