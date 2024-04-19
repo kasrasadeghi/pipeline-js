@@ -221,10 +221,12 @@ details[open] > summary > .tags-summary {
 }
 
 /* disc input */
-#msg_input {
+.msg_input {
   background: var(--input_background_color);
   margin: 5px;
   width: -webkit-fill-available;
+  padding: 5px;
+  font-family: Arial, Helvetica, sans-serif;
 }
 blockquote {
   /* background: var(--input_background_color);

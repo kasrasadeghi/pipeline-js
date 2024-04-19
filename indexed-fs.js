@@ -678,7 +678,7 @@ function htmlMsg(item) {
   }
   return (`
     <div class='msg' id='${item.date}'>
-      <div><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(timezoneCompatibility(item.date)))}</a> ${item.origin.split('/')[0]} ${Date.parse(timezoneCompatibility(item.date))}</div>
+      <div><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(timezoneCompatibility(item.date)))}</a> ${item.origin.split('/')[0]}</div>
       <div class="msg_content"${style_option}>${line}</div>
     </div>
     ${item.blocks.map(block => htmlTextBlock(block)).join("<br/>")}`
@@ -783,14 +783,20 @@ async function renderDisc(uuid) {
   let edit_button = "";
   if (uuid.startsWith(await get_local_repo_name())) {
     global.handlers.handleMsg = async (event) => {
+      console.log(event);
+
+      const should_submit = (event.key === 'Enter');
+      if (! should_submit) {
+        return;
+      }
 
       event.preventDefault();
 
       let msg_input = document.getElementById('msg_input');
-      let msg = msg_input.value;
+      let msg = msg_input.innerText;
       if (msg.trim().length > 0) {
         console.log('msg', msg);
-        msg_input.value = '';
+        msg_input.innerText = '';
 
         let content = await global_notes.readFile(uuid);
         let lines = content.split("\n");
@@ -809,7 +815,9 @@ async function renderDisc(uuid) {
       let combined_remote_status = await getRemoteStatus(repos.join(","));
       displayState("syncing...");
       await pullRemoteSimple(combined_remote_status);
-      await paintDisc(uuid, 'only main');
+      
+      // don't paint after syncing as it is quite disruptive as sync is sometimes slow (500ms)
+      // await paintDisc(uuid, 'only main'); 
 
       displayState("done");
       await pushLocalSimple(combined_remote_status);
@@ -817,24 +825,20 @@ async function renderDisc(uuid) {
     };
 
     msg_form = `<div
-      oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"
-      aria-describedby=":r4u:" 
+      onkeydown="return global.handlers.handleMsg(event);"
+      id="msg_input"
+      class="msg_input"
+      aria-describedby=":r4u:"
       aria-label="Message"
-      class="xzsf02u x1a2a7pz x1n2onr6 x14wi4xw x1iyjqo2 x1gh3ibb xisnujt xeuugli x1odjw0f notranslate" 
-      contenteditable="true" 
-      role="textbox" 
-      spellcheck="true" 
+      contenteditable="true"
+      role="textbox"
       tabindex="0" 
-      style="user-select: text; white-space: pre-wrap; word-break: break-word;" 
-      data-lexical-editor="true">
-        <p class="xat24cr xdj266r">
-          <br>
-        </p>
-      </div>`
+      style="user-select: text; white-space: pre-wrap; word-break: break-word;"
+      data-lexical-editor="true"><br></div>`
     
-    msg_form += `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
-      <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
-    </form>`;
+    // msg_form += `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
+    //   <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
+    // </form>`;
     edit_button = `<button onclick="gotoEdit('${uuid}')">edit</button>`;
   }
 
@@ -1060,7 +1064,7 @@ async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
   let local_status = await getLocalStatus(repo);
   let remote_status = undefined;
   if (combined_remote_status !== undefined) {
-    console.log('using combined remote status');
+    // console.log('using combined remote status');
     remote_status = combined_remote_status[repo];
   } else {
     remote_status = await getRemoteStatus(repo);
