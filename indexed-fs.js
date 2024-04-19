@@ -719,8 +719,11 @@ async function paintDisc(uuid, flag) {
   } else {
     [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
   }
-  if (updateSelected() === null) {
+  const selected = updateSelected();
+  if (selected === null) {
     main.scrollTop = main.scrollHeight;
+  } else {
+    selected.scrollIntoView();
   }
 }
 
@@ -951,10 +954,10 @@ window.addEventListener('load', () => {
   console.log('enable highlight-selected');
 
   window.addEventListener('hashchange', () => {
-    updateSelected();
+    updateSelected()?.scrollIntoView();
   });
 
-  updateSelected();
+  updateSelected()?.scrollIntoView();
 });
 
 // SYNC
