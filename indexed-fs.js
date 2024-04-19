@@ -815,8 +815,24 @@ async function renderDisc(uuid) {
       await pushLocalSimple(combined_remote_status);
       return false;
     };
+
+    msg_form = `<div
+      oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"
+      aria-describedby=":r4u:" 
+      aria-label="Message"
+      class="xzsf02u x1a2a7pz x1n2onr6 x14wi4xw x1iyjqo2 x1gh3ibb xisnujt xeuugli x1odjw0f notranslate" 
+      contenteditable="true" 
+      role="textbox" 
+      spellcheck="true" 
+      tabindex="0" 
+      style="user-select: text; white-space: pre-wrap; word-break: break-word;" 
+      data-lexical-editor="true">
+        <p class="xat24cr xdj266r">
+          <br>
+        </p>
+      </div>`
     
-    msg_form = `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
+    msg_form += `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
       <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
     </form>`;
     edit_button = `<button onclick="gotoEdit('${uuid}')">edit</button>`;
