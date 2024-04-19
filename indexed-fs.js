@@ -719,7 +719,7 @@ async function paintDisc(uuid, flag) {
   } else {
     [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
   }
-  if (updateSelected() !== null) {
+  if (updateSelected() === null) {
     main.scrollTop = main.scrollHeight;
   }
 }
