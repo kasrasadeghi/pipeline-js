@@ -162,7 +162,7 @@ print(f'Serving HTTP on port {PORT} ...')
 while True:
     try:
         client_connection, client_address = listen_socket.accept()
-        print()
+        print('----------------------------------------')
         print(datetime.now(), client_address) # (address: string, port: int)
         request = receive_headers_and_content(client_connection)
         if request is None:
