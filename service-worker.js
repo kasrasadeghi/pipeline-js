@@ -80,7 +80,7 @@ self.addEventListener('fetch', (event) => {
             file_to_find = baseFile;
           }
           if (cachedResponse) {
-            LOG(`found in cache! ${event.request.url} -> ${file_to_find} (${cachedResponse.length} bytes)`);
+            LOG(`found in cache! ${event.request.url} -> ${file_to_find} (${cachedResponse.headers.get("content-length")} bytes)`);
             return cachedResponse;
           }
           throw new Error(`cache miss '${event.request.url}' for file '${file_to_find}' after network failure`);
