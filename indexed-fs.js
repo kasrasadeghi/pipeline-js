@@ -1517,8 +1517,22 @@ async function gotoNewNote(title) {
 }
 
 async function renderMenu() {
+  global.handlers = {};
+  global.handlers.clearServiceWorkerCaches = async () => {
+    if ('serviceWorker' in navigator) {
+      caches.keys().then(function(cacheNames) {
+        cacheNames.forEach(function(cacheName) {
+          console.log('deleting', cacheName, 'from', caches);
+          caches.delete(cacheName);
+        });
+      });
+    }
+    return false;
+  }
   return [
-    `${TextAction({id: 'new_note', label: 'make new note', value: '', action: 'gotoNewNote'})}`,
+    `${TextAction({id: 'new_note', label: 'make new note', value: '', action: 'gotoNewNote'})}
+    <br/>
+    <button onclick="return global.handlers.clearServiceWorkerCaches();">clear service worker cache</button>`,
     `<div>
       <button onclick="gotoJournal()">journal</button>
       <button onclick="gotoList()">list</button>

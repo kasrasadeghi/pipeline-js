@@ -2,13 +2,14 @@ const CACHE_VERSION = 'pipeline-notes-v1';
 const baseFile = 'sw-index.html';
 const assets = [
   'favicon.ico',
+  'icon512.png',
   'manifest.json',
   'indexed-fs.js',
   'style.css',
 ];
 
 function LOG(...data) {
-  // console.log('SERVICE WORKER', ...data);
+  console.log('SERVICE WORKER', ...data);
 }
 
 async function fillServiceWorkerCache() {
@@ -39,6 +40,8 @@ self.addEventListener('fetch', (event) => {
 
   if (event.request.url.includes('/api/')) {
     return; // don't use the cache for /api/ subpaths
+  } else if (event.request.url.startsWith('chrome-extension://')) {
+    return; // don't cache chrome extension requests
   } else {
     event.respondWith(
       (async () => {
@@ -50,9 +53,9 @@ self.addEventListener('fetch', (event) => {
         // fetch
         try {
           LOG(`attempting fetch ${event.request.url}`);
-          const fetchedResponse = await fetch(event.request);
+          const fetchedResponse = await fetch(event.request, { signal: AbortSignal.timeout(2000) }); // 1 second timeout
           if (!fetchedResponse.ok) {
-            throw new Error('response status is not ok');
+            throw new Error(`response status is not ok: ${fetchedResponse.status} ${fetchedResponse.statusText}`);
           } else {
             LOG(`fetch succeeded! ${event.request.url}`)
             if (is_asset) {
@@ -65,7 +68,7 @@ self.addEventListener('fetch', (event) => {
 
         // use cache if fetch fails
         } catch (e) {
-          LOG("network failed, loading from cache")
+          LOG("network failed, loading from cache:", event.request.url, e);
           // fetch timeout and other errors
           let cachedResponse = null;
           let file_to_find = null;
@@ -77,7 +80,7 @@ self.addEventListener('fetch', (event) => {
             file_to_find = baseFile;
           }
           if (cachedResponse) {
-            LOG(`found in cache! ${event.request.url} -> ${file_to_find}`);
+            LOG(`found in cache! ${event.request.url} -> ${file_to_find} (${cachedResponse.length} bytes)`);
             return cachedResponse;
           }
           throw new Error(`cache miss '${event.request.url}' for file '${file_to_find}' after network failure`);
