@@ -1581,6 +1581,8 @@ function lookupIcon(full_name) {
     'next': 'NEXT',
     'prev': 'PREV',
     'all': 'ALL_',
+    'submit': 'SUBM',
+    'back': 'BACK',
   }[full_name];
 }
 
