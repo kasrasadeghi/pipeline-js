@@ -15,6 +15,10 @@
   --cmd_color: #bbb;
   --msg_timestamp_color: rgb(57, 146, 138);
   --quote_timestamp_color: rgb(87, 186, 158);
+  --disc-font: Arial, Helvetica, sans-serif;
+  --input-font: Arial, Helvetica, sans-serif;
+  --link-font: monospace;
+  --time-font: monospace;
 }
 /* global font setting */
  * { font-size: 18px; color: var(--base_text_color); }
@@ -58,8 +62,8 @@ input[type=checkbox] { width: 18px; height: 18px; margin: 1px 3px 1px 3px; paddi
   align-items: flex-start;
   font-feature-settings: "liga" 0;
 }
-.msg { display: flex; margin: 3px; font-family: monospace; }
-.msg_timestamp { border-radius: 18px; color: var(--msg_timestamp_color); }
+.msg { display: flex; margin: 3px; font-family: var(--disc-font); }
+.msg_timestamp { border-radius: 18px; color: var(--msg_timestamp_color); font-family: var(--time-font); }
 .msg_content {
   padding: 7px 12px 8px 12px;
   border-radius: 18px;
@@ -166,17 +170,16 @@ details[open] > summary > .tags-summary {
 }
 
 /* buttons */
-.link-button {
+.menu-button {
   background: none;
   color: var(--link_button_main_color);
-  cursor: pointer;
-  font-family: monospace;
+  font-family: var(--link-font);
   border: var(--link_button_main_color) 1px solid;
   margin: 2px;
-  padding: 6px 6px 4px 6px;
+  padding: 10px 5px;
 }
-.link-button:hover, .link-button:focus { border-color: var(--link_button_hover_color); outline: none; }
-.link-button:active { color: var(--link_button_hovercolor); }
+.menu-button:hover, .menu-button:focus { border-color: var(--link_button_hover_color); outline: none; }
+.menu-button:active { color: var(--link_button_hovercolor); }
 
 .sidebar-buttons {
   display:flex;
@@ -204,7 +207,7 @@ details[open] > summary > .tags-summary {
   background: none;
   color: var(--link_button_main_color);
   cursor: pointer;
-  font-family: monospace;
+  font-family: var(--link-font);
   margin: 2px;
   padding: 6px 6px 4px 6px;
 }
@@ -226,7 +229,7 @@ details[open] > summary > .tags-summary {
   margin: 5px;
   width: -webkit-fill-available;
   padding: 5px;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--input-font);
 }
 blockquote {
   /* background: var(--input_background_color);

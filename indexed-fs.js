@@ -535,14 +535,16 @@ function rewriteLine(line) {
   while (line !== '') {
     if (line.startsWith('https://') || line.startsWith('http://')) {
       let end_of_url = line.search(' ');
-      if (end_of_url === -1) {  // ideally this wouldn't need a special case but i can't think of how to handle it on this flight
-        result.push(new Link(line));
-        line = '';
-      } else {
-        result.push(new Link(line.slice(0, end_of_url)));
-        line = line.slice(end_of_url);
+      if (line.slice(0, end_of_url).length > 9) { // after the "https://" is actually a link
+        if (end_of_url === -1) {  // ideally this wouldn't need a special case but i can't think of how to handle it on this flight
+          result.push(new Link(line));
+          line = '';
+        } else {
+          result.push(new Link(line.slice(0, end_of_url)));
+          line = line.slice(end_of_url);
+        }
+        continue;
       }
-      continue;
     }
 
     if (result.slice(-1).length > 0 && typeof result.slice(-1)[0] === 'string') {
@@ -791,8 +793,8 @@ async function renderDisc(uuid) {
       await paintDisc(uuid);
       return false;
     };
-    mix_button_value = mix_state === 'true' ? "unmix" : "mix";
-    mix_button = `<button onclick="return global.handlers.mix(event)" id='mix_button'>${mix_button_value}</button>`;
+    mix_button_value = mix_state === 'true' ? lookupIcon('focus') : lookupIcon('mix');
+    mix_button = `<button class='menu-button' onclick="return global.handlers.mix(event)">${mix_button_value}</button>`;
   }
 
   console.log('mix state', mix_state);
@@ -863,7 +865,7 @@ async function renderDisc(uuid) {
     // msg_form += `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
     //   <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
     // </form>`;
-    edit_button = `<button onclick="gotoEdit('${uuid}')">edit</button>`;
+    edit_button = `<button class='menu-button' onclick="gotoEdit('${uuid}')">${lookupIcon('edit')}</button>`;
   }
 
   return [
@@ -871,10 +873,10 @@ async function renderDisc(uuid) {
     `${msg_form}
     <div>
       ${edit_button}
-      <button onclick="gotoList()">list</button>
-      <button onclick="gotoJournal()">journal</button>
-      <button onclick="gotoSearch()">search</button>
-      <button onclick="gotoMenu()">menu</button>
+      <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
+      <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
+      <button class='menu-button' onclick="gotoSearch()">${lookupIcon('search')}</button>
+      <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>
       ${mix_button}
     </div>
     <div id='state_display'></div>`
@@ -918,8 +920,8 @@ async function renderEdit(uuid) {
   global.handlers = {submitEdit};
   return [
     `<textarea class='editor_textarea'>` + content + "</textarea>",
-    `<button onclick="global.handlers.submitEdit()">submit</button>
-     <button onclick="gotoDisc('${uuid}')">disc</button>`
+    `<button class='menu-button' onclick="global.handlers.submitEdit()">${lookupIcon('submit')}</button>
+     <button class='menu-button' onclick="gotoDisc('${uuid}')">${lookupIcon('back')}</button>`
   ];
 }
 
@@ -936,7 +938,7 @@ async function renderList() {
   let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
   return [
     table,
-    `<button onclick="gotoJournal()">journal</button>`
+    `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>`
   ];
 }
 
@@ -1000,7 +1002,7 @@ async function hasRemote() {
 
 async function syncButton() {
   if (await hasRemote()) {
-    return `<button onclick="gotoSync()">sync</button>`;
+    return `<button class='menu-button' onclick="gotoSync()">${lookupIcon('sync')}</button>`;
   } else {
     return ``;
   }
@@ -1056,9 +1058,9 @@ async function renderSync() {
   </div>
   <div style='display: flex;'>` + repo_sync_menu(local, 'local') + remotes.map(remote => repo_sync_menu(remote, 'remote')).join("") + `</div>`,
   `<div>
-    <button onclick="gotoList()">list</button>
-    <button onclick="gotoSetup()">setup</button>
-    <button onclick="gotoJournal()">journal</button>
+    <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
+    <button class='menu-button' onclick="gotoSetup()">S${lookupIcon('search')}ER</button>
+    <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
   </div>
   `]
 }
@@ -1355,9 +1357,9 @@ function renderSearchPagination(all_messages) {
   };
   let pagination = document.getElementById('search-pagination');
   pagination.innerHTML = `
-    <button onclick="return global.handlers.paginate(1)">next</button>
-    <button onclick="return global.handlers.paginate(-1)">prev</button>
-    <button onclick="return global.handlers.paginate('all')">all</button>
+    <button class='menu-button' onclick="return global.handlers.paginate(1)">${lookupIcon('next')}</button>
+    <button class='menu-button' onclick="return global.handlers.paginate(-1)">${lookupIcon('prev')}</button>
+    <button class='menu-button' onclick="return global.handlers.paginate('all')">${lookupIcon('all')}</button>
   `;
 }
 
@@ -1377,9 +1379,9 @@ function renderSearchFooter() {
   const urlParams = new URLSearchParams(window.location.search);
   const text = urlParams.get('q');
   let menu = `
-    <button onclick="gotoJournal()">journal</button>
+    <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
     <input onkeydown="return global.handlers.handleSearch(event)" type='text' id='search_query' value="${text}"></input>
-    <button onclick="return global.handlers.handleSearch(true)">search</button>
+    <button class='menu-button' onclick="return global.handlers.handleSearch(true)">${lookupIcon('search')}</button>
     <br/>
     <div id='search-pagination'></div>
   `;
@@ -1421,7 +1423,7 @@ async function handleTextField(event, id, file_name, rerender) {
 function TextField({id, file_name, label, value, rerender}) {
   return (
     `<input onkeydown="return handleTextField(event, '${id}', '${file_name}', ${rerender})" type='text' id='${id}' value="${value}"></input>
-    <button onclick="return handleTextField(true, '${id}', '${file_name}', ${rerender})">${label}</button>`
+    <button class='menu-button' onclick="return handleTextField(true, '${id}', '${file_name}', ${rerender})">${label}</button>`
   );
 }
 
@@ -1436,7 +1438,7 @@ async function handleTextAction(event, id, action) {
 function TextAction({id, label, value, action}) {
   return (
     `<input onkeydown="return handleTextAction(event, '${id}', ${action})" type='text' id='${id}' value="${value}"></input>
-    <button onclick="return handleTextAction(true, '${id}', ${action})">${label}</button>`
+    <button class='menu-button' onclick="return handleTextAction(true, '${id}', ${action})">${label}</button>`
   );
 }
 
@@ -1478,8 +1480,8 @@ async function renderSetup() {
   }
   if (local_repo_name.length > 0) {
     local_repo_name_message = `Local repo name is ${colorize_repo(local_repo_name)}`;
-    add_links = `<button onclick="gotoJournal()">journal</button>
-    <button onclick="gotoList()">list</button>
+    add_links = `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
+    <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
     ${await syncButton()}`;
   }
 
@@ -1495,11 +1497,11 @@ async function renderSetup() {
   return [
     `<div style="margin: 10px">
        <input onkeydown="return global.handlers.handleSetup(event)" type='text' id='local_repo_name' value="${local_repo_name}"></input>
-       <button onclick="return global.handlers.handleSetup(true)">set local repo name</button>
+       <button class='menu-button' onclick="return global.handlers.handleSetup(true)">set local repo name</button>
      </div>
      <div style="margin: 10px">
        <input onkeydown="return global.handlers.handleSubscriptions(event)" type='text' id='subscriptions' value="${subscribed_repos}"></input>
-       <button onclick="return global.handlers.handleSubscriptions(true)">subscribe to repos</button>
+       <button class='menu-button' onclick="return global.handlers.handleSubscriptions(true)">subscribe to repos</button>
        <label for='subscriptions'>subscribe to a list of (whitespace-separated) repositories</label>
      </div>
      <p>${local_repo_name_message}</p>
@@ -1541,15 +1543,45 @@ async function renderMenu() {
   return [
     `${TextAction({id: 'new_note', label: 'make new note', value: '', action: 'gotoNewNote'})}
     <br/>
-    <button onclick="return global.handlers.clearServiceWorkerCaches();">clear service worker cache</button>`,
+    <button class='menu-button' onclick="return global.handlers.clearServiceWorkerCaches();">clear service worker cache</button>`,
     `<div>
-      <button onclick="gotoJournal()">journal</button>
-      <button onclick="gotoList()">list</button>
-      <button onclick="gotoSearch()">search</button>
-      <button onclick="gotoSync()">sync</button>
-      <button onclick="gotoSetup()">setup</button>
+      <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
+      <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
+      <button class='menu-button' onclick="gotoSearch()">${lookupIcon('search')}</button>
+      <button class='menu-button' onclick="gotoSync()">${lookupIcon('sync')}</button>
+      <button class='menu-button' onclick="gotoSetup()">${lookupIcon('setup')}</button>
     </div>`
   ];
+}
+
+// ICONS
+
+function lookupIcon(full_name) {
+  // return {
+  //   'search' : '🔍',
+  //   'sync' : '🔄',
+  //   'setup' : '⚙️',
+  //   'journal' : '📓',
+  //   'edit' : '✏️',
+  //   'list' : '📜',
+  //   'menu' : '🍔',
+  //   'mix' : '🔀',
+  //   'focus' : '',  // arrow pointing to the right
+  // }[full_name];
+  return {
+    'search': 'SRCH',
+    'sync': 'SYNC',
+    'setup': 'SETP',
+    'journal': 'JRNL',
+    'edit': 'EDIT',
+    'list': 'LIST',
+    'menu': 'MENU',
+    'mix': 'MIX_',
+    'focus': 'FOCS',
+    'next': 'NEXT',
+    'prev': 'PREV',
+    'all': 'ALL_',
+  }[full_name];
 }
 
 // MAIN
@@ -1657,7 +1689,7 @@ async function run() {
   const reloadNecessary = () => {
     alert("Database is outdated, please reload the page.");
     // document.location.reload();
-    document.getElementsByTagName("body")[0].innerHTML = `Database is outdated, please <button onclick="window.location.reload(); return false;">reload the page</button>.`;
+    document.getElementsByTagName("body")[0].innerHTML = `Database is outdated, please <button class='menu-button' onclick="window.location.reload(); return false;">reload the page</button>.`;
   }
 
   await global_notes.init(reloadNecessary);
