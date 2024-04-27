@@ -699,7 +699,15 @@ function htmlLine(line) {
         return "<emph class='tag'>" + x.tag + "</emph>";
       }
       if (x instanceof Link) {
-        return `<a href="${x.url}">${x.url}</a>`
+        let rendered = x.url;
+        if (x.url.startsWith("http://") || x.url.startsWith("https://")) {
+          rendered = rendered.slice(rendered.indexOf('://') + '://'.length);
+        }
+        const reddit_share_tail = "?utm_source=share&utm_medium=mweb3x&utm_name=mweb3xcss&utm_term=1&utm_content=share_button";
+        if (x.url.endsWith(reddit_share_tail)) {
+          rendered = rendered.slice(0, -reddit_share_tail.length);
+        }
+        return `<a href="${x.url}">${rendered}</a>`
       }
       return x;
     }).join("");
