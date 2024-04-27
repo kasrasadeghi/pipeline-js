@@ -687,7 +687,7 @@ function htmlMsg(item) {
   }
   return (`
     <div class='msg' id='${item.date}'>
-      <div><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(timezoneCompatibility(item.date)))}</a> ${item.origin.split('/')[0]}</div>
+      <div class="msg_menu"><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(timezoneCompatibility(item.date)))}</a> ${item.origin.split('/')[0]}</div>
       <div class="msg_content"${style_option}>${line}</div>
     </div>
     ${item.blocks.map(block => htmlTextBlock(block)).join("<br/>")}`
