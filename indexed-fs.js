@@ -1101,7 +1101,7 @@ async function renderSync() {
   <div style='display: flex;'>` + repo_sync_menu(local, 'local') + remotes.map(remote => repo_sync_menu(remote, 'remote')).join("") + `</div>`,
   `<div>
     <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
-    <button class='menu-button' onclick="gotoSetup()">S${lookupIcon('search')}ER</button>
+    <button class='menu-button' onclick="gotoSetup()">${lookupIcon('setup')}</button>
     <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
   </div>
   `]
