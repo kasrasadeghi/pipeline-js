@@ -717,7 +717,7 @@ function ShortcircuitLink(url, text, style_class) {
   if (style_class !== undefined) {
     style_class_include = `class='${style_class}'`;
   }
-  return `<a ${style_class_include} onclick="window.history.pushState({}, '', '${url}'); handleRouting(); return false;" href="javascript:void(0)">${text}</a>`;
+  return `<a ${style_class_include} onclick="window.history.pushState({}, '', '${url}'); handleRouting(); return false;" href="${url}">${text}</a>`;
 }
 
 function htmlLine(line) {
@@ -746,7 +746,8 @@ function htmlLine(line) {
       return x;
     }).join("");
   }
-  return line;
+  console.log('huh', line);
+  return encodeURIComponent(line);
 }
 
 // DISC
