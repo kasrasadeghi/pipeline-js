@@ -1333,7 +1333,7 @@ async function perfStatus() {
 // SEARCH
 
 async function search(text) {
-  if (text === '') {
+  if (text === '' || text === null || text === undefined) {
     return [];
   }
   let notes = await getNoteMetadataMap();
