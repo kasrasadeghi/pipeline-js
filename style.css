@@ -74,7 +74,7 @@ pre { margin: 0px; color: var(--base_text_color); }
 
 /* selecting specific messages */
 .selected { width: 100%; background: #0cc4; border-radius: 18px }
-.selected > .msg_timestamp { color: #ddd; }
+.selected > .msg_menu > .msg_timestamp { color: #ddd; }
 
 /* tags */
 emph.tag { color: var(--tag_color); font-weight: 500; }
