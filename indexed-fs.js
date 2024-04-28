@@ -811,6 +811,12 @@ async function renderDisc(uuid) {
     global.handlers.handleMsg = async (event) => {
       console.log(event);
 
+      setTimeout(() => {
+        let footer_menu_size = (document.getElementById('msg_input').clientHeight) + 60;
+        console.log('setting footer menu to ', footer_menu_size, 'px');
+        document.documentElement.style.setProperty("--footer_menu_size", footer_menu_size + "px");
+      }, 0);
+
       const should_submit = (event.key === 'Enter');
       if (! should_submit) {
         return;
