@@ -722,8 +722,14 @@ function htmlLine(line) {
           rendered = rendered.slice(rendered.indexOf('://') + '://'.length);
         }
         const reddit_share_tail = "?utm_source=share&utm_medium=mweb3x&utm_name=mweb3xcss&utm_term=1&utm_content=share_button";
-        if (x.url.endsWith(reddit_share_tail)) {
+        if (rendered.endsWith(reddit_share_tail)) {
           rendered = rendered.slice(0, -reddit_share_tail.length);
+        }
+        if (rendered.startsWith(window.location.host)) {
+          rendered = rendered.slice(window.location.host.length);
+          rendered = decodeURI(rendered);
+
+          return `<a onclick="window.history.pushState({}, '', '${x.url}'); handleRouting(); return false;" href="javascript:void(0)">${rendered}</a>`;
         }
         return `<a href="${x.url}">${rendered}</a>`
       }
@@ -745,7 +751,7 @@ async function paintDisc(uuid, flag) {
   } else {
     [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
     setTimeout(() => {
-      document.getElementById('msg_input').focus();
+      document.getElementById('msg_input')?.focus();
     }, 0);
   }
   const selected = updateSelected();
