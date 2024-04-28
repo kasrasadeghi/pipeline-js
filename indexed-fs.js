@@ -1419,7 +1419,7 @@ function runSearch() {
 
 function renderSearchFooter() {
   const urlParams = new URLSearchParams(window.location.search);
-  const text = urlParams.get('q');
+  const text = urlParams.get('q') || '';
   let menu = `
     <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
     <input onkeydown="return global.handlers.handleSearch(event)" type='text' id='search_query' value="${text}"></input>
