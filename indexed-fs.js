@@ -338,6 +338,19 @@ function parseSection(lines) {
   return blocks.map(parseTree);
 }
 
+class TreeNode {
+  constructor(obj) {
+    this.children = [];
+    this.indent = obj.indent;
+    this.value = obj.value;
+  }
+
+  toString() {
+    let indent = this.indent == -1 ? "" : "- " + "  ".repeat(this.indent);
+    return indent + htmlLine(this.value) + "\n" + this.children.map(x => x.toString()).join("\n");
+  }
+}
+
 function parseTree(block) {
   let indent_lines = []
   for (let L of block) {
@@ -367,7 +380,7 @@ function parseTree(block) {
 
     if (stack.length === 0) {
       if ([-1, 0].includes(indent)) {
-        let node = {indent, value: L, children: []};
+        let node = new TreeNode({indent, value: L});
         stack.push(node);
         roots.push(node);
         continue;
@@ -379,7 +392,7 @@ function parseTree(block) {
     // stack must have elements in it, so the current line must be the stack's child
     found_children = true;
 
-    let node = {indent, value: L, children: []};
+    let node = new TreeNode({indent, value: L});
     if (stack.slice(-1)[0].indent + 1 !== indent) {
       return block; // failure, children must be one indent deeper than their parent
     }
@@ -672,6 +685,9 @@ function htmlTextBlock(block) {
       return "<blockquote>" + block.slice(1).map(x => "<p>" + htmlLine(x) + "</p>").join("") + "</blockquote>";
     }
     return "<pre>" + block.map(htmlLine).join("\n") + "</pre>";
+  }
+  if (block instanceof TreeNode) {
+    return `<pre>` + block.toString() + `</pre>`;
   }
   return JSON.stringify(block, undefined, 2);
 }
