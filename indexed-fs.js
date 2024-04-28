@@ -701,13 +701,23 @@ function htmlMsg(item) {
   if (item.origin !== getCurrentNoteUuid()) {
     style_option = " style='background: #5f193f'";
   }
+  let msg_timestamp_link = ShortcircuitLink(href_id, timestamp_format.format(Date.parse(timezoneCompatibility(item.date))), 'msg_timestamp');
+
   return (`
     <div class='msg' id='${item.date}'>
-      <div class="msg_menu"><a class='msg_timestamp' href='${href_id}'>${timestamp_format.format(Date.parse(timezoneCompatibility(item.date)))}</a> ${item.origin.split('/')[0]}</div>
+      <div class="msg_menu">${msg_timestamp_link} ${item.origin.split('/')[0]}</div>
       <div class="msg_content"${style_option}>${line}</div>
     </div>
     ${item.blocks.map(block => htmlTextBlock(block)).join("<br/>")}`
   )
+}
+
+function ShortcircuitLink(url, text, style_class) {
+  let style_class_include = "";
+  if (style_class !== undefined) {
+    style_class_include = `class='${style_class}'`;
+  }
+  return `<a ${style_class_include} onclick="window.history.pushState({}, '', '${url}'); handleRouting(); return false;" href="javascript:void(0)">${text}</a>`;
 }
 
 function htmlLine(line) {
@@ -729,7 +739,7 @@ function htmlLine(line) {
           rendered = rendered.slice(window.location.host.length);
           rendered = decodeURI(rendered);
 
-          return `<a onclick="window.history.pushState({}, '', '${x.url}'); handleRouting(); return false;" href="javascript:void(0)">${rendered}</a>`;
+          return ShortcircuitLink(x.url, rendered);
         }
         return `<a href="${x.url}">${rendered}</a>`
       }
