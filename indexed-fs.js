@@ -728,7 +728,9 @@ async function paintDisc(uuid, flag) {
     main.innerHTML = (await renderDisc(uuid))[0];
   } else {
     [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
-    document.getElementById('msg_input').focus();
+    setTimeout(() => {
+      document.getElementById('msg_input').focus();
+    }, 0);
   }
   const selected = updateSelected();
   if (selected === null) {
