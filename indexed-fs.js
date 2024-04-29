@@ -848,7 +848,7 @@ async function renderDisc(uuid) {
 
       // yield to the UI thread with settimeout 0, so the msg_input clientHeight uses the post-keyboardEvent UI state.
       setTimeout(() => {
-        let footer_menu_size = (document.getElementById('msg_input').clientHeight) + 60;
+        let footer_menu_size = (document.getElementById('msg_input').clientHeight) + 80; // for one line, client height is 31px
         console.log('setting footer menu to ', footer_menu_size, 'px');
         document.documentElement.style.setProperty("--footer_menu_size", footer_menu_size + "px");
       }, 0);
