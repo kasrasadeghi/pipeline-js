@@ -15,7 +15,6 @@ import traceback
 from datetime import datetime
 
 NOTES_ROOT = os.path.join(os.path.expanduser('~'), "notes")
-
 HOST, PORT = '', 8000
 
 redirect = """
@@ -187,6 +186,7 @@ while True:
         elif path == '/sw-index.html':
             path = 'index.html'
             mimetype = b"text/html"
+        
         elif path == '/manifest.json':
             path = 'manifest.json'
             mimetype = b"application/manifest+json"
@@ -196,6 +196,16 @@ while True:
         elif path == '/icon512.png':
             path = 'icon512.png'
             mimetype = b"image/png"
+        elif path == '/icon192.png':
+            path = 'icon192.png'
+            mimetype = b"image/png"
+        elif path == '/maskable_icon.png':
+            path = 'maskable_icon.png'
+            mimetype = b"image/png"
+        elif path == '/maskable_icon_x192.png':
+            path = 'maskable_icon_x192.png'
+            mimetype = b"image/png"
+        
         elif not path.startswith('/api'):
             path = 'index.html'
             mimetype = b"text/html"

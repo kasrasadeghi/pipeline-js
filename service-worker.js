@@ -3,6 +3,9 @@ const baseFile = 'sw-index.html';
 const assets = [
   'favicon.ico',
   'icon512.png',
+  'icon192.png',
+  'maskable_icon.png',
+  'maskable_icon_x192.png',
   'manifest.json',
   'indexed-fs.js',
   'style.css',
