@@ -747,7 +747,7 @@ function htmlLine(line) {
     }).join("");
   }
   console.log('huh', line);
-  return encodeURIComponent(line);
+  return line;
 }
 
 // DISC
