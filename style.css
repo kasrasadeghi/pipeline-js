@@ -193,6 +193,10 @@ details[open] > summary > .tags-summary {
   --routine_menu_width: 180px;
 }
 
+#subscriptions, #local_repo_name {
+  width: min(400px, 100%);
+}
+
 .routine-buttons {
   display:flex;
   width: var(--routine_menu_width);

@@ -1511,28 +1511,7 @@ function TextAction({id, label, value, action}) {
 async function renderSetup() {
 
   // TODO allow renaming local repo?
-
   global.handlers = {};
-
-  global.handlers.handleSetup = async (event) => {
-    if (event === true || event.key === 'Enter') {
-      let text = document.getElementById('local_repo_name').value;
-      await cache.writeFile(LOCAL_REPO_NAME_FILE, text);
-
-      paintSimple(await renderSetup());
-      return false;
-    }
-  };
-
-  global.handlers.handleSubscriptions = async (event) => {
-    if (event === true || event.key === 'Enter') {
-      let text = document.getElementById('subscriptions').value;
-      await cache.writeFile(SUBBED_REPOS_FILE, text);
-
-      paintSimple(await renderSetup());
-      return false;
-    }
-  };
 
   const colorize_repo = (repo) => `<span style="color: #ffcc55; font-family: monospace">${repo}</span>`;
 
@@ -1560,12 +1539,11 @@ async function renderSetup() {
 
   return [
     `<div style="margin: 10px">
-       <input onkeydown="return global.handlers.handleSetup(event)" type='text' id='local_repo_name' value="${local_repo_name}"></input>
-       <button class='menu-button' onclick="return global.handlers.handleSetup(true)">set local repo name</button>
+       ${TextField({id: 'local_repo_name', file_name: LOCAL_REPO_NAME_FILE, rerender: 'renderSetup', value: local_repo_name, label: 'set local repo name'})}
      </div>
      <div style="margin: 10px">
-       <input onkeydown="return global.handlers.handleSubscriptions(event)" type='text' id='subscriptions' value="${subscribed_repos}"></input>
-       <button class='menu-button' onclick="return global.handlers.handleSubscriptions(true)">subscribe to repos</button>
+       ${TextField({id: 'subscriptions', file_name: SUBBED_REPOS_FILE, rerender: 'renderSetup', value: subscribed_repos, label: 'subscribe to repos'})}
+       <br/>
        <label for='subscriptions'>subscribe to a list of (whitespace-separated) repositories</label>
      </div>
      <p>${local_repo_name_message}</p>
