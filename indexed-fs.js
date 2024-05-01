@@ -692,16 +692,38 @@ function htmlTextBlock(block) {
   return JSON.stringify(block, undefined, 2);
 }
 
-// date timestamp
+// date timestamp, like hh:mm:ss in 24-hour clock
 const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-function htmlMsg(item) {
-  let line = htmlLine(item.msg);
+
+// datetime format for "search" mode, like "Wed, Jan 15, hh:mm:ss" in 24-hour clock
+const datetime_format = new Intl.DateTimeFormat('en-us', { month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
+// datetime format for "search" mode with year, like "Wed, Jan 15 2024, hh:mm:ss" in 24-hour clock
+const datetime_year_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
+function htmlMsg(item, mode) {
+
+  let date = Date.parse(timezoneCompatibility(item.date));
+  let now = new Date();
+
+  let time_format = timestamp_format;
+  if (mode === 'search') {
+    time_format = datetime_format;
+    if (now.getFullYear() !== date.getFullYear()) {
+      time_format = datetime_year_format
+    }
+  }
+  
+  let timestamp_content = time_format.format(date)
+    .replaceAll(",", ""); // "Wed, Jan 15, hh:mm:ss" -> "Wed Jan 15 hh:mm:ss"
   let href_id = `/disc/${item.origin}#${item.date}`;
+  let msg_timestamp_link = ShortcircuitLink(href_id, timestamp_content, 'msg_timestamp');
+
+  let line = htmlLine(item.msg);
   let style_option = "";
   if (item.origin !== getCurrentNoteUuid()) {
     style_option = " style='background: #5f193f'";
   }
-  let msg_timestamp_link = ShortcircuitLink(href_id, timestamp_format.format(Date.parse(timezoneCompatibility(item.date))), 'msg_timestamp');
 
   return (`
     <div class='msg' id='${item.date}'>
@@ -1371,12 +1393,12 @@ function renderSearchMain(all_messages) {
   const urlParams = new URLSearchParams(window.location.search);
   let page = urlParams.get('page');
   if (page === 'all') {
-    main.innerHTML = `<h3>render all ${all_messages.length} results</h3><div class='msglist'>${all_messages.map(htmlMsg).join("")}</div>`;
+    main.innerHTML = `<h3>render all ${all_messages.length} results</h3><div class='msglist'>${all_messages.map((x) => htmlMsg(x, 'search')).join("")}</div>`;
     return;
   }
   page = (page === null ? 0 : parseInt(page));
   let messages = all_messages.slice(page * SEARCH_RESULTS_PER_PAGE, (page + 1) * SEARCH_RESULTS_PER_PAGE);
-  main.innerHTML = `<h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3><div class='msglist'>${messages.map(htmlMsg).join("")}</div>`;
+  main.innerHTML = `<h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3><div class='msglist'>${messages.map((x) => htmlMsg(x, 'search')).join("")}</div>`;
 }
 
 function renderSearchPagination(all_messages) {
