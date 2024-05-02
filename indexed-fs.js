@@ -709,7 +709,7 @@ function htmlMsg(item, mode) {
   let time_format = timestamp_format;
   if (mode === 'search') {
     time_format = datetime_format;
-    if (now.getFullYear() !== date.getFullYear()) {
+    if (now.getFullYear() !== new Date(date).getFullYear()) {
       time_format = datetime_year_format
     }
   }
@@ -1535,9 +1535,10 @@ async function renderSetup() {
   }
   if (local_repo_name.length > 0) {
     local_repo_name_message = `Local repo name is ${colorize_repo(local_repo_name)}`;
-    add_links = `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
-    <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
-    ${await syncButton()}`;
+    add_links = `
+    <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>
+    <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
+    `;
   }
 
   return [
@@ -1579,10 +1580,23 @@ async function renderMenu() {
     }
     return false;
   }
+
+  tag_color = (x) => `<span style="color: var(--link_button_main_color)">${x}</span>`
   return [
     `${TextAction({id: 'new_note', label: 'make new note', value: '', action: 'gotoNewNote'})}
     <br/>
-    <button class='menu-button' onclick="return global.handlers.clearServiceWorkerCaches();">clear service worker cache</button>`,
+    <div>
+      <p> Advanced Debugging Tools: </p>
+      <ul>
+      <li><button class='menu-button' onclick="return global.handlers.clearServiceWorkerCaches();">clear service worker cache</button></li>
+      </ul>
+    </div>
+    <div>
+    <h3>Welcome to Pipeline!</h3>
+    <p>This is the May 1st, 2024 version of Pipeline Notes.</p>
+    <p>Changelog, roadmap, help, usage, and examples coming soon!</p>
+    <p>For now, make a ${tag_color('J')}ou${tag_color('RNL')} for each day, ${tag_color('S')}ea${tag_color('RCH')} your notes, and ${tag_color('LIST')} them out.</p>
+    </div>`,
     `<div>
       <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
       <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>

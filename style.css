@@ -70,7 +70,7 @@ input[type=checkbox] { width: 18px; height: 18px; margin: 1px 3px 1px 3px; paddi
   border-radius: 18px;
   background: var(--msg_color); color: rgb(250, 250, 250);
 }
-pre { margin: 0px; color: var(--base_text_color); }
+pre { font-family: Courier; margin: 0px; color: var(--base_text_color); }
 
 /* selecting specific messages */
 .selected { width: 100%; background: #0cc4; border-radius: 18px }
