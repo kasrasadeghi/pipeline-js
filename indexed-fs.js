@@ -1091,7 +1091,7 @@ async function renderSync() {
     await cache.writeFile(SYNC_FILE, '{}');
   }
 
-  let remote_addr = await cache.readFile(SYNC_REMOTE_FILE);
+  let remote_addr = (await cache.readFile(SYNC_REMOTE_FILE)) || '';
 
   const repo_sync_menu = (repo, type) => {
     let menu_content = '';
@@ -1116,9 +1116,21 @@ async function renderSync() {
   };
   let [local, ...remotes] = await getRepos();
 
+
+  let subscribed_repos_message = "Not subscribed to any repositories.";
+  if (remotes.length > 0) {
+    subscribed_repos_message = "Subscribed to " + remotes.map(colorize_repo).join(", ") + ".";
+  }
+
   return [`
   <div>
     ${TextField({id:'remote', file_name: SYNC_REMOTE_FILE, label: 'set remote addr', value: remote_addr, rerender: 'renderSync'})}
+    <div style="margin: 10px">
+      ${TextField({id: 'subscriptions', file_name: SUBBED_REPOS_FILE, rerender: 'renderSetup', value: remotes.join(" "), label: 'subscribe to repos'})}
+      <br/>
+      <label for='subscriptions'>subscribe to a list of (whitespace-separated) repositories</label>
+    </div>
+    ${subscribed_repos_message}
   </div>
   <div style='display: flex;'>` + repo_sync_menu(local, 'local') + remotes.map(remote => repo_sync_menu(remote, 'remote')).join("") + `</div>`,
   `<div>
@@ -1508,12 +1520,12 @@ function TextAction({id, label, value, action}) {
 
 // SETUP
 
+const colorize_repo = (repo) => `<span style="color: #ffcc55; font-family: monospace">${repo}</span>`;
+
 async function renderSetup() {
 
   // TODO allow renaming local repo?
   global.handlers = {};
-
-  const colorize_repo = (repo) => `<span style="color: #ffcc55; font-family: monospace">${repo}</span>`;
 
   let add_links = '<div style="margin: 10px">Please set a local repo name to continue.</div>';
   let local_repo_name_message = 'Local repo name is unset.';
@@ -1528,26 +1540,11 @@ async function renderSetup() {
     ${await syncButton()}`;
   }
 
-  let subscribed_repos = await cache.readFile(SUBBED_REPOS_FILE);
-  let subscribed_repos_message = "Not subscribed to any repositories.";
-  if (subscribed_repos === null) {
-    subscribed_repos = '';
-  }
-  if (subscribed_repos.length > 0) {
-    subscribed_repos_message = "Subscribed to " + subscribed_repos.split(' ').map(colorize_repo).join(", ") + ".";
-  }
-
   return [
     `<div style="margin: 10px">
        ${TextField({id: 'local_repo_name', file_name: LOCAL_REPO_NAME_FILE, rerender: 'renderSetup', value: local_repo_name, label: 'set local repo name'})}
      </div>
-     <div style="margin: 10px">
-       ${TextField({id: 'subscriptions', file_name: SUBBED_REPOS_FILE, rerender: 'renderSetup', value: subscribed_repos, label: 'subscribe to repos'})}
-       <br/>
-       <label for='subscriptions'>subscribe to a list of (whitespace-separated) repositories</label>
-     </div>
-     <p>${local_repo_name_message}</p>
-     <p>${subscribed_repos_message}</p>`,
+     <p>${local_repo_name_message}</p>`,
     add_links
   ];
 }
