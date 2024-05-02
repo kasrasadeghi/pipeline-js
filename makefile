@@ -12,7 +12,10 @@ curltime:
 	curl -w "@curl-format.txt" -o /dev/null -s "http://localhost:8000/api/status/core"
 
 deploy:
-	scp 404.html indexed-fs.js style.css index.html pubpipe:/web
+	scp favicon.ico indexed-fs.js style.css index.html \
+		icon512.png icon192.png maskable_icon.png maskable_icon_x192.png \
+		manifest.json \
+		pubpipe:/web
 
 systemd:
 	sudo cp pipeline-notes.service /etc/systemd/system/

@@ -1123,6 +1123,7 @@ async function renderSync() {
   }
 
   return [`
+  <p>Sync is a very experimental feature! use at your own risk!</p>
   <div>
     ${TextField({id:'remote', file_name: SYNC_REMOTE_FILE, label: 'set remote addr', value: remote_addr, rerender: 'renderSync'})}
     <div style="margin: 10px">
@@ -1593,7 +1594,7 @@ async function renderMenu() {
     </div>
     <div>
     <h3>Welcome to Pipeline!</h3>
-    <p>This is the May 1st, 2024 version of Pipeline Notes.</p>
+    <p>This is the May 1st, 2024 version of Pipeline Notes, version ${tag_color('1.1')}.</p>
     <p>Changelog, roadmap, help, usage, and examples coming soon!</p>
     <p>For now, make a ${tag_color('J')}ou${tag_color('RNL')} for each day, ${tag_color('S')}ea${tag_color('RCH')} your notes, and ${tag_color('LIST')} them out.</p>
     </div>`,
