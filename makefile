@@ -34,3 +34,6 @@ llogs:
 
 status:
 	systemctl status pipeline-notes
+
+certs:
+	bash make-certs.bash
