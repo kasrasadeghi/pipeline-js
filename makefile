@@ -18,11 +18,19 @@ deploy:
 		pubpipe:/web
 
 systemd:
-	sudo cp pipeline-notes.service /etc/systemd/system/
+	-[ -f /etc/systemd/system/pipeline-notes.service ] && sudo rm /etc/systemd/system/pipeline-notes.service
+	python -c 'import sys; import os; print(open(sys.argv[1]).read().replace("^USER", os.getenv("USER")).replace("^PIPELINE_DIR", os.getcwd()), end="")' \
+		pipeline-notes.service | sudo tee /etc/systemd/system/pipeline-notes.service
 	sudo systemctl daemon-reload
 	sudo systemctl enable pipeline-notes
-	sudo systemctl restart pipeline-notes
+	-sudo systemctl restart pipeline-notes
 	sudo systemctl status pipeline-notes
 
 logs:
 	journalctl -u pipeline-notes -f
+
+llogs:
+	journalctl -u pipeline-notes
+
+status:
+	systemctl status pipeline-notes

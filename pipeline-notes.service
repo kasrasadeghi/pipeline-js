@@ -2,9 +2,9 @@
 Description=Pipeline Server
 
 [Service]
-User=kasra
-WorkingDirectory=/home/kasra/projects/pipeline-js
-ExecStart=/usr/bin/python3 /home/kasra/projects/pipeline-js/simple_server.py
+User=^USER
+WorkingDirectory=^PIPELINE_DIR
+ExecStart=/usr/bin/python ^PIPELINE_DIR/simple_server.py
 Environment=PYTHONUNBUFFERED=1
 Restart=always
 
