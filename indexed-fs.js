@@ -347,7 +347,7 @@ class TreeNode {
 
   toString() {
     let indent = this.indent == -1 ? "" : "- " + "  ".repeat(this.indent);
-    return indent + htmlLine(this.value) + "\n" + this.children.map(x => x.toString()).join("\n");
+    return indent + htmlLine(this.value) + "\n" + this.children.map(x => x.toString()).join("");
   }
 }
 
