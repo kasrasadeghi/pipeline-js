@@ -1747,6 +1747,9 @@ async function handleRouting() {
 
   } else if (window.location.pathname.startsWith('/menu')) {
     paintSimple(await renderMenu());
+  
+  } else if (window.location.pathname.startsWith('/routine')) {
+    paintSimple(await renderRoutine());
 
   } else if (window.location.pathname.startsWith('/today')) {
     await gotoJournal();
