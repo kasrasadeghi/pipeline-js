@@ -641,10 +641,16 @@ function tagParse(line) {
 
 async function htmlNote(uuid) {
   console.log('rendering note for', uuid);
-  let page = await parseFile(uuid);
+  let content = await global_notes.readFile(filepath);
   if (page === null) {
     return `couldn't find file '${uuid}'`;
   }
+  return htmlNoteContent(uuid, content);
+}
+
+function htmlNoteContent(uuid, content) {
+  console.assert(content !== null, content, 'content should not be null');
+  let page = parseContent(content);
   let rewritten = rewrite(page, uuid);
   let rendered = rewritten.map(htmlSection).join("\n");
   return "<div class='msglist'>" + rendered + "</div>";
@@ -1601,7 +1607,9 @@ async function renderMenu() {
   }
 
   return [
-    `${TextAction({id: 'new_note', label: 'make new note', value: '', action: 'gotoNewNote'})}
+    `${TextAction({id: 'new_note', label: lookupIcon('new note'), value: '', action: 'gotoNewNote'})}
+    <br/>
+    <button class='menu-button' onclick="gotoRoutine()">${lookupIcon('routine')}</button>
     <br/>
     <div>
       <p> Advanced Debugging Tools: </p>
@@ -1648,7 +1656,35 @@ function lookupIcon(full_name) {
     'all': 'ALL_',
     'submit': 'SUBM',
     'back': 'BACK',
+    'routine': 'RTNE',
+    'new note': 'NEW_',
   }[full_name];
+}
+
+// ROUTINE
+
+async function gotoRoutine() {
+  paintSimple(await renderRoutine());
+  window.history.pushState({},"", "/routine");
+}
+
+async function renderRoutine() {
+  const notes = await getNoteMetadataMap();
+  const routine_notes = notes.filter(note => note.title === "ROUTINE");
+  let content = "no routine notes found"
+  if (routine_notes.length > 0) {
+    const most_recent_routine_note = routine_notes.sort((a, b) => dateComp(b, a))[0];
+    content = htmlNoteContent(most_recent_routine_note.uuid, most_recent_routine_note.content);
+  }
+  
+  return [
+    `<div>
+      <h3>routine</h3>
+      ${content}
+    </div>`,
+    `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
+    <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>`
+  ];
 }
 
 // MAIN
