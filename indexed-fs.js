@@ -1542,11 +1542,27 @@ async function renderSetup() {
     `;
   }
 
+  const welcome_splash = `<div>
+  <h3>Welcome to Pipeline!</h3>
+  <p>This is the May 1st, 2024 version of Pipeline Notes, version ${tag_color('1.1')}.</p>
+  <p>Changelog, roadmap, help, usage, and examples coming soon!</p>
+  <p>For now, make a ${tag_color('J')}ou${tag_color('RNL')} for each day, ${tag_color('S')}ea${tag_color('RCH')} your notes, and ${tag_color('LIST')} them out.</p>
+  </div>`;
+
+  const setup_splash = `<div>
+  <h3>Setup</h3>
+  <p>Set up your local repo name to get started.</p>
+  <p>A good local repo name is your first name, optionally with the name of your device.</p>
+  </div>`
+
+  let splash = local_repo_name.length > 0 ? welcome_splash : setup_splash;
+
   return [
     `<div style="margin: 10px">
        ${TextField({id: 'local_repo_name', file_name: LOCAL_REPO_NAME_FILE, rerender: 'renderSetup', value: local_repo_name, label: 'set local repo name'})}
      </div>
-     <p>${local_repo_name_message}</p>`,
+     <p>${local_repo_name_message}</p>
+     ${splash}`,
     add_links
   ];
 }
@@ -1568,6 +1584,8 @@ async function gotoNewNote(title) {
   await gotoDisc(uuid);
 }
 
+const tag_color = (x) => `<span style="color: var(--link_button_main_color)">${x}</span>`
+
 async function renderMenu() {
   global.handlers = {};
   global.handlers.clearServiceWorkerCaches = async () => {
@@ -1582,7 +1600,6 @@ async function renderMenu() {
     return false;
   }
 
-  tag_color = (x) => `<span style="color: var(--link_button_main_color)">${x}</span>`
   return [
     `${TextAction({id: 'new_note', label: 'make new note', value: '', action: 'gotoNewNote'})}
     <br/>
@@ -1591,12 +1608,6 @@ async function renderMenu() {
       <ul>
       <li><button class='menu-button' onclick="return global.handlers.clearServiceWorkerCaches();">clear service worker cache</button></li>
       </ul>
-    </div>
-    <div>
-    <h3>Welcome to Pipeline!</h3>
-    <p>This is the May 1st, 2024 version of Pipeline Notes, version ${tag_color('1.1')}.</p>
-    <p>Changelog, roadmap, help, usage, and examples coming soon!</p>
-    <p>For now, make a ${tag_color('J')}ou${tag_color('RNL')} for each day, ${tag_color('S')}ea${tag_color('RCH')} your notes, and ${tag_color('LIST')} them out.</p>
     </div>`,
     `<div>
       <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
