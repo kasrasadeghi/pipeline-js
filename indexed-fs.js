@@ -1691,7 +1691,7 @@ async function renderRoutine() {
     const tags = await getTagsFromMixedNote(current_journal);
 
     const error = (msg, obj) => {
-      console.error(msg, obj);
+      console.log(msg, obj);
       return `<div><h3>${msg}</h3><pre>` + JSON.stringify(obj, undefined, 2) + "</pre></div>"
     };
 
@@ -1704,14 +1704,14 @@ async function renderRoutine() {
       }
       return section.blocks.map(block => {
         if (block instanceof Array) {
+          const renderRoutineValue = (v) => {
+            if (tags.map(t => t.tag).includes(v)) {
+              return `<span style="color: var(--tag_color)">${v}</span>`;
+            }
+            return `<span>${v}</span>`;
+          }
           const renderRoutineBlockItem = element => {
             if (element instanceof TreeNode) {
-              const renderRoutineValue = (v) => {
-                if (tags.map(t => t.tag).includes(v)) {
-                  return `<span style="color: var(--tag_color)">${v}</span>`;
-                }
-                return v;
-              }
               const renderRoutineNode = (x) => {
                 if (x.children.length === 0) {
                   return renderRoutineValue(x.value);
@@ -1720,12 +1720,15 @@ async function renderRoutine() {
               };
               return `<div>${renderRoutineValue(element.value)} <ul>${element.children.map(c => "<li>" + renderRoutineNode(c) + "</li>").join("")}</ul></div>`;
             }
+            if (typeof element === 'string') {
+              return renderRoutineValue(element);
+            } 
             return error('unimpl element', element);
           };
 
           if (block.length !== 1) {
             // return error('array of len ' + block.length, block);
-            return block.map(renderRoutineBlockItem).join("<br>");
+            return block.map(renderRoutineBlockItem).join("<br>") + "<br>";
           }
           
           let [element] = block;
