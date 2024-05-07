@@ -1704,11 +1704,6 @@ async function renderRoutine() {
       }
       return section.blocks.map(block => {
         if (block instanceof Array) {
-          if (block.length !== 1) {
-            // return error('array of len ' + block.length, block);
-            return block.map(renderRoutineBlockItem).join("<br>");
-          }
-
           const renderRoutineBlockItem = element => {
             if (element instanceof TreeNode) {
               const renderRoutineValue = (v) => {
@@ -1727,6 +1722,11 @@ async function renderRoutine() {
             }
             return error('unimpl element', element);
           };
+
+          if (block.length !== 1) {
+            // return error('array of len ' + block.length, block);
+            return block.map(renderRoutineBlockItem).join("<br>");
+          }
           
           let [element] = block;
           return renderRoutineBlockItem(element);
