@@ -1687,6 +1687,8 @@ async function renderRoutine() {
     const most_recent_routine_note = routine_notes.sort((a, b) => dateComp(b, a))[0];
     let page = parseContent(most_recent_routine_note.content);
     page = rewrite(page, most_recent_routine_note.uuid);
+    let current_journal = (await getNotesWithTitle(today(), await get_local_repo_name()))[0];
+    const tags = await getTagsFromMixedNote(current_journal);
 
     const error = (msg, obj) => {
       console.error(msg, obj);
@@ -1708,14 +1710,19 @@ async function renderRoutine() {
           
           let [element] = block;
           if (element instanceof TreeNode) {
-            
+            const renderRoutineValue = (v) => {
+              if (tags.map(t => t.tag).includes(v)) {
+                return `<span style="color: var(--tag_color)">${v}</span>`;
+              }
+              return v;
+            }
             const renderRoutineNode = (x) => {
               if (x.children.length === 0) {
-                return x.value;
+                return renderRoutineValue(x.value);
               }
-              return `${x.value}<ul>${x.children.map(c => "<li>" +  renderRoutineNode(c) + "</li>").join("")}</ul>`;
+              return `${renderRoutineValue(x.value)}<ul>${x.children.map(c => "<li>" +  renderRoutineNode(c) + "</li>").join("")}</ul>`;
             };
-            return `<div>${element.value} <ul>${element.children.map(c => "<li>" + renderRoutineNode(c) + "</li>").join("")}</ul></div>`;
+            return `<div>${renderRoutineValue(element.value)} <ul>${element.children.map(c => "<li>" + renderRoutineNode(c) + "</li>").join("")}</ul></div>`;
           }
           return error('unimpl element', element);
         }
@@ -1735,6 +1742,14 @@ async function renderRoutine() {
     `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
     <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>`
   ];
+}
+
+async function getTagsFromMixedNote(uuid) {
+  let page = await mixPage(uuid);
+  return page
+    .flatMap(s => s.blocks?.filter(x => x instanceof Msg))  // get all messages from every section
+    .filter(x => x)  // filter away sections that didn't have blocks
+    .flatMap(x => x.msg.filter(p => p instanceof Tag));  // get all tags from every message
 }
 
 // MAIN
