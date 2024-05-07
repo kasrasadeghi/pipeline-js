@@ -1705,26 +1705,31 @@ async function renderRoutine() {
       return section.blocks.map(block => {
         if (block instanceof Array) {
           if (block.length !== 1) {
-            return error('array of len ' + block.length, block);
+            // return error('array of len ' + block.length, block);
+            return block.map(renderRoutineBlockItem).join("<br>");
           }
+
+          const renderRoutineBlockItem = element => {
+            if (element instanceof TreeNode) {
+              const renderRoutineValue = (v) => {
+                if (tags.map(t => t.tag).includes(v)) {
+                  return `<span style="color: var(--tag_color)">${v}</span>`;
+                }
+                return v;
+              }
+              const renderRoutineNode = (x) => {
+                if (x.children.length === 0) {
+                  return renderRoutineValue(x.value);
+                }
+                return `${renderRoutineValue(x.value)}<ul>${x.children.map(c => "<li>" +  renderRoutineNode(c) + "</li>").join("")}</ul>`;
+              };
+              return `<div>${renderRoutineValue(element.value)} <ul>${element.children.map(c => "<li>" + renderRoutineNode(c) + "</li>").join("")}</ul></div>`;
+            }
+            return error('unimpl element', element);
+          };
           
           let [element] = block;
-          if (element instanceof TreeNode) {
-            const renderRoutineValue = (v) => {
-              if (tags.map(t => t.tag).includes(v)) {
-                return `<span style="color: var(--tag_color)">${v}</span>`;
-              }
-              return v;
-            }
-            const renderRoutineNode = (x) => {
-              if (x.children.length === 0) {
-                return renderRoutineValue(x.value);
-              }
-              return `${renderRoutineValue(x.value)}<ul>${x.children.map(c => "<li>" +  renderRoutineNode(c) + "</li>").join("")}</ul>`;
-            };
-            return `<div>${renderRoutineValue(element.value)} <ul>${element.children.map(c => "<li>" + renderRoutineNode(c) + "</li>").join("")}</ul></div>`;
-          }
-          return error('unimpl element', element);
+          return renderRoutineBlockItem(element);
         }
         return error('unimpl block', block);
       }).join("<br>");
