@@ -305,6 +305,8 @@ function parseContent(content) {
   for (let L of content.split("\n")) {
     if (L.startsWith("--- ") && L.endsWith(" ---") && L.length > 9) {
       sections.push({title: L.slice(4, -4), lines: []});
+    } else if (L === '---') {
+      sections.push({title: 'entry', lines: []});
     } else {
       // console.log('append ', L, 'to section', sections);
       sections.slice(-1)[0].lines.push(L);
@@ -1674,7 +1676,46 @@ async function renderRoutine() {
   let content = "no routine notes found"
   if (routine_notes.length > 0) {
     const most_recent_routine_note = routine_notes.sort((a, b) => dateComp(b, a))[0];
-    content = htmlNoteContent(most_recent_routine_note.uuid, most_recent_routine_note.content);
+    let page = parseContent(most_recent_routine_note.content);
+    page = rewrite(page, most_recent_routine_note.uuid);
+
+    const error = (msg, obj) => {
+      console.error(msg, obj);
+      return `<div><h3>${msg}</h3><pre>` + JSON.stringify(obj, undefined, 2) + "</pre></div>"
+    };
+
+    const renderRoutineSection = (section) => {
+      if (section.blocks === undefined) {
+        return error("expected section to have blocks", section);
+      }
+      if (section.blocks.length === 0) {
+        return section;
+      }
+      return section.blocks.map(block => {
+        if (block instanceof Array) {
+          if (block.length !== 1) {
+            return error('array of len ' + block.length, block);
+          }
+          
+          let [element] = block;
+          if (element instanceof TreeNode) {
+            
+            const renderRoutineNode = (x) => {
+              if (x.children.length === 0) {
+                return x.value;
+              }
+              return `${x.value}<ul>${x.children.map(c => "<li>" +  renderRoutineNode(c) + "</li>").join("")}</ul>`;
+            };
+            return `<div>${element.value} <ul>${element.children.map(c => "<li>" + renderRoutineNode(c) + "</li>").join("")}</ul></div>`;
+          }
+          return error('unimpl element', element);
+        }
+        return error('unimpl block', block);
+      }).join("<br>");
+    };
+
+    page = page.map(section => section.title == "ROUTINE" ? renderRoutineSection(section) : htmlSection(section));
+    content = page.join("\n");
   }
   
   return [
