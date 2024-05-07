@@ -641,8 +641,8 @@ function tagParse(line) {
 
 async function htmlNote(uuid) {
   console.log('rendering note for', uuid);
-  let content = await global_notes.readFile(filepath);
-  if (page === null) {
+  let content = await global_notes.readFile(uuid);
+  if (content === null) {
     return `couldn't find file '${uuid}'`;
   }
   return htmlNoteContent(uuid, content);
