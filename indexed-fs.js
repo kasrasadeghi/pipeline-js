@@ -803,11 +803,12 @@ async function paintDisc(uuid, flag) {
   }
 }
 
-async function renderDiscMixedBody(uuid) {
+async function mixPage(uuid) {
   let page = await parseFile(uuid);
   if (page === null) {
-    return `couldn't find file '${uuid}'`;
+    return null;
   }
+
   let current_page = rewrite(page, uuid);
 
   // notes that share our title
@@ -832,8 +833,16 @@ async function renderDiscMixedBody(uuid) {
 
   let current_entry_section = current_page.filter(section => section.title === 'entry')[0];
   current_entry_section.blocks = new_blocks;
+  return current_page;
+}
 
-  let rendered = current_page.map(htmlSection).join("\n");
+async function renderDiscMixedBody(uuid) {
+  let page = await mixPage(uuid);
+  if (page === null) {
+    return `couldn't find file '${uuid}'`;
+  }
+  
+  let rendered = page.map(htmlSection).join("\n");
   return "<div class='msglist'>" + rendered + "</div>";
 }
 
