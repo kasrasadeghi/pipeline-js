@@ -30,7 +30,7 @@ logs:
 	journalctl -u pipeline-notes -f
 
 llogs:
-	journalctl -u pipeline-notes
+	journalctl -u pipeline-notes -e
 
 status:
 	systemctl status pipeline-notes
