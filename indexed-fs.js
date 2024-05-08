@@ -75,6 +75,25 @@ class FileDB {
     });
   }
 
+  async updateFile(path, updater) { // update a file within a transaction
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.storeName], "readwrite");
+      const objectStore = transaction.objectStore(this.storeName);
+      const request = objectStore.get(path);
+
+      request.onsuccess = () => {
+        const value = request.result;
+        const updated_content = updater(value.content);
+        const putRequest = objectStore.put({path, content: updated_content});
+
+        putRequest.onsuccess = () => resolve();
+        putRequest.onerror = () => reject(putRequest.error);
+      };
+
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   async exists(path) {
     return new Promise((resolve, reject) => {
       const transaction = this.db.transaction([this.storeName]);
@@ -901,17 +920,16 @@ async function renderDiscFooter(uuid) {
         console.log('msg', msg);
         msg_input.innerText = '';
 
-        let content = await global_notes.readFile(uuid);
-        let lines = content.split("\n");
-        const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
-        const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
-        const old_content = content_lines.join("\n");
-        const metadata = metadata_lines.join("\n");
+        await global_notes.updateFile(uuid, (content) => {
+          let lines = content.split("\n");
+          const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
+          const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
+          const old_content = content_lines.join("\n");
+          const metadata = metadata_lines.join("\n");
 
-        const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
-        await global_notes.writeFile(uuid, new_content + metadata);
-
-        await paintDisc(uuid, 'only main');
+          const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
+          return new_content + metadata;
+        });
       }
 
       let repos = await getRepos();
