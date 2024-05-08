@@ -181,38 +181,28 @@ while True:
 
         # Handle paths for frontend pages
 
-        if path == "/style.css":
-            path = "style.css"
-            mimetype = b"text/css"
-        elif path == "/indexed-fs.js":
-            path = "indexed-fs.js"
-            mimetype = b"text/javascript"
-        elif path == '/service-worker.js':
-            path = "service-worker.js"
-            mimetype = b"text/javascript"
-        elif path == '/sw-index.html':
+        mimetype_table = {
+            ".html": b"text/html",
+            ".css": b"text/css",
+            ".js": b"text/javascript",
+            ".png": b"image/png",
+            ".ico": b"image/x-icon"
+        }
+
+        assets = [
+            "style.css", "indexed-fs.js", "service-worker.js", 
+            "favicon.ico", "icon512.png", "icon192.png", "maskable_icon.png", "maskable_icon_x192.png"
+        ]
+
+        if path == '/sw-index.html':
             path = 'index.html'
             mimetype = b"text/html"
-        
-        elif path == '/manifest.json':
-            path = 'manifest.json'
+        elif path == "/manifest.json":
+            path = "manifest.json"
             mimetype = b"application/manifest+json"
-        elif path == '/favicon.ico':
-            path = 'favicon.ico'
-            mimetype = b"image/x-icon"
-        elif path == '/icon512.png':
-            path = 'icon512.png'
-            mimetype = b"image/png"
-        elif path == '/icon192.png':
-            path = 'icon192.png'
-            mimetype = b"image/png"
-        elif path == '/maskable_icon.png':
-            path = 'maskable_icon.png'
-            mimetype = b"image/png"
-        elif path == '/maskable_icon_x192.png':
-            path = 'maskable_icon_x192.png'
-            mimetype = b"image/png"
-        
+        elif path.removeprefix("/") in assets:
+            path = path.removeprefix("/")
+            mimetype = mimetype_table[os.path.splitext(path)[1]]
         elif not path.startswith('/api'):
             path = 'index.html'
             mimetype = b"text/html"
