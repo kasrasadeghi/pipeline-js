@@ -1738,8 +1738,8 @@ async function renderRoutine() {
       }).join("<br>");
     };
 
-    page = page.map(section => section.title == "ROUTINE" ? renderRoutineSection(section) : htmlSection(section));
-    content = page.join("\n");
+    page = page.filter(section => section.title == "ROUTINE").map(renderRoutineSection);
+    content = page.join("\n") + `<br><br><button class='menu-button' onclick="gotoEdit('${most_recent_routine_note.uuid}')">${lookupIcon('edit')}</button>`;
   }
   
   return [
