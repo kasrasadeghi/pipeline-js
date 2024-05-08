@@ -931,6 +931,7 @@ async function renderDiscFooter(uuid) {
           return new_content + metadata;
         });
       }
+      await paintDisc(uuid);
 
       let repos = await getRepos();
       let combined_remote_status = await getRemoteStatus(repos.join(","));
@@ -1026,6 +1027,7 @@ async function renderEdit(uuid) {
   const submitEdit = async () => {
     let textarea = document.getElementsByTagName('textarea')[0];
     let content = textarea.value.split("\r\n").join("\n");  // dos2unix because textarea.value is dos by default
+    // TODO consider using .replace instead of .split and .join
     await global_notes.writeFile(uuid, content);
     gotoDisc(uuid);
   };
