@@ -787,10 +787,13 @@ const MIX_FILE = 'disc mix state';
 async function paintDisc(uuid, flag) {
   let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
-  if (flag === 'only main') {
-    main.innerHTML = (await renderDisc(uuid))[0];
-  } else {
-    [main.innerHTML, footer.innerHTML] = await renderDisc(uuid);
+  main.innerHTML = await renderDiscBody(uuid);
+  if (flag !== 'only main') {
+    footer.innerHTML = await renderDiscFooter(uuid);
+
+    // TODO maybe don't focus this sometimes, 
+    // - like if we're coming from discussion mode and it wasn't focused, 
+    //   but we're repainting because we toggled focus/mix
     setTimeout(() => {
       document.getElementById('msg_input')?.focus();
     }, 0);
@@ -846,7 +849,7 @@ async function renderDiscMixedBody(uuid) {
   return "<div class='msglist'>" + rendered + "</div>";
 }
 
-async function renderDisc(uuid) {
+async function renderDiscFooter(uuid) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
 
   global.handlers = {};
@@ -861,7 +864,6 @@ async function renderDisc(uuid) {
       await cache.writeFile(MIX_FILE, mix_state);
     }
     global.handlers.mix = async () => {
-      console.log('actually swapping mix state');
       // toggle mix state in the file
       await cache.writeFile(MIX_FILE, (await cache.readFile(MIX_FILE)) === "true" ? "false" : "true");
       await paintDisc(uuid);
@@ -869,14 +871,6 @@ async function renderDisc(uuid) {
     };
     mix_button_value = mix_state === 'true' ? lookupIcon('focus') : lookupIcon('mix');
     mix_button = `<button class='menu-button' onclick="return global.handlers.mix(event)">${mix_button_value}</button>`;
-  }
-
-  console.log('mix state', mix_state);
-  let rendered_note = '';
-  if (mix_state === "true") {
-    rendered_note = await renderDiscMixedBody(uuid);
-  } else {
-    rendered_note = await htmlNote(uuid);
   }
 
   let msg_form = "";
@@ -942,16 +936,11 @@ async function renderDisc(uuid) {
       tabindex="0" 
       style="user-select: text; white-space: pre-wrap; word-break: break-word;"
       data-lexical-editor="true"><br></div>`
-    
-    // msg_form += `<form id="msg_form" onsubmit="return global.handlers.handleMsg(event)">
-    //   <input id="msg_input" class="msg_input" autocomplete="off" autofocus="" type="text" name="msg">
-    // </form>`;
+
     edit_button = `<button class='menu-button' onclick="gotoEdit('${uuid}')">${lookupIcon('edit')}</button>`;
   }
 
-  return [
-    rendered_note,
-    `${msg_form}
+  return `${msg_form}
     <div>
       ${edit_button}
       <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
@@ -960,8 +949,30 @@ async function renderDisc(uuid) {
       <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>
       ${mix_button}
     </div>
-    <div id='state_display'></div>`
-  ];
+    <div id='state_display'></div>`;
+}
+
+async function getMixState() {
+  let mix_state = await cache.readFile(MIX_FILE);
+  if (mix_state === null) {
+    mix_state = "false";
+    await cache.writeFile(MIX_FILE, mix_state);
+  }
+  return mix_state;
+}
+
+async function renderDiscBody(uuid) {
+  global.handlers = {};
+
+  let mix_state = await getMixState();
+  console.log('mix state', mix_state);
+  let rendered_note = '';
+  if (mix_state === "true") {
+    rendered_note = await renderDiscMixedBody(uuid);
+  } else {
+    rendered_note = await htmlNote(uuid);
+  }
+  return rendered_note;
 }
 
 async function gotoDisc(uuid) {
