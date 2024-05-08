@@ -858,18 +858,14 @@ async function renderDiscFooter(uuid) {
   let mix_state = "false";
   let mix_button = '';
   if (has_remote) {
-    mix_state = await cache.readFile(MIX_FILE);
-    if (mix_state === null) {
-      mix_state = "false";
-      await cache.writeFile(MIX_FILE, mix_state);
-    }
+    mix_state = await getMixState();
     global.handlers.mix = async () => {
       // toggle mix state in the file
       await cache.writeFile(MIX_FILE, (await cache.readFile(MIX_FILE)) === "true" ? "false" : "true");
       await paintDisc(uuid);
       return false;
     };
-    mix_button_value = mix_state === 'true' ? lookupIcon('focus') : lookupIcon('mix');
+    mix_button_value = lookupIcon(mix_state === 'true' ? 'focus' :'mix');
     mix_button = `<button class='menu-button' onclick="return global.handlers.mix(event)">${mix_button_value}</button>`;
   }
 
