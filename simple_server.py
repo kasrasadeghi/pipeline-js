@@ -83,7 +83,13 @@ def allow_cors_for_localhost(headers):
     return b""
 
 def receive_headers_and_content(client_connection):
-    request_data = client_connection.recv(1024)  # TODO receive more?
+    print("receiving data from client connection")
+    try:
+        request_data = client_connection.recv(1024)  # TODO receive more?
+    except socket.timeout:
+        print('timeout')
+        return None
+    
     if len(request_data) == 1024 and request_data.startswith(b"GET "):  # only support long 'GET's for now
         print('requesting more')
         while True:  # TODO make this a generator and only get more when we actually need it
@@ -117,7 +123,7 @@ def receive_headers_and_content(client_connection):
         http_response = HTTP_OK(b"Hello, World!\n", mimetype=b"text/plain")
         client_connection.sendall(http_response)
         client_connection.close()
-        return
+        return None
     
     # TODO keep getting more until it's empty?
 
@@ -131,7 +137,7 @@ def receive_headers_and_content(client_connection):
         http_response = HTTP_NOT_FOUND(b"empty line between body and headers not found")
         client_connection.sendall(http_response)
         client_connection.close()    
-        return
+        return None
 
     headers = [line.split(': ', 1) for line in headers.decode().splitlines()]
     headers = {key: value for key, value in headers}
@@ -145,6 +151,7 @@ def receive_headers_and_content(client_connection):
     return {'method': method, 'path': path, 'httpver': httpver, 'headers': headers, 'body': body}
 
 
+socket.setdefaulttimeout(5)  # 5 second timeouts by default
 raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 if os.path.exists('cert/cert.pem'):
@@ -160,8 +167,8 @@ listen_socket.listen(1)
 print(f'Serving HTTP on port {PORT} ...')
 while True:
     try:
-        client_connection, client_address = listen_socket.accept()
         print('----------------------------------------')
+        client_connection, client_address = listen_socket.accept()
         print(datetime.now(), client_address) # (address: string, port: int)
         request = receive_headers_and_content(client_connection)
         if request is None:
