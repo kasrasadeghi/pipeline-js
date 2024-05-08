@@ -272,6 +272,12 @@ async function getNoteMetadataMap() {
       console.log('broken metadata', blob.path, e);
       metadata = {Title: "broken metadata", Date: `${new Date()}`};
     }
+    if (metadata.Title === undefined) {
+      metadata.Title = "broken title";
+    }
+    if (metadata.Date === undefined) {
+      metadata.Date = `${new Date()}`;
+    }
     return {uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content};
   });
 }
