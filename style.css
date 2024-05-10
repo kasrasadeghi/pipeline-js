@@ -19,6 +19,7 @@
   --input-font: Arial, Helvetica, sans-serif;
   --link-font: monospace;
   --time-font: monospace;
+  --menu_modal_display: none;
 }
 /* global font setting */
  * { font-size: 18px; color: var(--base_text_color); }
@@ -256,3 +257,21 @@ blockquote {
   /* .msg { flex-direction: row; align-items: baseline; }
   .msg_timestamp { margin: 0px 5px 0px 5px; } */
 /* } */
+
+/* menu modal */
+.menu-modal {
+  display: var(--menu_modal_display);
+  position: fixed;
+  z-index: 10;
+  left: 10%; top: 10%;
+  width: 80%; height: calc(100% - var(--footer_menu_size) - 20%);
+  overflow: auto;
+  background-color: rgba(0,0,0,0.4);
+  /* transition: display 0.5s; TODO figure out how to make transitions work */
+  margin: 0;
+}
+
+#modal-container {
+  display: inline;
+  margin: 0;
+}

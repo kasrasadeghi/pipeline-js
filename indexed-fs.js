@@ -883,15 +883,23 @@ async function renderDiscFooter(uuid) {
   let mix_state = "false";
   let mix_button = '';
   if (has_remote) {
-    mix_state = await getMixState();
     global.handlers.mix = async () => {
       // toggle mix state in the file
-      await cache.writeFile(MIX_FILE, (await cache.readFile(MIX_FILE)) === "true" ? "false" : "true");
-      await paintDisc(uuid);
+      let mix_state = await getMixState();
+      mix_state = mix_state === "true" ? "false" : "true"
+      await cache.writeFile(MIX_FILE, mix_state);
+      await paintDisc(uuid, 'only main');
+      document.getElementById('mix-button').innerHTML = lookupIcon(mix_state === "true" ? 'focus' : 'mix');
+
+      // testing menu modal.  NOW when you put this in here, it doesn't actually paint.  probably have to set innerHTML somewhere or something.
+      document.documentElement.style.setProperty("--menu_modal_display", mix_state === 'true' ? "none" : "block");
+      document.getElementById("modal-container").innerHTML = `<div class="menu-modal"></div>`
       return false;
     };
+    mix_state = await getMixState();
+    document.documentElement.style.setProperty("--menu_modal_display", mix_state === 'true' ? "none" : "block");
     mix_button_value = lookupIcon(mix_state === 'true' ? 'focus' :'mix');
-    mix_button = `<button class='menu-button' onclick="return global.handlers.mix(event)">${mix_button_value}</button>`;
+    mix_button = `<button id="mix-button" class='menu-button' onclick="return global.handlers.mix(event)">${mix_button_value}</button>`;
   }
 
   let msg_form = "";
@@ -962,6 +970,10 @@ async function renderDiscFooter(uuid) {
   }
 
   return `${msg_form}
+    <div id="modal-container">
+      <div class="menu-modal">
+      </div>
+    </div>
     <div>
       ${edit_button}
       <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
@@ -983,8 +995,6 @@ async function getMixState() {
 }
 
 async function renderDiscBody(uuid) {
-  global.handlers = {};
-
   let mix_state = await getMixState();
   console.log('mix state', mix_state);
   let rendered_note = '';
