@@ -3,7 +3,7 @@ restart:
 
 default:
 	#python -m http.server
-	python simple_server.py
+	python simple_server.py 8000
 
 style:
 	curl https://10.50.50.2:5000/api/style.css > style.css
@@ -37,3 +37,6 @@ status:
 
 certs:
 	bash make-certs.bash
+
+proxy: proxy.cpp
+	g++ -std=c++20 -o proxy proxy.cpp -lssl -lcrypto -g
