@@ -10,14 +10,37 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-constexpr int proxy_port = 9000;
-constexpr int destination_port = 9001;
+constexpr int proxy_port = 8000;
+constexpr int destination_port = 8001;
 
 int main() {
+    SSL_library_init();
+
+    // Create an SSL context
+    SSL_CTX* sslServerContext = SSL_CTX_new(SSLv23_server_method());
+    if (!sslServerContext) {
+        std::cerr << "Failed to create SSL context" << std::endl;
+        return 1;
+    }
+
+    // Load SSL certificate and private key
+    if (SSL_CTX_use_certificate_file(sslServerContext, "cert/cert.pem", SSL_FILETYPE_PEM) <= 0) {
+        std::cerr << "Failed to load SSL certificate" << std::endl;
+        SSL_CTX_free(sslServerContext);
+        return 1;
+    }
+
+    if (SSL_CTX_use_PrivateKey_file(sslServerContext, "cert/key.pem", SSL_FILETYPE_PEM) <= 0) {
+        std::cerr << "Failed to load SSL private key" << std::endl;
+        SSL_CTX_free(sslServerContext);
+        return 1;
+    }
+
     // Create a socket for the server
     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == -1) {
         std::cerr << "Failed to create socket" << std::endl;
+        SSL_CTX_free(sslServerContext);
         return 1;
     }
 
@@ -27,6 +50,7 @@ int main() {
     if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR,
                             (void*)&yes, sizeof(yes)) < 0) {
         perror("setsockopt() failed");
+        SSL_CTX_free(sslServerContext);
         return 1;
     }
 
@@ -41,6 +65,7 @@ int main() {
         std::cerr << "Failed to bind socket" << std::endl;
         perror("bind");
         close(serverSocket);
+        SSL_CTX_free(sslServerContext);
         return 1;
     }
 
@@ -49,6 +74,7 @@ int main() {
     if (listen(serverSocket, backlog) == -1) {
         std::cerr << "Failed to listen for connections" << std::endl;
         close(serverSocket);
+        SSL_CTX_free(sslServerContext);
         return 1;
     }
 
@@ -64,8 +90,28 @@ int main() {
         if (clientSocket == -1) {
             std::cerr << "Failed to accept client connection" << std::endl;
             close(serverSocket);
+            SSL_CTX_free(sslServerContext);
             return 1;
         }
+
+        // Create an SSL structure for the connection
+        SSL* sslServer = SSL_new(sslServerContext);
+        if (!sslServer) {
+            std::cerr << "Failed to create SSL server structure" << std::endl;
+            return 1;
+        }
+
+        // Associate the SSL structure with the client socket
+        SSL_set_fd(sslServer, clientSocket);
+
+        // Perform the SSL handshake
+        if (SSL_accept(sslServer) <= 0) {
+            std::cerr << "Failed to perform SSL handshake" << std::endl;
+            return 1;
+        }
+
+        // SSL connection established with client.
+        // now making connection to backend/destination server.
 
         // Connect to the destination server
         int destinationSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -88,7 +134,6 @@ int main() {
         }
 
         // Initialize SSL
-        SSL_library_init();
         SSL_CTX* sslContext = SSL_CTX_new(SSLv23_client_method());
         if (!sslContext) {
             std::cerr << "Failed to create SSL context" << std::endl;
@@ -109,6 +154,9 @@ int main() {
         SSL_set_fd(ssl, destinationSocket);
 
         // Perform SSL handshake
+        SSL_CTX_set_verify(sslContext, SSL_VERIFY_PEER, nullptr);
+        SSL_CTX_load_verify_locations(sslContext, "cert/cert.pem", nullptr);
+
         if (SSL_connect(ssl) != 1) {
             std::cerr << "Failed to perform SSL handshake" << std::endl;
             close(clientSocket);
@@ -142,16 +190,15 @@ int main() {
             }
 
             // Proxy the data between the client and destination server
-            char buffer[4096];
             // Check if the client socket is ready for reading
             if (FD_ISSET(clientSocket, &readfds)) {
                 // Read from the client socket
+                std::cout << "client -----------------------------------------\n";
+                std::cout << "reading bytes... ";
                 int bytesRead = read(clientSocket, buffer, sizeof(buffer));
                 if (bytesRead <= 0) {
                     break;
                 }
-                std::cout << "-----------------------------------------\n";
-                std::cout << "reading bytes... ";
                 std::cout << bytesRead << " received\n";
                 std::cout << "request:\n" << std::string_view(buffer, bytesRead) << std::endl;
 
@@ -170,12 +217,12 @@ int main() {
             // Check if the destination socket is ready for reading
             if (FD_ISSET(destinationSocket, &readfds)) {
                 // Read from the destination socket
+                std::cout << "destination -----------------------------------------\n";
+                std::cout << "reading bytes from backend... ";
                 int encryptedBytes = SSL_read(ssl, buffer, sizeof(buffer));
                 if (encryptedBytes <= 0) {
                     break;
                 }
-                std::cout << "-----------------------------------------\n";
-                std::cout << "reading bytes from backend... ";
                 std::cout << encryptedBytes << " received\n";
                 std::cout << "response:\n" << std::string_view(buffer, encryptedBytes) << std::endl;
 
