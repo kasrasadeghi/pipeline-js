@@ -96,6 +96,14 @@ int main() {
             return 1;
         }
 
+        std::cout << "Accepted connection from " << inet_ntoa(clientAddress.sin_addr) << std::endl;
+        std::cout << "clientSocket: " << clientSocket << std::endl;
+        std::cout << "clientAddressLength: " << clientAddressLength << std::endl;
+        std::cout << "clientAddress.sin_family: " << clientAddress.sin_family << std::endl
+         << "clientAddress.sin_addr.s_addr: " << clientAddress.sin_addr.s_addr << std::endl
+            << "clientAddress.sin_port: " << clientAddress.sin_port << std::endl;
+
+
         // Create an SSL structure for the connection
         SSL* sslServer = SSL_new(sslServerContext);
         if (!sslServer) {
@@ -107,9 +115,10 @@ int main() {
         SSL_set_fd(sslServer, clientSocket);
 
         // Perform the SSL handshake
-        if (SSL_accept(sslServer) <= 0) {
+        int result = 0;
+        if ((result = SSL_accept(sslServer)) <= 0) {
             perror("SSL_accept");
-            std::cerr << "Failed to perform SSL handshake" << std::endl;
+            std::cerr << "Failed to perform SSL handshake: " << result << std::endl;
             return 1;
         }
 
@@ -199,10 +208,10 @@ int main() {
                 std::cout << "client -----------------------------------------\n";
                 std::cout << "reading bytes... ";
                 int bytesRead = SSL_read(sslServer, buffer, sizeof(buffer));
+                std::cout << bytesRead << " received\n";
                 if (bytesRead <= 0) {
                     break;
                 }
-                std::cout << bytesRead << " received\n";
                 std::cout << "request:\n" << std::string_view(buffer, bytesRead) << std::endl;
 
                 std::cout << "writing bytes... ";
@@ -223,10 +232,10 @@ int main() {
                 std::cout << "destination -----------------------------------------\n";
                 std::cout << "reading bytes from backend... ";
                 int encryptedBytes = SSL_read(ssl, buffer, sizeof(buffer));
+                std::cout << encryptedBytes << " received\n";
                 if (encryptedBytes <= 0) {
                     break;
                 }
-                std::cout << encryptedBytes << " received\n";
                 std::cout << "response:\n" << std::string_view(buffer, encryptedBytes) << std::endl;
 
                 // Decrypt the data using SSL
@@ -246,7 +255,11 @@ int main() {
         // Clean up SSL resources
         SSL_shutdown(ssl);
         SSL_free(ssl);
+        
         SSL_CTX_free(sslContext);
+
+        SSL_shutdown(sslServer);
+        SSL_free(sslServer);
 
         // Close the sockets
         close(clientSocket);
@@ -254,8 +267,7 @@ int main() {
     }
 
     // Close the server socket
-    SSL_shutdown(sslServer);
-    SSL_free(sslServer);
+    SSL_CTX_free(sslServerContext);
     close(serverSocket);
 
     return 0;
