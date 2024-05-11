@@ -13,6 +13,8 @@
 constexpr int proxy_port = 8000;
 constexpr int destination_port = 8001;
 
+constexpr int buffer_size = 4096 * 4;
+
 int main() {
     SSL_library_init();
 
@@ -106,6 +108,7 @@ int main() {
 
         // Perform the SSL handshake
         if (SSL_accept(sslServer) <= 0) {
+            perror("SSL_accept");
             std::cerr << "Failed to perform SSL handshake" << std::endl;
             return 1;
         }
@@ -167,7 +170,7 @@ int main() {
         }
 
         // Proxy the data between the client and destination server
-        char buffer[4096];
+        char buffer[buffer_size];
         while (true) {
             // Set up the file descriptor sets for select
             fd_set readfds;
@@ -195,7 +198,7 @@ int main() {
                 // Read from the client socket
                 std::cout << "client -----------------------------------------\n";
                 std::cout << "reading bytes... ";
-                int bytesRead = read(clientSocket, buffer, sizeof(buffer));
+                int bytesRead = SSL_read(sslServer, buffer, sizeof(buffer));
                 if (bytesRead <= 0) {
                     break;
                 }
@@ -227,7 +230,7 @@ int main() {
                 std::cout << "response:\n" << std::string_view(buffer, encryptedBytes) << std::endl;
 
                 // Decrypt the data using SSL
-                int decryptedBytes = write(clientSocket, buffer, encryptedBytes);
+                int decryptedBytes = SSL_write(sslServer, buffer, encryptedBytes);
                 if (decryptedBytes <= 0) {
                     std::cerr << "Failed to decrypt data" << std::endl;
                     break;
@@ -251,6 +254,8 @@ int main() {
     }
 
     // Close the server socket
+    SSL_shutdown(sslServer);
+    SSL_free(sslServer);
     close(serverSocket);
 
     return 0;

@@ -26,6 +26,10 @@ systemd:
 	-sudo systemctl restart pipeline-notes
 	sudo systemctl status pipeline-notes
 
+unsystemd:
+	sudo systemctl disable pipeline-notes
+	sudo systemctl stop pipeline-notes
+
 logs:
 	journalctl -u pipeline-notes -f
 
@@ -40,3 +44,4 @@ certs:
 
 proxy: proxy.cpp
 	g++ -std=c++20 -o proxy proxy.cpp -lssl -lcrypto -g
+	./proxy
