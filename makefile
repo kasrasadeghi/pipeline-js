@@ -42,6 +42,12 @@ status:
 certs:
 	bash make-certs.bash
 
+.PHONY: proxy
 proxy: proxy.cpp
-	g++ -std=c++20 -o proxy proxy.cpp -lssl -lcrypto -g
-	./proxy
+	-killall pipeline-proxy
+	g++ -std=c++20 -o pipeline-proxy proxy.cpp -lssl -lcrypto -g
+	#nohup ./pipeline-proxy < /dev/null 2>&1 > logs/`date +%s`.log &
+	./pipeline-proxy
+
+pl:
+	less logs/`ls -Art logs | tail -n 1`

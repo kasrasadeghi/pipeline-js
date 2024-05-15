@@ -6,9 +6,11 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <sys/select.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+
+// #include <sys/select.h>
+#include <poll.h>
 
 constexpr int proxy_port = 8000;
 constexpr int destination_port = 8001;
@@ -181,32 +183,35 @@ int main() {
         // Proxy the data between the client and destination server
         char buffer[buffer_size];
         while (true) {
-            // Set up the file descriptor sets for select
-            fd_set readfds;
-            FD_ZERO(&readfds);
-            FD_SET(clientSocket, &readfds);
-            FD_SET(destinationSocket, &readfds);
+            // Set up the file descriptors for poll
+            struct pollfd fds[2];
+            fds[0].fd = clientSocket;
+            fds[0].events = POLLIN;
+            fds[1].fd = destinationSocket;
+            fds[1].events = POLLIN;
 
-            // Find the maximum file descriptor value
-            int maxfd = std::max(clientSocket, destinationSocket) + 1;
-
-            // Use select to determine which socket is ready for reading
-            std::cout << "select\n";
-            int ready = select(maxfd, &readfds, nullptr, nullptr, nullptr);
+            // Use poll to determine which socket is ready for reading
+            std::cout << "poll\n";
+            int ready = poll(fds, 2, -1);
             std::cout << "- done\n";
             if (ready == -1) {
-                std::cerr << "Failed to use select" << std::endl;
+                std::cerr << "Failed to use poll" << std::endl;
                 close(clientSocket);
                 close(destinationSocket);
                 return 1;
             }
 
+            std::cout << "- ready: " << ready << std::endl;
+            std::cout << "- clientSocket: " << (fds[0].revents & POLLIN) << std::endl;
+            std::cout << "- destinationSocket: " << (fds[1].revents & POLLIN) << std::endl;
+
             // Proxy the data between the client and destination server
             // Check if the client socket is ready for reading
-            if (FD_ISSET(clientSocket, &readfds)) {
+            if (fds[0].revents & POLLIN) {
                 // Read from the client socket
                 std::cout << "client -----------------------------------------\n";
                 std::cout << "reading bytes... ";
+                std::cout.flush();
                 int bytesRead = SSL_read(sslServer, buffer, sizeof(buffer));
                 std::cout << bytesRead << " received\n";
                 if (bytesRead <= 0) {
@@ -227,10 +232,11 @@ int main() {
             }
 
             // Check if the destination socket is ready for reading
-            if (FD_ISSET(destinationSocket, &readfds)) {
+            if (fds[1].revents & POLLIN) {
                 // Read from the destination socket
                 std::cout << "destination -----------------------------------------\n";
                 std::cout << "reading bytes from backend... ";
+                std::cout.flush();
                 int encryptedBytes = SSL_read(ssl, buffer, sizeof(buffer));
                 std::cout << encryptedBytes << " received\n";
                 if (encryptedBytes <= 0) {
