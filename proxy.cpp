@@ -17,6 +17,26 @@ constexpr int destination_port = 8001;
 
 constexpr int buffer_size = 4096 * 4;
 
+// returns unix_result (0 success, nonzero failure)
+int set_socket_timeout(int sockfd, int seconds) { 
+    struct timeval timeout;      
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+    
+    if (setsockopt (sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+                sizeof timeout) < 0) {
+        std::cout << "setsockopt failed\n";
+        return 1;
+    }
+
+    if (setsockopt (sockfd, SOL_SOCKET, SO_SNDTIMEO, &timeout,
+                sizeof timeout) < 0) {
+        std::cout << "setsockopt failed\n";
+        return 1;
+    }
+    return 0;
+}
+
 int main() {
     SSL_library_init();
 
@@ -181,7 +201,7 @@ int main() {
         }
 
         // Proxy the data between the client and destination server
-        char buffer[buffer_size];
+        char* buffer = (char*)calloc(buffer_size, sizeof(char));
         while (true) {
             // Set up the file descriptors for poll
             struct pollfd fds[2];
@@ -210,16 +230,16 @@ int main() {
             if (fds[0].revents & POLLIN) {
                 // Read from the client socket
                 std::cout << "client -----------------------------------------\n";
-                std::cout << "reading bytes... ";
-                std::cout.flush();
-                int bytesRead = SSL_read(sslServer, buffer, sizeof(buffer));
+                std::cout << "reading bytes... \n";
+                int bytesRead = SSL_read(sslServer, buffer, buffer_size);
+                ERR_print_errors_fp(stdout);
                 std::cout << bytesRead << " received\n";
                 if (bytesRead <= 0) {
                     break;
                 }
                 std::cout << "request:\n" << std::string_view(buffer, bytesRead) << std::endl;
 
-                std::cout << "writing bytes... ";
+                std::cout << "writing bytes... \n";
                 // Encrypt the data using SSL
                 int encryptedBytes = SSL_write(ssl, buffer, bytesRead);
                 if (encryptedBytes <= 0) {
@@ -235,9 +255,9 @@ int main() {
             if (fds[1].revents & POLLIN) {
                 // Read from the destination socket
                 std::cout << "destination -----------------------------------------\n";
-                std::cout << "reading bytes from backend... ";
-                std::cout.flush();
-                int encryptedBytes = SSL_read(ssl, buffer, sizeof(buffer));
+                std::cout << "reading bytes from backend... \n";
+                int encryptedBytes = SSL_read(ssl, buffer, buffer_size);
+                ERR_print_errors_fp(stdout);
                 std::cout << encryptedBytes << " received\n";
                 if (encryptedBytes <= 0) {
                     break;
@@ -245,18 +265,19 @@ int main() {
                 std::cout << "response:\n" << std::string_view(buffer, encryptedBytes) << std::endl;
 
                 // Decrypt the data using SSL
+                std::cout << "writing bytes to client... \n";
                 int decryptedBytes = SSL_write(sslServer, buffer, encryptedBytes);
                 if (decryptedBytes <= 0) {
                     std::cerr << "Failed to decrypt data" << std::endl;
                     break;
                 }
-
-                std::cout << "writing bytes to client... ";
                 std::cout << decryptedBytes << " sent\n";
+
             } else {
                 std::cout << "destination socket not ready\n";
             }
         }
+        free(buffer);
 
         // Clean up SSL resources
         SSL_shutdown(ssl);
