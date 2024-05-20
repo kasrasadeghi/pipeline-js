@@ -174,7 +174,7 @@ while True:
             print(f"read {path} ({len(content)})")
 
         http_response = HTTP_OK(content, mimetype)
-        # print("RESPONSE:", http_response)
+        print("RESPONSE:", http_response)
         client_connection.sendall(http_response)
         client_connection.close()
     except Exception as e:

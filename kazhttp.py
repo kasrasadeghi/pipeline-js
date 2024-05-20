@@ -38,17 +38,17 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
         return None
     
     if len(request_data) == 1024 and request_data.startswith(b"GET "):  # only support long 'GET's for now
-        print('requesting more')
+        print('MORE: requesting more')
         while True:  # TODO make this a generator and only get more when we actually need it
             more = client_connection.recv(1024)
-            if request_data.startswith(b"GET ") and more.endswith(b"\r\n\r\n"):
-                request_data += more
+            print('received', len(more), 'bytes')
+            print("got MORE:\n", more)
+            request_data += more
+            if request_data.startswith(b"GET ") and request_data.endswith(b"\r\n\r\n"):
+                print('got all the data')
                 break
             if len(more) == 0:
                 break
-            print(f'receiving more, {len(more)} bytes')
-            print("MORE:\n", more)
-            request_data += more
     first_line, rest = request_data.split(b'\n', 1)
 
     print(first_line)

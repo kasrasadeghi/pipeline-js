@@ -20,7 +20,7 @@ constexpr int buffer_size = 4096 * 4;
 // returns unix_result (0 success, nonzero failure)
 int set_socket_timeout(int sockfd, int seconds) { 
     struct timeval timeout;      
-    timeout.tv_sec = 1;
+    timeout.tv_sec = seconds;
     timeout.tv_usec = 0;
     
     if (setsockopt (sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
@@ -167,6 +167,13 @@ int main() {
             return 1;
         }
 
+        if (set_socket_timeout(destinationSocket, 1)) {
+            std::cerr << "Failed to set socket timeout" << std::endl;
+            close(clientSocket);
+            close(destinationSocket);
+            return 1;
+        }
+
         // Initialize SSL
         SSL_CTX* sslContext = SSL_CTX_new(SSLv23_client_method());
         if (!sslContext) {
@@ -232,6 +239,9 @@ int main() {
                 std::cout << "client -----------------------------------------\n";
                 std::cout << "reading bytes... \n";
                 int bytesRead = SSL_read(sslServer, buffer, buffer_size);
+                if (bytesRead == -1) {
+                    perror("SSL_read");
+                }
                 ERR_print_errors_fp(stdout);
                 std::cout << bytesRead << " received\n";
                 if (bytesRead <= 0) {
@@ -243,6 +253,7 @@ int main() {
                 // Encrypt the data using SSL
                 int encryptedBytes = SSL_write(ssl, buffer, bytesRead);
                 if (encryptedBytes <= 0) {
+                    perror("SSL_write");
                     std::cerr << "Failed to encrypt data" << std::endl;
                     break;
                 }
@@ -257,6 +268,9 @@ int main() {
                 std::cout << "destination -----------------------------------------\n";
                 std::cout << "reading bytes from backend... \n";
                 int encryptedBytes = SSL_read(ssl, buffer, buffer_size);
+                if (encryptedBytes == -1) {
+                    perror("SSL_read");
+                }
                 ERR_print_errors_fp(stdout);
                 std::cout << encryptedBytes << " received\n";
                 if (encryptedBytes <= 0) {
@@ -267,11 +281,14 @@ int main() {
                 // Decrypt the data using SSL
                 std::cout << "writing bytes to client... \n";
                 int decryptedBytes = SSL_write(sslServer, buffer, encryptedBytes);
-                if (decryptedBytes <= 0) {
-                    std::cerr << "Failed to decrypt data" << std::endl;
+                if (decryptedBytes == -1) {
+                    perror("SSL_write");
+                }
+                ERR_print_errors_fp(stdout);
+                std::cout << decryptedBytes << " received\n";
+                if (encryptedBytes <= 0) {
                     break;
                 }
-                std::cout << decryptedBytes << " sent\n";
 
             } else {
                 std::cout << "destination socket not ready\n";
