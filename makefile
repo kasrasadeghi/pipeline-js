@@ -46,8 +46,11 @@ certs:
 proxy: proxy.cpp
 	-killall pipeline-proxy
 	g++ -std=c++20 -o pipeline-proxy proxy.cpp -lssl -lcrypto -g
-	#nohup ./pipeline-proxy < /dev/null 2>&1 > logs/`date +%s`.log &
+	#nohup ./pipeline-proxy < /dev/null 2>&1 > logs/date.log &
 	./pipeline-proxy
 
 pl:
 	less logs/`ls -Art logs | tail -n 1`
+
+tm:
+	bash tmux-debug.sh
