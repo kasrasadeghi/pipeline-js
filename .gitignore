@@ -1,2 +1,5 @@
 cert/
 pipeline-proxy
+logs/proxy
+logs/server
+*.pyc
