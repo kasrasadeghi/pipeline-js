@@ -15,7 +15,7 @@ import traceback
 from datetime import datetime
 import sys
 
-from kazhttp import HTTP_OK, HTTP_NOT_FOUND, HTTP_OK_JSON, allow_cors_for_localhost, receive_headers_and_content, create_server_socket
+from kazhttp import HTTP_OK, HTTP_NOT_FOUND, HTTP_OK_JSON, allow_cors_for_localhost, receive_headers_and_content, create_server_socket, log
 
 NOTES_ROOT = os.path.join(os.path.expanduser('~'), "notes")
 HOST, PORT = '', int(sys.argv[1])
@@ -48,12 +48,19 @@ def compute_status(repos, headers) -> "http_response":
         return HTTP_OK_JSON(status, extra_header=cors_header)
 
 
-listen_socket = create_server_socket(HOST, PORT)
+listen_socket, https = create_server_socket(HOST, PORT)
 while True:
     try:
-        print('----------------------------------------')
+        log('----------------------------------------')
         client_connection, client_address = listen_socket.accept()
-        print(datetime.now(), client_address) # (address: string, port: int)
+        log(datetime.now(), client_address) # (address: string, port: int)
+
+        def respond(http_response: bytes):
+            client_connection.sendall(http_response)
+            log('shutdown and close connection', datetime.utcnow().isoformat())
+            client_connection.shutdown(socket.SHUT_RDWR)
+            client_connection.close()
+
         request = receive_headers_and_content(client_connection)
         if request is None:
             continue
@@ -96,13 +103,12 @@ while True:
         if path.startswith('/api'):
             path = path.removeprefix('/api')
             if path.startswith('/list/') and method == 'GET':
-                print('listing notes')
+                log('listing notes')
                 repo = path.removeprefix('/list/')
                 repo_path = get_repo_path(repo)
                 cors_header = allow_cors_for_localhost(headers)
                 http_response = HTTP_OK_JSON(os.listdir(repo_path), extra_header=cors_header)
-                client_connection.sendall(http_response)
-                client_connection.close()
+                respond(http_response)
                 continue
             elif path.startswith('/get/') and method == 'GET':
                 note = path.removeprefix('/get/')
@@ -121,18 +127,16 @@ while True:
                 read_notes = {repo + '/' + note: read_file(os.path.join(repo_path, note)) for note in notes}
                 cors_header = allow_cors_for_localhost(headers)
                 http_response = HTTP_OK_JSON(read_notes, extra_header=cors_header)
-                client_connection.sendall(http_response)
-                client_connection.close()
+                respond(http_response)
                 continue
             elif path.startswith('/put/') and method == 'PUT':
                 note = path.removeprefix('/put/')
-                print(note)
+                log(note)
 
                 # the note is of format <repo>/<uuid>.note
                 if '/' not in note:
                     http_response = HTTP_NOT_FOUND(b"bad note: " + note.encode())
-                    client_connection.sendall(http_response)
-                    client_connection.close()
+                    respond(http_response)
                     continue
 
                 # make folder if repo doesn't exist
@@ -143,20 +147,17 @@ while True:
                 with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
                     f.write(body)
                 http_response = HTTP_OK(b"wrote notes/" + note.encode(), mimetype=b"text/plain")
-                print("wrote notes/" + note, time.time())
-                client_connection.sendall(http_response)
-                client_connection.close()
+                log("wrote notes/" + note, time.time())
+                respond(http_response)
                 continue
             elif path.startswith('/status/') and method == 'GET':
                 repos = path.removeprefix('/status/')
                 http_response = compute_status(repos.split(','), headers)
-                client_connection.sendall(http_response)
-                client_connection.close()
+                respond(http_response)
                 continue
             else:
                 http_response = HTTP_NOT_FOUND(b"api not found: " + path.encode())
-                client_connection.sendall(http_response)
-                client_connection.close()
+                respond(http_response)
                 continue
 
 
@@ -165,17 +166,16 @@ while True:
         path = path.removeprefix('/')
         if not os.path.exists(path):
             http_response = HTTP_NOT_FOUND(b"could not handle path: " + path.encode())
-            client_connection.sendall(http_response)
-            client_connection.close()    
+            respond(http_response)   
             continue
 
         with open(path, 'rb') as f:
             content = f.read()
-            print(f"read {path} ({len(content)})")
+            log(f"read {path} ({len(content)})")
 
         http_response = HTTP_OK(content, mimetype)
-        print("RESPONSE:", http_response)
-        client_connection.sendall(http_response)
-        client_connection.close()
+        # log("RESPONSE:", http_response)
+        respond(http_response)
     except Exception as e:
-        traceback.print_exc()
+        log(traceback.format_exc())
+
