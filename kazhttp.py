@@ -4,6 +4,9 @@ import os
 import ssl
 import json
 
+def log(*k):
+    print(*k, flush=True)
+
 def HTTP_OK(body: bytes, mimetype: bytes) -> bytes:
     return (b"HTTP/1.1 200 OK\n"
           + b"Content-Type: " + mimetype + b"; charset=utf-8\n"
@@ -24,21 +27,34 @@ def HTTP_NOT_FOUND(msg):
 def allow_cors_for_localhost(headers: Dict[str, str]):
     if 'Origin' in headers:
         from urllib.parse import urlparse
-        print(headers['Origin'])
+        log(headers['Origin'])
         if 'localhost' == headers['Origin'].split("//", 1)[1].split(":", 1)[0]:
             return b"Access-Control-Allow-Origin: " + headers['Origin'].encode() + b"\n"
     return b""
 
 def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, Any]:
-    print("receiving data from client connection")
+    log("receiving data from client connection")
     try:
         request_data = client_connection.recv(1024)  # TODO receive more?
     except socket.timeout:
-        print('timeout')
+        log('timeout')
         return None
     
+    if len(request_data) == 0:
+        retry_count = 5
+        while True:
+            more = client_connection.recv(1024)
+            request_data += more
+            if len(more) == 0:
+                retry_count -= 1
+            if retry_count == 0:
+                raise Exception("ERROR: retried 5 times, got 0 bytes every time, giving up.  didn't receive any data.")
+            if len(request_data) > 0:
+                break
+            
+
     if len(request_data) == 1024 and request_data.startswith(b"GET "):  # only support long 'GET's for now
-        print('MORE: requesting more')
+        log('MORE: requesting more')
         while True:  # TODO make this a generator and only get more when we actually need it
             more = client_connection.recv(1024)
             print('received', len(more), 'bytes')
@@ -49,9 +65,13 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
                 break
             if len(more) == 0:
                 break
-    first_line, rest = request_data.split(b'\n', 1)
+    try:
+        first_line, rest = request_data.split(b'\n', 1)
+    except ValueError as e:
+        log("ERROR: couldn't split request_data into first_line and rest:", request_data)
+        raise e
 
-    print(first_line)
+    log(first_line)
     first_line = first_line.decode("utf-8")
     parts = first_line.split()
 
@@ -80,7 +100,7 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
     elif b'\n\n' in rest:
         headers, body = rest.split(b'\n\n', 1)
     else:
-        print('ERROR: empty line before body not found')
+        log('ERROR: empty line before body not found')
         http_response = HTTP_NOT_FOUND(b"empty line between body and headers not found")
         client_connection.sendall(http_response)
         client_connection.close()    
@@ -89,25 +109,32 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
     headers = [line.split(': ', 1) for line in headers.decode().splitlines()]
     headers = {key: value for key, value in headers}
 
-    for key, value in headers.items():
-        print("-", key, ":", value)
+    for header in ["User-Agent", "sec-ch-ua-platform", "Referer"]:
+        if header in headers:
+            log("-", header, ":", headers[header])
     
     if 'Content-Length' in headers:
         content_length = int(headers['Content-Length'])
+        retry_count = 5
         while content_length - len(body) > 0:
-            print(f'{len(body)=} {content_length=}')
-            body += client_connection.recv(content_length - len(body))
-        print(f'{len(body)=} {content_length=}')
+            log(f'{len(body)=} {content_length=}')
+            more = client_connection.recv(content_length - len(body))
+            body += more
+            if len(more) == 0:
+                retry_count -= 1
+            if retry_count == 0:
+                raise Exception("ERROR: retried 5 times, got 0 bytes every time, giving up.  body doesn't match content-length header.")
+        log(f'{len(body)=} {content_length=}')
     return {'method': method, 'path': path, 'httpver': httpver, 'headers': headers, 'body': body}
 
-def create_server_socket(host, port) -> socket.socket:
+def create_server_socket(host, port) -> (socket.socket, bool):  # bool is True iff https/ ssl
     # socket.setdefaulttimeout(5)  # 5 second timeouts by default
     raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     https = False
     if os.path.exists('cert/cert.pem'):
         https = True
-        context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(certfile="cert/cert.pem", keyfile="cert/key.pem")
         listen_socket = context.wrap_socket(raw_socket, server_side=True)
     else:
@@ -116,5 +143,5 @@ def create_server_socket(host, port) -> socket.socket:
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listen_socket.bind((host, port))
     listen_socket.listen(1)
-    print(f"Serving HTTP{'S' if https else ''} on port {port} ...")
-    return listen_socket
+    log(f"Serving HTTP{'S' if https else ''} on port {port} ...")
+    return listen_socket, https
