@@ -3,7 +3,7 @@ restart:
 
 simple:
 	#python -m http.server
-	python simple_server.py 8001
+	python simple_server.py 8000
 
 style:
 	curl https://10.50.50.2:5000/api/style.css > style.css
@@ -54,3 +54,6 @@ pl:
 
 tm:
 	bash tmux-debug.sh
+
+sup:
+	python supervisor.py &
