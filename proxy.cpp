@@ -2,12 +2,13 @@
 #include <string>
 #include <cstdlib>
 #include <cstring>
-#include <unistd.h>
+#include <unistd.h>       // sleep
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <chrono>
 
 // #include <sys/select.h>
 #include <poll.h>
@@ -41,7 +42,7 @@ int main() {
     SSL_library_init();
 
     // Create an SSL context
-    SSL_CTX* sslServerContext = SSL_CTX_new(SSLv23_server_method());
+    SSL_CTX* sslServerContext = SSL_CTX_new(TLS_server_method());
     if (!sslServerContext) {
         std::cerr << "Failed to create SSL context" << std::endl;
         return 1;
@@ -108,6 +109,7 @@ int main() {
         // Accept a client connection
         struct sockaddr_in clientAddress;
         socklen_t clientAddressLength = sizeof(clientAddress);
+        std::cout << "===--- waiting for connection --------------------------------===\n";
         std::cout << "accept\n";
         int clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddress, &clientAddressLength);
         std::cout << "- done accept\n";
@@ -117,6 +119,21 @@ int main() {
             SSL_CTX_free(sslServerContext);
             return 1;
         }
+
+        // format like: 2024-05-24 06:55:26.651297
+        std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+
+        auto dp = std::chrono::floor<std::chrono::days>(now);
+        std::chrono::year_month_day ymd{dp};
+        std::chrono::hh_mm_ss time{std::chrono::floor<std::chrono::milliseconds>(now-dp)};
+        auto y = ymd.year();
+        auto m = ymd.month();
+        auto d = ymd.day();
+        auto h = time.hours();
+        auto M = time.minutes();
+        auto s = time.seconds();
+        auto ms = time.subseconds();
+        std::cout << y << "-" << m << "-" << d << " " << h << ":" << M << ":" << s << "." << ms << std::endl;
 
         std::cout << "Accepted connection from " << inet_ntoa(clientAddress.sin_addr) << std::endl;
         std::cout << "clientSocket: " << clientSocket << std::endl;
@@ -167,6 +184,13 @@ int main() {
             return 1;
         }
 
+        std::cout << "Accepted connection from " << inet_ntoa(destinationAddress.sin_addr) << std::endl;
+        std::cout << "destinationSocket: " << destinationSocket << std::endl;
+        std::cout << "destinationAddress.sin_family: " << destinationAddress.sin_family << std::endl
+            << "destinationAddress.sin_addr.s_addr: " << destinationAddress.sin_addr.s_addr << std::endl
+            << "destinationAddress.sin_port: " << destinationAddress.sin_port << std::endl;
+
+
         if (set_socket_timeout(destinationSocket, 1)) {
             std::cerr << "Failed to set socket timeout" << std::endl;
             close(clientSocket);
@@ -175,7 +199,7 @@ int main() {
         }
 
         // Initialize SSL
-        SSL_CTX* sslContext = SSL_CTX_new(SSLv23_client_method());
+        SSL_CTX* sslContext = SSL_CTX_new(TLS_client_method());
         if (!sslContext) {
             std::cerr << "Failed to create SSL context" << std::endl;
             close(clientSocket);
@@ -220,28 +244,29 @@ int main() {
             // Use poll to determine which socket is ready for reading
             std::cout << "poll\n";
             int ready = poll(fds, 2, -1);
-            std::cout << "- done\n";
             if (ready == -1) {
-                std::cerr << "Failed to use poll" << std::endl;
+                std::cerr << "- ready: " << ready << ", Failed to use poll" << std::endl;
                 close(clientSocket);
                 close(destinationSocket);
                 return 1;
             }
-
-            std::cout << "- ready: " << ready << std::endl;
-            std::cout << "- clientSocket: " << (fds[0].revents & POLLIN) << std::endl;
-            std::cout << "- destinationSocket: " << (fds[1].revents & POLLIN) << std::endl;
+            std::cout << "- ready: " << ready << ", "
+                << "clientSocket: " << (fds[0].revents & POLLIN) << ", "
+                << "destinationSocket: " << (fds[1].revents & POLLIN) << std::endl;
 
             // Proxy the data between the client and destination server
             // Check if the client socket is ready for reading
             if (fds[0].revents & POLLIN) {
                 // Read from the client socket
                 std::cout << "client -----------------------------------------\n";
+                std::cout << "clearing errors\n";
+                ERR_print_errors_fp(stdout);
                 std::cout << "reading bytes... \n";
                 int bytesRead = SSL_read(sslServer, buffer, buffer_size);
                 if (bytesRead == -1) {
                     perror("SSL_read");
                 }
+
                 ERR_print_errors_fp(stdout);
                 std::cout << bytesRead << " received\n";
                 if (bytesRead <= 0) {
@@ -266,17 +291,25 @@ int main() {
             if (fds[1].revents & POLLIN) {
                 // Read from the destination socket
                 std::cout << "destination -----------------------------------------\n";
+                std::cout << "clearing errors\n";
+                ERR_print_errors_fp(stdout);
                 std::cout << "reading bytes from backend... \n";
                 int encryptedBytes = SSL_read(ssl, buffer, buffer_size);
                 if (encryptedBytes == -1) {
                     perror("SSL_read");
                 }
+
+                if (encryptedBytes < buffer_size) {
+                    std::cout << "NOTE: buffer not filled, closing probably imminent\n";
+                }
+
                 ERR_print_errors_fp(stdout);
                 std::cout << encryptedBytes << " received\n";
                 if (encryptedBytes <= 0) {
                     break;
                 }
-                std::cout << "response:\n" << std::string_view(buffer, encryptedBytes) << std::endl;
+
+                // std::cout << "response:\n" << std::string_view(buffer, encryptedBytes) << std::endl;
 
                 // Decrypt the data using SSL
                 std::cout << "writing bytes to client... \n";
@@ -285,7 +318,7 @@ int main() {
                     perror("SSL_write");
                 }
                 ERR_print_errors_fp(stdout);
-                std::cout << decryptedBytes << " received\n";
+                std::cout << decryptedBytes << " sent\n";
                 if (encryptedBytes <= 0) {
                     break;
                 }
@@ -297,7 +330,10 @@ int main() {
         free(buffer);
 
         // Clean up SSL resources
-        SSL_shutdown(ssl);
+        SSL_shutdown(ssl);  
+        // WONTFIX close_notify handling with shutdown.
+        // it'll complain about eof after the destination socket's SSL_read, but it will literally work.
+        
         SSL_free(ssl);
         
         SSL_CTX_free(sslContext);
