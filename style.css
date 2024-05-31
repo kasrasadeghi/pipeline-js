@@ -259,16 +259,35 @@ blockquote {
 /* } */
 
 /* menu modal */
+
+:root {
+  --menu-modal-margin-size: 5%;
+  --menu-modal-height: calc(100% - var(--footer_menu_size) - (2 * var(--menu-modal-margin-size)));
+  --menu-modal-width: calc(100% - (2 * var(--menu-modal-margin-size)));
+}
+
 .menu-modal {
   display: var(--menu_modal_display);
   position: fixed;
   z-index: 10;
-  left: 10%; top: 10%;
-  width: 80%; height: calc(100% - var(--footer_menu_size) - 20%);
+  left: var(--menu-modal-margin-size); top: var(--menu-modal-margin-size);
+  width: var(--menu-modal-width); height: var(--menu-modal-height);
   overflow: auto;
-  background-color: rgba(0,0,0,0.4);
+  background-color: rgba(0,0,0,0.9);
   /* transition: display 0.5s; TODO figure out how to make transitions work */
   margin: 0;
+
+  flex-direction: column;
+  flex-wrap: wrap;
+  /* justify-content: space-evenly; */
+  gap: 0px;
+}
+
+.routine-block {
+  margin: 5px;
+  border-radius: 5px;
+  padding: 5px;
+  background-color: rgb(0, 92, 92);
 }
 
 #modal-container {

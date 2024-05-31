@@ -137,6 +137,28 @@ class FileDB {
       request.onerror = () => reject(request.error);
     });
   }
+
+  async renameFile(priorPath, newPath) {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.storeName], "readwrite");
+      const objectStore = transaction.objectStore(this.storeName);
+      const request = objectStore.get(priorPath);
+
+      request.onsuccess = () => {
+        if (! request.result) {
+          reject(`no content in ${priorPath}`);
+        }
+        const writeReq = objectStore.put({path: newPath, content: request.result.content});
+        writeReq.onsuccess = () => {
+          const deleteReq = objectStore.delete(priorPath);
+          deleteReq.onsuccess = () => resolve();
+          deleteReq.onerror = () => reject(deleteReq.error);
+        };
+        writeReq.onerror = () => reject(writeReq.error);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
 }
 
 // GLOBALS
@@ -794,6 +816,11 @@ function htmlLine(line) {
           rendered = rendered.slice(window.location.host.length);
           rendered = decodeURI(rendered);
 
+          if (rendered.startsWith("/disc/")) {
+            rendered = rendered.slice("/disc/".length);
+            
+          }
+
           return ShortcircuitLink(x.url, rendered);
         }
         return `<a href="${x.url}">${rendered}</a>`
@@ -808,6 +835,7 @@ function htmlLine(line) {
 // DISC
 
 const MIX_FILE = 'disc mix state';
+const MENU_TOGGLE_FILE = 'disc menu toggle state';
 
 async function paintDisc(uuid, flag) {
   let main = document.getElementsByTagName('main')[0];
@@ -874,6 +902,20 @@ async function renderDiscMixedBody(uuid) {
   return "<div class='msglist'>" + rendered + "</div>";
 }
 
+async function paintDiscRoutine() {
+  // maintain the scroll of the modal when repainting it
+  let left = document.getElementsByClassName("menu-modal")[0].scrollLeft;
+  let top = document.getElementsByClassName("menu-modal")[0].scrollTop;
+  console.log('current scroll', left, top);
+
+  document.getElementById("modal-container").innerHTML = `<div class="menu-modal">
+      ${await routineContent()}
+    </div>`;
+
+  document.getElementsByClassName("menu-modal")[0].scrollLeft = left;
+  document.getElementsByClassName("menu-modal")[0].scrollTop = top;
+}
+
 async function renderDiscFooter(uuid) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
 
@@ -890,14 +932,9 @@ async function renderDiscFooter(uuid) {
       await cache.writeFile(MIX_FILE, mix_state);
       await paintDisc(uuid, 'only main');
       document.getElementById('mix-button').innerHTML = lookupIcon(mix_state === "true" ? 'focus' : 'mix');
-
-      // testing menu modal.  NOW when you put this in here, it doesn't actually paint.  probably have to set innerHTML somewhere or something.
-      document.documentElement.style.setProperty("--menu_modal_display", mix_state === 'true' ? "none" : "block");
-      document.getElementById("modal-container").innerHTML = `<div class="menu-modal"></div>`
       return false;
     };
     mix_state = await getMixState();
-    document.documentElement.style.setProperty("--menu_modal_display", mix_state === 'true' ? "none" : "block");
     mix_button_value = lookupIcon(mix_state === 'true' ? 'focus' :'mix');
     mix_button = `<button id="mix-button" class='menu-button' onclick="return global.handlers.mix(event)">${mix_button_value}</button>`;
   }
@@ -940,6 +977,7 @@ async function renderDiscFooter(uuid) {
         });
       }
       await paintDisc(uuid, 'only main');
+      await paintDiscRoutine();
 
       let repos = await getRepos();
       let combined_remote_status = await getRemoteStatus(repos.join(","));
@@ -969,9 +1007,20 @@ async function renderDiscFooter(uuid) {
     edit_button = `<button class='menu-button' onclick="gotoEdit('${uuid}')">${lookupIcon('edit')}</button>`;
   }
 
+  global.handlers.toggleMenu = async () => {
+    let menu_state = await toggleMenuState();
+    document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "none" : "flex");
+    await paintDiscRoutine();
+  }
+
+  let menu_state = await getMenuState();
+  document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "none" : "flex");
+  // document.getElementById("modal-container").innerHTML = `<div class="menu-modal"></div>`;
+
   return `${msg_form}
     <div id="modal-container">
       <div class="menu-modal">
+      ${await routineContent()}
       </div>
     </div>
     <div>
@@ -979,7 +1028,7 @@ async function renderDiscFooter(uuid) {
       <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
       <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
       <button class='menu-button' onclick="gotoSearch()">${lookupIcon('search')}</button>
-      <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>
+      <button class='menu-button' onclick="return global.handlers.toggleMenu()">${lookupIcon('menu')}</button>
       ${mix_button}
     </div>
     <div id='state_display'></div>`;
@@ -992,6 +1041,25 @@ async function getMixState() {
     await cache.writeFile(MIX_FILE, mix_state);
   }
   return mix_state;
+}
+
+async function getMenuState() {
+  let state = await cache.readFile(MENU_TOGGLE_FILE);
+  if (state === null) {
+    state = "false";
+    await cache.writeFile(MENU_TOGGLE_FILE, state);
+  }
+  return state;
+}
+
+async function toggleMenuState() {
+  let state = await cache.readFile(MENU_TOGGLE_FILE);
+  if (state === null) {
+    state = "false"; // default
+  }
+  state = state === "true" ? "false" : "true";
+  await cache.writeFile(MENU_TOGGLE_FILE, state);
+  return state;
 }
 
 async function renderDiscBody(uuid) {
@@ -1042,10 +1110,14 @@ async function renderEdit(uuid) {
     gotoDisc(uuid);
   };
   global.handlers = {submitEdit};
+  // TODO if coming frmo routine, we might want to go back to where we came from, rather than going to the routine disc.
+  // - TEMP (lol) adding a JRNL button to go to the journal, which is usually where we need to go back to.
   return [
     `<textarea class='editor_textarea'>` + content + "</textarea>",
     `<button class='menu-button' onclick="global.handlers.submitEdit()">${lookupIcon('submit')}</button>
-     <button class='menu-button' onclick="gotoDisc('${uuid}')">${lookupIcon('back')}</button>`
+     <button class='menu-button' onclick="gotoDisc('${uuid}')">${lookupIcon('back')}</button>
+     <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
+     `
   ];
 }
 
@@ -1062,7 +1134,9 @@ async function renderList() {
   let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
   return [
     table,
-    `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>`
+    `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
+    <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>
+    `
   ];
 }
 
@@ -1722,15 +1796,20 @@ async function gotoRoutine() {
   window.history.pushState({},"", "/routine");
 }
 
-async function renderRoutine() {
+async function routineContent() {
+  const local_repo_name = await get_local_repo_name();
   const notes = await getNoteMetadataMap();
   const routine_notes = notes.filter(note => note.title === "ROUTINE");
-  let content = "no routine notes found"
+
+  let content = "no routine notes found";
+  let is_local_routine = false;
   if (routine_notes.length > 0) {
     const most_recent_routine_note = routine_notes.sort((a, b) => dateComp(b, a))[0];
+    is_local_routine = most_recent_routine_note.uuid.startsWith(local_repo_name + "/");
+
     let page = parseContent(most_recent_routine_note.content);
     page = rewrite(page, most_recent_routine_note.uuid);
-    let current_journal = (await getNotesWithTitle(today(), await get_local_repo_name()))[0];
+    let current_journal = (await getNotesWithTitle(today(), local_repo_name))[0];
     const tags = await getTagsFromMixedNote(current_journal);
 
     const error = (msg, obj) => {
@@ -1761,7 +1840,7 @@ async function renderRoutine() {
                 }
                 return `${renderRoutineValue(x.value)}<ul>${x.children.map(c => "<li>" +  renderRoutineNode(c) + "</li>").join("")}</ul>`;
               };
-              return `<div>${renderRoutineValue(element.value)} <ul>${element.children.map(c => "<li>" + renderRoutineNode(c) + "</li>").join("")}</ul></div>`;
+              return `<div class="routine-block">${renderRoutineValue(element.value)} <ul>${element.children.map(c => "<li>" + renderRoutineNode(c) + "</li>").join("")}</ul></div>`;
             }
             if (typeof element === 'string') {
               return renderRoutineValue(element);
@@ -1778,12 +1857,20 @@ async function renderRoutine() {
           return renderRoutineBlockItem(element);
         }
         return error('unimpl block', block);
-      }).join("<br>");
+      }).join("");
     };
 
     page = page.filter(section => section.title == "ROUTINE").map(renderRoutineSection);
-    content = page.join("\n") + `<br><br><button class='menu-button' onclick="gotoEdit('${most_recent_routine_note.uuid}')">${lookupIcon('edit')}</button>`;
+    content = page.join("\n") + `<br><br>`;
+    if (is_local_routine) {
+      content += `<div style="display: flex; justify-content: end;"><button class='menu-button' onclick="gotoEdit('${most_recent_routine_note.uuid}')">${lookupIcon('edit')}</button></div>`;
+    }
   }
+  return content;
+}
+
+async function renderRoutine() {
+  let content = await routineContent();
   
   return [
     `<div>
