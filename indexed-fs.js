@@ -939,7 +939,7 @@ async function renderDiscFooter(uuid) {
           return new_content + metadata;
         });
       }
-      await paintDisc(uuid);
+      await paintDisc(uuid, 'only main');
 
       let repos = await getRepos();
       let combined_remote_status = await getRemoteStatus(repos.join(","));
