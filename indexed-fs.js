@@ -337,7 +337,7 @@ async function getNotesWithTitle(title, repo) {
 }
 
 async function getAllNotesWithSameTitleAs(uuid) {
-  const files_with_names = await getNoteMetadataMap();
+  const files_with_names = await getNoteMetadataMap('raw all notes with same title as uuid');
   let title = files_with_names.find(note => note.uuid == uuid).title;
   return files_with_names.filter(note => note.title === title);
 }
@@ -1584,7 +1584,7 @@ async function search(text) {
   if (text === '' || text === null || text === undefined) {
     return [];
   }
-  let notes = await getNoteMetadataMap();
+  let notes = await getNoteMetadataMap('search');
   let cache_log = console.log;
   console.log = (x) => {};
   let filtered_notes = notes.filter(note => note.content.includes(text));  // first pass filter without parsing using a hopefully fast impl-provided string-includes.
