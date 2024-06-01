@@ -179,6 +179,7 @@ details[open] > summary > .tags-summary {
   border: var(--link_button_main_color) 1px solid;
   margin: 2px;
   padding: 10px 5px;
+  border-radius: 3px;
 }
 .menu-button:hover, .menu-button:focus { border-color: var(--link_button_hover_color); outline: none; }
 .menu-button:active { color: var(--link_button_hovercolor); }
@@ -262,8 +263,13 @@ blockquote {
 
 :root {
   --menu-modal-margin-size: 5%;
-  --menu-modal-height: calc(100% - var(--footer_menu_size) - (2 * var(--menu-modal-margin-size)));
-  --menu-modal-width: calc(100% - (2 * var(--menu-modal-margin-size)));
+  --menu-modal-padding: 5px;
+  --menu-modal-height: calc(100% - var(--footer_menu_size) - (
+    2 * (var(--menu-modal-margin-size) + var(--menu-modal-padding))
+  ));
+  --menu-modal-width: calc(100% - (
+    2 * (var(--menu-modal-margin-size) + var(--menu-modal-padding))
+  ));
 }
 
 .menu-modal {
@@ -273,9 +279,12 @@ blockquote {
   left: var(--menu-modal-margin-size); top: var(--menu-modal-margin-size);
   width: var(--menu-modal-width); height: var(--menu-modal-height);
   overflow: auto;
-  background-color: rgba(0,0,0,0.9);
+  background-color: rgba(0,0,0,0.85);
   /* transition: display 0.5s; TODO figure out how to make transitions work */
   margin: 0;
+  padding: var(--menu-modal-padding);
+
+  border-radius: 5px;
 
   flex-direction: column;
   flex-wrap: wrap;
@@ -286,8 +295,14 @@ blockquote {
 .routine-block {
   margin: 5px;
   border-radius: 5px;
-  padding: 5px;
+  padding: 8px;
   background-color: rgb(0, 92, 92);
+}
+
+.routine-block > ul, .routine-block > ul > li > ul {
+  padding-inline-start: 20px;
+  margin-block-start: 3px;
+  margin-block-end: 3px;
 }
 
 #modal-container {
