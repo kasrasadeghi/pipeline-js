@@ -303,7 +303,15 @@ function today() {
   return `${month} ${day}${day_suffix}, ${year}`;
 }
 
-async function getNoteMetadataMap() {
+// FLAT DATABASE WRAPPER
+
+async function getNoteMetadataMap(caller) {
+  if (caller === undefined) {
+    console.log('raw note metadata used');
+    throw new Error('raw note metadata used');
+  } else {
+    console.log('getNoteMetadataMap from', caller);
+  }
   const blobs = await global_notes.readAllFiles();
   return blobs.map(blob => {
     let metadata = null;
@@ -324,7 +332,7 @@ async function getNoteMetadataMap() {
 }
 
 async function getNotesWithTitle(title, repo) {
-  const files_with_names = await getNoteMetadataMap();
+  const files_with_names = await getNoteMetadataMap('note with title, probably from gotoJournal');
   return files_with_names.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
 }
 
@@ -332,6 +340,52 @@ async function getAllNotesWithSameTitleAs(uuid) {
   const files_with_names = await getNoteMetadataMap();
   let title = files_with_names.find(note => note.uuid == uuid).title;
   return files_with_names.filter(note => note.title === title);
+}
+
+// === Efficient cache for a single read/ scan of the whole database. ===
+// make sure to make a new one and plumb it through properly in each request.
+// - it will probably be difficult to stash one of these globally and interrupt its usage when page transitions happen.
+// - we'll probably have to handle that with a state machine that interrupts renders and clears the cache if it has been invalidated.
+// N.B. it is _not_ correct to stash this and only modify the elements that are modified from write operations and syncs, because other pages may have modified this.
+// - we'll have to make a cache within indexedDB that is invalidated when the database in a cooperative way _between tabs_ for that to work.
+// - that might also have pernicious bugs.
+// N.B. make sure to not capture this in a handler or a lambda that is preserved, because that's basically stashing it.
+class FlatRead { // a single "read" operation for the flat note database.
+  constructor() {}
+  
+  async build() {
+    this.metadata_map = await getNoteMetadataMap('FlatRead');
+    return this;
+  }
+
+  getNotesWithTitle(title, repo) {
+    return this.metadata_map.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
+  }
+
+  getAllNotesWithSameTitleAs(uuid) {
+    let title = this.metadata_map.find(note => note.uuid == uuid).title;
+    return this.metadata_map.filter(note => note.title === title);
+  }
+
+  get_note(uuid) {
+    return this.metadata_map.find(note => note.uuid === uuid);
+  }
+
+  rewrite(uuid) {
+    let note = this.get_note(uuid);
+    if (note.rewrite === undefined) {
+      let page = parseContent(note.content);
+      note.rewrite = rewrite(page, uuid);
+    }
+    return note.rewrite;
+  }
+
+  async local_repo_name() {
+    if (this._local_repo === undefined) {
+      this._local_repo = await get_local_repo_name();
+    }
+    return this._local_repo;
+  }
 }
 
 // PARSE
@@ -818,7 +872,6 @@ function htmlLine(line) {
 
           if (rendered.startsWith("/disc/")) {
             rendered = rendered.slice("/disc/".length);
-            
           }
 
           return ShortcircuitLink(x.url, rendered);
@@ -837,21 +890,29 @@ function htmlLine(line) {
 const MIX_FILE = 'disc mix state';
 const MENU_TOGGLE_FILE = 'disc menu toggle state';
 
-async function paintDisc(uuid, flag) {
-  let footer = document.getElementsByTagName('footer')[0];
-  if (flag !== 'only main') {
-    footer.innerHTML = await renderDiscFooter(uuid);
+async function buildFlatRead() {
+  console.log('building flat read');
+  let flatRead = new FlatRead()
+  await flatRead.build();
+  await flatRead.local_repo_name();
+  return flatRead;
+}
 
-    // TODO maybe don't focus this sometimes, 
-    // - like if we're coming from discussion mode and it wasn't focused, 
-    //   but we're repainting because we toggled focus/mix
+async function paintDisc(uuid, flag, flatRead) {
+  if (flatRead === undefined) {
+    flatRead = await buildFlatRead();
+  }
+  
+  if (flag !== 'only main') {
+    await paintDiscFooter(uuid, flatRead);
+
     setTimeout(() => {
       document.getElementById('msg_input')?.focus();
     }, 0);
   }
 
   let main = document.getElementsByTagName('main')[0];
-  main.innerHTML = await renderDiscBody(uuid);
+  main.innerHTML = await renderDiscBody(uuid, flatRead);
   
   const selected = updateSelected();
   if (selected === null) {
@@ -861,16 +922,33 @@ async function paintDisc(uuid, flag) {
   }
 }
 
-async function mixPage(uuid) {
-  let page = await parseFile(uuid);
-  if (page === null) {
-    return null;
+async function mixPage(uuid, flatRead) {
+  let page = null;
+  let note = null;
+  let rewritten = null;
+
+  if (flatRead === undefined) {
+    page = await parseFile(uuid);
+    if (page === null) {
+      return null;
+    }
+    rewritten = rewrite(page, uuid);
+
+  } else {
+    note = flatRead.metadata_map.find(note => note.uuid === uuid);
+    if (note === undefined) {
+      return null;
+    }
+    page = parseContent(note.content);
+    if (note.rewrite) {
+      rewritten = note.rewrite;
+    } else {
+      rewritten = rewrite(page, uuid);
+    }
   }
 
-  let current_page = rewrite(page, uuid);
-
   // notes that share our title
-  let sibling_notes = await getAllNotesWithSameTitleAs(uuid);
+  let sibling_notes = (flatRead === undefined) ? await getAllNotesWithSameTitleAs(uuid) : flatRead.getAllNotesWithSameTitleAs(uuid);
   console.log('mixing entry sections of', sibling_notes.map(note => note.uuid), "with current note", uuid);
   let sibling_pages = sibling_notes.map((sibling_note) => rewrite(parseContent(sibling_note.content), sibling_note.uuid));
 
@@ -889,13 +967,13 @@ async function mixPage(uuid) {
   entry_messages.sort(dateComp);
   let new_blocks = [...entry_nonmessages, ...entry_messages];
 
-  let current_entry_section = current_page.filter(section => section.title === 'entry')[0];
+  let current_entry_section = rewritten.filter(section => section.title === 'entry')[0];
   current_entry_section.blocks = new_blocks;
-  return current_page;
+  return rewritten;
 }
 
-async function renderDiscMixedBody(uuid) {
-  let page = await mixPage(uuid);
+async function renderDiscMixedBody(uuid, flatRead) {
+  let page = await mixPage(uuid, flatRead);
   if (page === null) {
     return `couldn't find file '${uuid}'`;
   }
@@ -904,21 +982,22 @@ async function renderDiscMixedBody(uuid) {
   return "<div class='msglist'>" + rendered + "</div>";
 }
 
-async function paintDiscRoutine() {
+async function paintDiscRoutine(flatRead) {
   // maintain the scroll of the modal when repainting it
   let left = document.getElementsByClassName("menu-modal")[0].scrollLeft;
   let top = document.getElementsByClassName("menu-modal")[0].scrollTop;
-  console.log('current scroll', left, top);
+
+  flatRead = flatRead || await buildFlatRead();
 
   document.getElementById("modal-container").innerHTML = `<div class="menu-modal">
-      ${await routineContent()}
+      ${await routineContent(flatRead)}
     </div>`;
 
   document.getElementsByClassName("menu-modal")[0].scrollLeft = left;
   document.getElementsByClassName("menu-modal")[0].scrollTop = top;
 }
 
-async function renderDiscFooter(uuid) {
+async function paintDiscFooter(uuid, flatRead) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
 
   global.handlers = {};
@@ -943,7 +1022,7 @@ async function renderDiscFooter(uuid) {
 
   let msg_form = "";
   let edit_button = "";
-  if (uuid.startsWith(await get_local_repo_name())) {
+  if (uuid.startsWith(flatRead._local_repo)) {
     global.handlers.handleMsg = async (event) => {
       console.log(event);
 
@@ -1012,17 +1091,16 @@ async function renderDiscFooter(uuid) {
   global.handlers.toggleMenu = async () => {
     let menu_state = await toggleMenuState();
     document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "none" : "flex");
-    await paintDiscRoutine();
   }
 
   let menu_state = await getMenuState();
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "none" : "flex");
-  // document.getElementById("modal-container").innerHTML = `<div class="menu-modal"></div>`;
 
-  return `${msg_form}
+  let footer = document.getElementsByTagName('footer')[0];
+  footer.innerHTML = `${msg_form}
     <div id="modal-container">
       <div class="menu-modal">
-      ${await routineContent()}
+        loading routine...
       </div>
     </div>
     <div>
@@ -1034,6 +1112,7 @@ async function renderDiscFooter(uuid) {
       ${mix_button}
     </div>
     <div id='state_display'></div>`;
+  await paintDiscRoutine(flatRead);
 }
 
 async function getMixState() {
@@ -1064,21 +1143,21 @@ async function toggleMenuState() {
   return state;
 }
 
-async function renderDiscBody(uuid) {
+async function renderDiscBody(uuid, flatRead) {
   let mix_state = await getMixState();
   console.log('mix state', mix_state);
   let rendered_note = '';
   if (mix_state === "true") {
-    rendered_note = await renderDiscMixedBody(uuid);
+    rendered_note = await renderDiscMixedBody(uuid, flatRead);
   } else {
     rendered_note = await htmlNote(uuid);
   }
   return rendered_note;
 }
 
-async function gotoDisc(uuid) {
+async function gotoDisc(uuid, flatRead) {
   window.history.pushState({},"", "/disc/" + uuid);
-  paintDisc(uuid);
+  paintDisc(uuid, /* paint both footer and main */ undefined, flatRead);
   return false;
 }
 
@@ -1132,7 +1211,7 @@ async function gotoList() {
 }
 
 async function renderList() {
-  let rows = (await getNoteMetadataMap()).sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
+  let rows = (await getNoteMetadataMap('render list')).sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
   let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
   return [
     table,
@@ -1798,9 +1877,9 @@ async function gotoRoutine() {
   window.history.pushState({},"", "/routine");
 }
 
-async function routineContent() {
-  const local_repo_name = await get_local_repo_name();
-  const notes = await getNoteMetadataMap();
+async function routineContent(flatRead) {
+  const local_repo_name = await flatRead.local_repo_name();
+  const notes = flatRead.metadata_map;
   const routine_notes = notes.filter(note => note.title === "ROUTINE");
 
   let content = "no routine notes found";
@@ -1811,8 +1890,8 @@ async function routineContent() {
 
     let page = parseContent(most_recent_routine_note.content);
     page = rewrite(page, most_recent_routine_note.uuid);
-    let current_journal = (await getNotesWithTitle(today(), local_repo_name))[0];
-    const tags = await getTagsFromMixedNote(current_journal);
+    let current_journal = flatRead.getNotesWithTitle(today(), local_repo_name)[0];
+    const tags = await getTagsFromMixedNote(current_journal, flatRead);
 
     const error = (msg, obj) => {
       console.log(msg, obj);
@@ -1872,7 +1951,7 @@ async function routineContent() {
 }
 
 async function renderRoutine() {
-  let content = await routineContent();
+  let content = await routineContent(await buildFlatRead());
   
   return [
     `<div>
@@ -1884,8 +1963,8 @@ async function renderRoutine() {
   ];
 }
 
-async function getTagsFromMixedNote(uuid) {
-  let page = await mixPage(uuid);
+async function getTagsFromMixedNote(uuid, flatRead) {
+  let page = await mixPage(uuid, flatRead);
   return page
     .flatMap(s => s.blocks?.filter(x => x instanceof Msg))  // get all messages from every section
     .filter(x => x)  // filter away sections that didn't have blocks
@@ -1897,12 +1976,13 @@ async function getTagsFromMixedNote(uuid) {
 const cache = new FileDB("pipeline-db-cache", "cache");
 
 async function gotoJournal() {
-  let notes = await getNotesWithTitle(today(), await get_local_repo_name());
+  let flatRead = await buildFlatRead();
+  let notes = flatRead.getNotesWithTitle(today(), await flatRead.local_repo_name());
   if (notes.length === 0) {
     let uuid = await newJournal(today());
     notes = [uuid];
   }
-  await gotoDisc(notes[0]);
+  await gotoDisc(notes[0], flatRead);
 }
 
 window.addEventListener("popstate", (event) => {
