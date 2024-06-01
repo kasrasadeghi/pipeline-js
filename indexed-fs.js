@@ -838,9 +838,7 @@ const MIX_FILE = 'disc mix state';
 const MENU_TOGGLE_FILE = 'disc menu toggle state';
 
 async function paintDisc(uuid, flag) {
-  let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
-  main.innerHTML = await renderDiscBody(uuid);
   if (flag !== 'only main') {
     footer.innerHTML = await renderDiscFooter(uuid);
 
@@ -851,6 +849,10 @@ async function paintDisc(uuid, flag) {
       document.getElementById('msg_input')?.focus();
     }, 0);
   }
+
+  let main = document.getElementsByTagName('main')[0];
+  main.innerHTML = await renderDiscBody(uuid);
+  
   const selected = updateSelected();
   if (selected === null) {
     main.scrollTop = main.scrollHeight;
