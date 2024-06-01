@@ -630,8 +630,26 @@ function rewriteBlock(block, note) {
 
 class Link {
   url;
+  display;
   constructor(url) {
+    this.display = url;
     this.url = url;
+    
+    if (this.url.startsWith("http://") || this.url.startsWith("https://")) {
+      this.display = this.display.slice(this.display.indexOf('://') + '://'.length);
+    }
+    const reddit_share_tail = "?utm_source=share&utm_medium=mweb3x&utm_name=mweb3xcss&utm_term=1&utm_content=share_button";
+    if (this.display.endsWith(reddit_share_tail)) {
+      this.display = this.display.slice(0, -reddit_share_tail.length);
+    }
+    if (this.display.startsWith(window.location.host)) {
+      this.display = this.display.slice(window.location.host.length);
+      this.display = decodeURI(this.display);
+
+      if (this.display.startsWith("/disc/")) {
+        this.display = this.display.slice("/disc/".length);
+      }
+    }
   }
   toString() {
     return `Link(${this.url})`;
@@ -826,7 +844,7 @@ function htmlMsg(item, mode) {
   let timestamp_content = time_format.format(date)
     .replaceAll(",", ""); // "Wed, Jan 15, hh:mm:ss" -> "Wed Jan 15 hh:mm:ss"
   let href_id = `/disc/${item.origin}#${item.date}`;
-  let msg_timestamp_link = ShortcircuitLink(href_id, timestamp_content, 'msg_timestamp');
+  let msg_timestamp_link = shortcircuitLink(href_id, timestamp_content, 'msg_timestamp');
 
   let line = htmlLine(item.msg);
   let style_option = "";
@@ -843,7 +861,7 @@ function htmlMsg(item, mode) {
   )
 }
 
-function ShortcircuitLink(url, text, style_class) {
+function shortcircuitLink(url, text, style_class) {
   let style_class_include = "";
   if (style_class !== undefined) {
     style_class_include = `class='${style_class}'`;
@@ -858,25 +876,7 @@ function htmlLine(line) {
         return "<emph class='tag'>" + x.tag + "</emph>";
       }
       if (x instanceof Link) {
-        let rendered = x.url;
-        if (x.url.startsWith("http://") || x.url.startsWith("https://")) {
-          rendered = rendered.slice(rendered.indexOf('://') + '://'.length);
-        }
-        const reddit_share_tail = "?utm_source=share&utm_medium=mweb3x&utm_name=mweb3xcss&utm_term=1&utm_content=share_button";
-        if (rendered.endsWith(reddit_share_tail)) {
-          rendered = rendered.slice(0, -reddit_share_tail.length);
-        }
-        if (rendered.startsWith(window.location.host)) {
-          rendered = rendered.slice(window.location.host.length);
-          rendered = decodeURI(rendered);
-
-          if (rendered.startsWith("/disc/")) {
-            rendered = rendered.slice("/disc/".length);
-          }
-
-          return ShortcircuitLink(x.url, rendered);
-        }
-        return `<a href="${x.url}">${rendered}</a>`
+        return `<a href="${x.url}">${x.display}</a>`;
       }
       return x;
     }).join("");
