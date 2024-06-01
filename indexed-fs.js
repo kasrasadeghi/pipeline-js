@@ -1241,8 +1241,6 @@ function updateSelected() {
 };
 
 window.addEventListener('load', () => {
-  console.log('enable highlight-selected');
-
   window.addEventListener('hashchange', () => {
     updateSelected()?.scrollIntoView();
   });
@@ -1981,6 +1979,8 @@ async function gotoJournal() {
   if (notes.length === 0) {
     let uuid = await newJournal(today());
     notes = [uuid];
+    flatRead = await buildFlatRead();  // TODO maybe this is a case where updating the cache is okay.
+    // TODO maybe we only want to do a full update of the cache on sync, hmm.  nah, it seems like it should be on every database operation, for _consistency_'s (ACID) sake.
   }
   await gotoDisc(notes[0], flatRead);
 }
