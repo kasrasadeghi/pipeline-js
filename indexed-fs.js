@@ -165,7 +165,7 @@ class FileDB {
 
 const global_notes = new FileDB();
 
-global = null;
+global = null;  // the only global variable.
 const LOCAL_REPO_NAME_FILE = "local_repo_name";
 const SUBBED_REPOS_FILE = "subbed_repos";
 
@@ -913,6 +913,7 @@ async function paintDisc(uuid, flag, flatRead) {
   if (flag !== 'only main') {
     await paintDiscFooter(uuid, flatRead);
 
+    // msg_input doesn't exist when the uuid is not in our local repo
     setTimeout(() => {
       document.getElementById('msg_input')?.focus();
     }, 0);
@@ -1766,7 +1767,7 @@ async function renderSetup() {
   const welcome_splash = `<div>
   <h3>Welcome to Pipeline!</h3>
   <p>This is the May 1st, 2024 version of Pipeline Notes, version ${tag_color('1.1')}.</p>
-  <p>Changelog, roadmap, help, usage, and examples coming soon!</p>
+  <p>Changelog and roadmap coming soon!</p>
   <p>For now, make a ${tag_color('J')}ou${tag_color('RNL')} for each day, ${tag_color('S')}ea${tag_color('RCH')} your notes, and ${tag_color('LIST')} them out.</p>
   </div>`;
 
