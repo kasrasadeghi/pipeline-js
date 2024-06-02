@@ -217,6 +217,7 @@ details[open] > summary > .tags-summary {
   font-family: var(--link-font);
   margin: 2px;
   padding: 6px 6px 4px 6px;
+  min-width: 50px;
 }
 /* .routine-button:hover, .routine-button:focus { border-color: var(--link_button_hover_color); outline: none; }
    .routine-button:active { color: var(--link_button_hovercolor); }
@@ -308,4 +309,26 @@ blockquote {
 #modal-container {
   display: inline;
   margin: 0;
+}
+
+#footer-button-container {
+  display: flex;
+  flex-direction: row;
+  gap: 5px;
+  padding-top: 3px;
+  padding-left: 5px;
+}
+
+@media screen and (max-width: 430px) {
+  #footer-button-container {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 5px;
+    padding-top: 3px;
+  }
+}
+
+#state_display {
+  padding-left: 7px;
 }

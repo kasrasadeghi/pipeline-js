@@ -631,9 +631,11 @@ function rewriteBlock(block, note) {
 class Link {
   url;
   display;
+  type;
   constructor(url) {
     this.display = url;
     this.url = url;
+    this.type = 'unknown';
     
     if (this.url.startsWith("http://") || this.url.startsWith("https://")) {
       this.display = this.display.slice(this.display.indexOf('://') + '://'.length);
@@ -649,8 +651,10 @@ class Link {
       if (this.display.startsWith("/disc/")) {
         this.display = this.display.slice("/disc/".length);
       }
+      this.type = 'shortcut';
     }
   }
+
   toString() {
     return `Link(${this.url})`;
   }
@@ -876,6 +880,9 @@ function htmlLine(line) {
         return "<emph class='tag'>" + x.tag + "</emph>";
       }
       if (x instanceof Link) {
+        if (x.type == 'shortcut') {
+          return shortcircuitLink(x.url, x.display);
+        }
         return `<a href="${x.url}">${x.display}</a>`;
       }
       return x;
@@ -1103,7 +1110,7 @@ async function paintDiscFooter(uuid, flatRead) {
         loading routine...
       </div>
     </div>
-    <div>
+    <div id="footer-button-container">
       ${edit_button}
       <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
       <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
@@ -1210,8 +1217,9 @@ async function gotoList() {
   painted.main.scrollTop = 0;
 }
 
-async function renderList() {
-  let rows = (await getNoteMetadataMap('render list')).sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
+async function renderList(flatRead) {
+  flatRead = flatRead || await buildFlatRead();
+  let rows = flatRead.metadata_map.sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
   let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
   return [
     table,
@@ -1888,7 +1896,11 @@ async function routineContent(flatRead) {
 
     let page = parseContent(most_recent_routine_note.content);
     page = rewrite(page, most_recent_routine_note.uuid);
-    let current_journal = flatRead.getNotesWithTitle(today(), local_repo_name)[0];
+    let maybe_current_journal = flatRead.getNotesWithTitle(today(), local_repo_name);
+    if (maybe_current_journal.length === 0) {
+      return "no journal found for today";
+    }
+    let current_journal = maybe_current_journal[0];
     const tags = await getTagsFromMixedNote(current_journal, flatRead);
 
     const error = (msg, obj) => {
@@ -1962,6 +1974,7 @@ async function renderRoutine() {
 }
 
 async function getTagsFromMixedNote(uuid, flatRead) {
+  flatRead = flatRead || await buildFlatRead();
   let page = await mixPage(uuid, flatRead);
   return page
     .flatMap(s => s.blocks?.filter(x => x instanceof Msg))  // get all messages from every section
@@ -2007,12 +2020,13 @@ function getCurrentNoteUuid() {
 }
 
 async function handleRouting() {
-  console.log("notes that match today's date:", await getNotesWithTitle(today(), await get_local_repo_name()));
+  let flatRead = await buildFlatRead();
+  console.log("notes that match today's date:", flatRead.getNotesWithTitle(today(), await flatRead.local_repo_name()));
   console.log("initializing from path", window.location.pathname);
 
   if (window.location.pathname.startsWith('/disc/')) {
     let uuid = window.location.pathname.slice("/disc/".length);
-    paintDisc(uuid);
+    paintDisc(uuid, flatRead);
 
   } else if (window.location.pathname.startsWith('/edit/')) {
     let uuid = window.location.pathname.slice("/edit/".length);
