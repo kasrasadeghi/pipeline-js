@@ -743,6 +743,8 @@ function tagParse(line) {
       }
 
       if (uppercase_prefix.length < 2) {
+        // if the uppercase prefix is less than 2 characters, it's not a tag.
+        // collect the non-uppercase prefix and continue.
         let non_uppercase_prefix = uppercase_prefix;
         while (i < line.length && (!isUpperCase(line[i+1]))) {
           non_uppercase_prefix += line[i++];
