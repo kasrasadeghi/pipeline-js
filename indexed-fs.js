@@ -736,9 +736,9 @@ function tagParse(line) {
       let uppercase_prefix = line[i++];
       // eat uppercase prefix, including intermediate dashes
       // - an intermediate dash is when the current character is a dash and the next letter is uppercase
-      let head_dash = (line[i] === '-' || line[i] === '_');
-      let intermediate_dash = head_dash && (i + 1 > line.length && isUpperCase(line[i+1]));
-      while (i < line.length && (isUpperCase(line[i]) || intermediate_dash)) {
+      const head_dash = () => (line[i] === '-' || line[i] === '_');
+      const intermediate_dash = () => head_dash() && (i + 1 <= line.length && isUpperCase(line[i+1]));
+      while (i < line.length && (isUpperCase(line[i]) || intermediate_dash())) {
         uppercase_prefix += line[i++];
       }
 
