@@ -1116,7 +1116,7 @@ async function paintDiscFooter(uuid, flatRead) {
       <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
       <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
       <button class='menu-button' onclick="gotoSearch()">${lookupIcon('search')}</button>
-      <button class='menu-button' onclick="return global.handlers.toggleMenu()">${lookupIcon('menu')}</button>
+      <button class='menu-button' onclick="return global.handlers.toggleMenu()">${lookupIcon('routine')}</button>
       ${mix_button}
     </div>
     <div id='state_display'></div>`;
@@ -1766,8 +1766,8 @@ async function renderSetup() {
 
   const welcome_splash = `<div>
   <h3>Welcome to Pipeline!</h3>
-  <p>This is the May 1st, 2024 version of Pipeline Notes, version ${tag_color('1.1')}.</p>
-  <p>Changelog and roadmap coming soon!</p>
+  <p>This is the June 2nd, 2024 version of Pipeline Notes, version ${tag_color('1.2')}.</p>
+  <p>Changelog, roadmap, and tutorial coming soon!</p>
   <p>For now, make a ${tag_color('J')}ou${tag_color('RNL')} for each day, ${tag_color('S')}ea${tag_color('RCH')} your notes, and ${tag_color('LIST')} them out.</p>
   </div>`;
 
