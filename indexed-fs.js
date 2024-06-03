@@ -259,10 +259,9 @@ Tags: Journal`;
 }
 
 function parseMetadata(note_content) {
-  const lines = note_content.split("\n");
-  const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---") + 1);
+  const lines = note_content.slice(note_content.indexOf("--- METADATA ---") + 1).split('\n');
   let metadata = {};
-  metadata_lines.forEach(line => {
+  lines.forEach(line => {
     let split_index = line.indexOf(": ");
     if (split_index === -1) {
       return;
@@ -312,8 +311,11 @@ async function getNoteMetadataMap(caller) {
   } else {
     console.log('getNoteMetadataMap from', caller);
   }
+  console.time('read files');
   const blobs = await global_notes.readAllFiles();
-  return blobs.map(blob => {
+  console.timeEnd('read files');
+  console.time('parse metadata');
+  let result = blobs.map(blob => {
     let metadata = null;
     try {
       metadata = parseMetadata(blob.content);
@@ -329,6 +331,8 @@ async function getNoteMetadataMap(caller) {
     }
     return {uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content};
   });
+  console.timeEnd('parse metadata');
+  return result;
 }
 
 async function getNotesWithTitle(title, repo) {
