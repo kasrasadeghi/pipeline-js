@@ -547,9 +547,6 @@ function rewriteSection(section, note) {
 
   let new_blocks = [];
   for (let block of section.blocks) {
-    if (block.length === 0) {  // TODO i should maybe actually render blocks like [] as newlines
-      continue;
-    }
     new_blocks.push(rewriteBlock(block, note));
   }
 
@@ -783,12 +780,12 @@ function htmlNoteContent(uuid, content) {
   console.assert(content !== null, content, 'content should not be null');
   let page = parseContent(content);
   let rewritten = rewrite(page, uuid);
-  let rendered = rewritten.map(htmlSection).join("\n");
+  let rendered = rewritten.map(htmlSection).join("");
   return "<div class='msglist'>" + rendered + "</div>";
 }
 
 function htmlSection(section, i) {
-  output = []
+  let output = [];
   if (! ('entry' === section.title && i === 0)) {
     output.push(`--- ${section.title} ---`)
   }
@@ -801,9 +798,33 @@ function htmlSection(section, i) {
     return '\n';
   }
 
-  output.push(...section.blocks.map(htmlBlock))
+  output.push(...section.blocks.map(htmlBlock));
 
-  return output.join("\n");
+  let result = output.join("");
+  result = trimTrailingRenderedBreak(result);
+  return result;
+}
+
+function htmlMsgBlock(block) {
+  if (block instanceof Msg) {
+    return htmlMsg(block);
+  }
+  if (block instanceof Newline) {
+    return "<br/>";
+  }
+  if (block instanceof Array) {
+    if (block[0] == 'QUOTE') {
+      return "<blockquote>" + block.slice(1).map(x => "<p>" + htmlLine(x) + "</p>").join("") + "</blockquote>";
+    }
+    if (block.length === 1 && block[0] instanceof TreeNode) {
+      return "<pre>" + block[0].toString() + "\n</pre>";
+    }
+    return "<p class='msgblock'>" + block.map(htmlLine).join("<br>") + "</p>";
+  }
+  if (block instanceof TreeNode) {
+    return `<pre>` + block.toString() + `</pre>`;
+  }
+  return JSON.stringify(block, undefined, 2);
 }
 
 function htmlBlock(block) {
@@ -813,15 +834,14 @@ function htmlBlock(block) {
   if (block instanceof Newline) {
     return "<br/>";
   }
-  return htmlTextBlock(block);
-}
-
-function htmlTextBlock(block) {
   if (block instanceof Array) {
+    if (block.length === 1 && block[0] instanceof TreeNode) {
+      return "<pre>" + block[0].toString() + "\n</pre>";
+    }
     if (block[0] == 'QUOTE') {
       return "<blockquote>" + block.slice(1).map(x => "<p>" + htmlLine(x) + "</p>").join("") + "</blockquote>";
     }
-    return "<pre>" + block.map(htmlLine).join("\n") + "</pre>";
+    return "<p>" + block.map(htmlLine).join("") + "\n</p>";
   }
   if (block instanceof TreeNode) {
     return `<pre>` + block.toString() + `</pre>`;
@@ -837,6 +857,16 @@ const datetime_format = new Intl.DateTimeFormat('en-us', { month: 'short', day: 
 
 // datetime format for "search" mode with year, like "Wed, Jan 15 2024, hh:mm:ss" in 24-hour clock
 const datetime_year_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
+function trimTrailingRenderedBreak(content) {
+  if (content.endsWith("<br/>")) {
+    content = content.slice(0, -("<br/>".length));
+  }
+  if (content.endsWith("<br>")) {
+    content = content.slice(0, -("<br>".length));
+  }
+  return content;
+}
 
 function htmlMsg(item, mode) {
 
@@ -862,12 +892,15 @@ function htmlMsg(item, mode) {
     style_option = " style='background: #5f193f'";
   }
 
+  let block_content = item.blocks.map(block => htmlMsgBlock(block)).join("");
+  block_content = trimTrailingRenderedBreak(block_content);
+
   return (`
     <div class='msg' id='${item.date}'>
       <div class="msg_menu">${msg_timestamp_link} ${item.origin.split('/')[0]}</div>
       <div class="msg_content"${style_option}>${line}</div>
     </div>
-    ${item.blocks.map(block => htmlTextBlock(block)).join("<br/>")}`
+    ${block_content}`
   )
 }
 

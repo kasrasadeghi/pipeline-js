@@ -332,3 +332,8 @@ blockquote {
 #state_display {
   padding-left: 7px;
 }
+
+.msgblock {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
