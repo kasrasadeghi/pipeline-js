@@ -337,3 +337,13 @@ blockquote {
   margin-top: 10px;
   margin-bottom: 10px;
 }
+
+.quotes {
+  border-top: 2px solid var(--quote_timestamp_color);
+  border-left: 2px solid var(--quote_timestamp_color);
+  border-bottom: 2px solid var(--quote_timestamp_color);
+  border-bottom-left-radius: 20px;
+  border-top-left-radius: 5px;
+  padding: 5px;
+  min-width: -webkit-fill-available;
+}

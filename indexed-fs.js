@@ -189,6 +189,24 @@ async function get_local_repo_name() {
 
 // DATE UTIL
 
+const COMPATIBILITY_TIMEZONES = {
+  'PST': 'GMT-0800 (Pacific Standard Time)',
+  'PDT': 'GMT-0700 (Pacific Daylight Time)',
+  'EST': 'GMT-0500 (Eastern Standard Time)',
+  'EDT': 'GMT-0400 (Eastern Daylight Time)',
+  'CST': 'GMT-0600 (Central Standard Time)',
+  'CDT': 'GMT-0500 (Central Daylight Time)',
+  'MST': 'GMT-0700 (Mountain Standard Time)',
+  'MDT': 'GMT-0600 (Mountain Daylight Time)',
+  'HST': 'GMT-1000 (Hawaiian Standard Time)',
+  // european timezones
+  'CET': 'GMT+0100 (Central European Time)',
+  'CEST': 'GMT+0200 (Central European Summer Time)',
+  // japan
+  'JST': 'GMT+0900 (Japan Standard Time)',
+  'JDT': 'GMT+1000 (Japan Daylight Time)',
+};
+
 function timezoneCompatibility(datestring) {
   // old dates look like: Wed Jan 17 22:02:44 PST 2024
   // new dates look like: Thu Jan 17 2024 22:02:44 GMT-0800 (Pacific Standard Time)
@@ -196,32 +214,14 @@ function timezoneCompatibility(datestring) {
   if (datestring.endsWith(")")) {
     return datestring; // no compatibility needed
   }
-
-  const compatibility_timezones = {
-    'PST': 'GMT-0800 (Pacific Standard Time)',
-    'PDT': 'GMT-0700 (Pacific Daylight Time)',
-    'EST': 'GMT-0500 (Eastern Standard Time)',
-    'EDT': 'GMT-0400 (Eastern Daylight Time)',
-    'CST': 'GMT-0600 (Central Standard Time)',
-    'CDT': 'GMT-0500 (Central Daylight Time)',
-    'MST': 'GMT-0700 (Mountain Standard Time)',
-    'MDT': 'GMT-0600 (Mountain Daylight Time)',
-    'HST': 'GMT-1000 (Hawaiian Standard Time)',
-    // european timezones
-    'CET': 'GMT+0100 (Central European Time)',
-    'CEST': 'GMT+0200 (Central European Summer Time)',
-    // japan
-    'JST': 'GMT+0900 (Japan Standard Time)',
-    'JDT': 'GMT+1000 (Japan Daylight Time)',
-  }
   let chunks = datestring.split(" ").filter(x => x !== '');
   console.assert(chunks.length == 6, chunks, "datestring should have 6 chunks: weekday, month, monthday, time, timezone, year");
   let time = chunks[3];
   let timezone = chunks[4];
-  console.assert(timezone in compatibility_timezones, timezone, "timezone should be in compatibility_timezones, from", datestring, compatibility_timezones);
+  console.assert(timezone in COMPATIBILITY_TIMEZONES, timezone, "timezone should be in compatibility_timezones, from", datestring, COMPATIBILITY_TIMEZONES);
   let year = chunks[5];
   let new_chunks = chunks.slice(0, 3);  // first three are the same.
-  new_chunks.push(year, time, compatibility_timezones[timezone]);
+  new_chunks.push(year, time, COMPATIBILITY_TIMEZONES[timezone]);
   return new_chunks.join(" ");
 }
 
@@ -649,10 +649,12 @@ class Link {
       this.display = this.display.slice(window.location.host.length);
       this.display = decodeURI(this.display);
 
-      if (this.display.startsWith("/disc/")) {
+      if (this.display.startsWith("/disc/") && this.display.includes("#")) {
         this.display = this.display.slice("/disc/".length);
+        this.type = 'internal';
+      } else {
+        this.type = 'shortcut';
       }
-      this.type = 'shortcut';
     }
   }
 
@@ -858,6 +860,33 @@ const datetime_format = new Intl.DateTimeFormat('en-us', { month: 'short', day: 
 // datetime format for "search" mode with year, like "Wed, Jan 15 2024, hh:mm:ss" in 24-hour clock
 const datetime_year_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
+// datetime format for "brief" mode, like "Wed Jan 15 hh:mm:ss PST" in 24-hour clock
+const datetime_brief_format = new Intl.DateTimeFormat('en-us', { month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short'});
+
+// the above format with the year added
+const datetime_brief_year_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short'});
+
+
+function renderDatetime(date, mode) {
+  let now = new Date();
+
+  let time_format = timestamp_format;
+  if (mode === 'search') {
+    time_format = datetime_format;
+    if (now.getFullYear() !== new Date(date).getFullYear()) {
+      time_format = datetime_year_format
+    }
+  } else if (mode === "brief") {
+    time_format = datetime_brief_format;
+    if (now.getFullYear() !== new Date(date).getFullYear()) {
+      time_format = datetime_brief_year_format;
+    }
+  }
+  
+  return time_format
+    .format(date).replaceAll(",", "");  // "Wed, Jan 15, hh:mm:ss" -> "Wed Jan 15 hh:mm:ss"
+}
+
 function trimTrailingRenderedBreak(content) {
   if (content.endsWith("<br/>")) {
     content = content.slice(0, -("<br/>".length));
@@ -871,26 +900,13 @@ function trimTrailingRenderedBreak(content) {
 function htmlMsg(item, mode) {
 
   let date = Date.parse(timezoneCompatibility(item.date));
-  let now = new Date();
-
-  let time_format = timestamp_format;
-  if (mode === 'search') {
-    time_format = datetime_format;
-    if (now.getFullYear() !== new Date(date).getFullYear()) {
-      time_format = datetime_year_format
-    }
-  }
   
-  let timestamp_content = time_format.format(date)
-    .replaceAll(",", ""); // "Wed, Jan 15, hh:mm:ss" -> "Wed Jan 15 hh:mm:ss"
+  let timestamp_content = renderDatetime(date, mode);
   let href_id = `/disc/${item.origin}#${item.date}`;
   let msg_timestamp_link = shortcircuitLink(href_id, timestamp_content, 'msg_timestamp');
 
   let line = htmlLine(item.msg);
-  let style_option = "";
-  if (item.origin !== getCurrentNoteUuid()) {
-    style_option = " style='background: #5f193f'";
-  }
+  let style_option = item.origin !== getCurrentNoteUuid() ? " style='background: #5f193f'": "";
 
   let block_content = item.blocks.map(block => htmlMsgBlock(block)).join("");
   block_content = trimTrailingRenderedBreak(block_content);
@@ -912,15 +928,67 @@ function shortcircuitLink(url, text, style_class) {
   return `<a ${style_class_include} onclick="window.history.pushState({}, '', '${url}'); handleRouting(); return false;" href="${url}">${text}</a>`;
 }
 
-function htmlLine(line) {
+function parseRef(ref) {
+  let s = ref.split('#');  // a ref looks like: "uuid#datetime_id" 
+  // EXAMPLE bigmac-js/f726c89e-7473-4079-bd3f-0e7c57b871f9.note#Sun Jun 02 2024 20:45:46 GMT-0700 (Pacific Daylight Time)
+  console.assert(s.length == 2);
+  console.log(s);
+  let [uuid, datetime_id] = s;
+  return {uuid, datetime_id};
+}
+
+async function retrieveMsg(ref) {
+  let url_ref = parseRef(ref);
+  let r = rewrite(await parseFile(url_ref.uuid), url_ref.uuid);
+  let found_msg = r.filter(section => section.title === 'entry')
+    .flatMap(s => s.blocks)
+    .filter(x => x instanceof Msg && x.date === url_ref.datetime_id);
+  return found_msg; // returns a list
+}
+
+function htmlLine(line, storage) {
   if (line instanceof Array) {
     return line.map(x => {
       if (x instanceof Tag) {
         return "<emph class='tag'>" + x.tag + "</emph>";
       }
       if (x instanceof Link) {
-        if (x.type == 'shortcut') {
+        if (x.type === 'shortcut') {
           return shortcircuitLink(x.url, x.display);
+        }
+        if (x.type === 'internal') {
+          let ref = parseRef(x.display);
+          let shorter_datetime = renderDatetime(new Date(ref.datetime_id), 'brief');
+          global.handlers.click = (url) => {
+            window.history.pushState({}, '', url); handleRouting(); return false;
+          }
+          global.handlers.expandRef = async (obj, url) => {
+            console.log(obj);
+            let parent = obj.parentElement;
+            while (! parent.classList.contains('msg')) {
+              parent = parent.parentElement;
+            }
+
+            let found_msg = await retrieveMsg(url);
+            // TODO persist quotes to cache so they work on refresh
+            // TODO UI to remove quotes
+            if (found_msg.length > 0) {
+              console.log(found_msg);
+              if (parent.previousElementSibling.classList.contains('quotes')) {
+                parent.previousElementSibling.innerHTML += htmlMsg(found_msg[0]);
+                // TODO make sure to replace the element with the same id if it exists
+              } else {
+                parent.insertAdjacentHTML('beforebegin', "<div class='quotes'>" + htmlMsg(found_msg[0]) + "</div>");
+              }
+            } else {
+              console.log(`couldn't find ${url_ref.datetime_id} in ${url_ref.uuid}`);
+              // TODO error messaging
+            }
+          };
+          return `<div style="display:inline">
+            <button onclick="return global.handlers.expandRef(this, '${x.display}')">get</button>
+            <a onclick="return global.handlers.click('${x.url}')" href="${x.url}">${shorter_datetime}</a>
+          </div>`;
         }
         return `<a href="${x.url}">${x.display}</a>`;
       }
