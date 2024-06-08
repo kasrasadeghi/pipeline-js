@@ -1366,7 +1366,7 @@ async function gotoSync() {
 }
 
 async function getRemote() {
-  return await cache.updateFile(SYNC_REMOTE_FILE,
+  return await cache.updateFile(SYNC_REMOTE_FILE, state =>
     state === null ? "" : state
   );
 }
