@@ -82,11 +82,11 @@ class FileDB {
       const request = objectStore.get(path);
 
       request.onsuccess = () => {
-        const value = request.result;
-        const updated_content = updater(value.content);
+        const read_result = request.result ? request.result.content : null;
+        const updated_content = updater(read_result);
         const putRequest = objectStore.put({path, content: updated_content});
 
-        putRequest.onsuccess = () => resolve();
+        putRequest.onsuccess = () => resolve(updated_content);
         putRequest.onerror = () => reject(putRequest.error);
       };
 
@@ -1231,31 +1231,21 @@ async function paintDiscFooter(uuid, flatRead) {
 }
 
 async function getMixState() {
-  let mix_state = await cache.readFile(MIX_FILE);
-  if (mix_state === null) {
-    mix_state = "false";
-    await cache.writeFile(MIX_FILE, mix_state);
-  }
-  return mix_state;
+  return await cache.updateFile(MIX_FILE,
+    state === null ? "false" : state
+  );
 }
 
 async function getMenuState() {
-  let state = await cache.readFile(MENU_TOGGLE_FILE);
-  if (state === null) {
-    state = "false";
-    await cache.writeFile(MENU_TOGGLE_FILE, state);
-  }
-  return state;
+  return await cache.updateFile(MENU_TOGGLE_FILE, (state) => 
+    state === null ? "false" : state
+  );
 }
 
 async function toggleMenuState() {
-  let state = await cache.readFile(MENU_TOGGLE_FILE);
-  if (state === null) {
-    state = "false"; // default
-  }
-  state = state === "true" ? "false" : "true";
-  await cache.writeFile(MENU_TOGGLE_FILE, state);
-  return state;
+  return await cache.updateFile(MENU_TOGGLE_FILE, (state) => 
+    (state === null || state === "true") ? "false" : "true"  // flip, default "false"
+  );
 }
 
 async function renderDiscBody(uuid, flatRead) {
@@ -1376,10 +1366,9 @@ async function gotoSync() {
 }
 
 async function getRemote() {
-  if (! (await cache.exists(SYNC_REMOTE_FILE))) {
-    await cache.writeFile(SYNC_REMOTE_FILE, '');
-  }
-  return cache.readFile(SYNC_REMOTE_FILE);
+  return await cache.updateFile(SYNC_REMOTE_FILE,
+    state === null ? "" : state
+  );
 }
 
 async function hasRemote() {
@@ -1416,9 +1405,7 @@ async function getRepos() {
 }
 
 async function renderSync() {
-  if (! (await cache.exists(SYNC_FILE))) {
-    await cache.writeFile(SYNC_FILE, '{}');
-  }
+  await cache.updateFile(SYNC_FILE, c => c === null ? '{}' : c);
 
   let remote_addr = (await cache.readFile(SYNC_REMOTE_FILE)) || '';
 
