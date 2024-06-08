@@ -1231,7 +1231,7 @@ async function paintDiscFooter(uuid, flatRead) {
 }
 
 async function getMixState() {
-  return await cache.updateFile(MIX_FILE,
+  return await cache.updateFile(MIX_FILE, state =>
     state === null ? "false" : state
   );
 }
