@@ -1744,7 +1744,7 @@ function renderSearchPagination(all_messages) {
     const text = urlParams.get('q');
     let page = urlParams.get('page');
     page = (page === null ? 0 : parseInt(page));
-    page = clamp(page + delta, 0, Math.floor(all_messages.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
+    page = clamp(page + delta, /*bottom*/0, /*top*/Math.floor(all_messages.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
     window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=" + page);
     renderSearchMain(all_messages);
   };
