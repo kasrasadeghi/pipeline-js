@@ -605,6 +605,7 @@ function rewriteSection(section, note) {
       }
 
       // gobble trailing newlines
+      new_blocks.back().gobbled_newline = 0;
       while(new_blocks.back().blocks.back() instanceof EmptyLine) {
         new_blocks.back().blocks.pop();
         new_blocks.back().gobbled_newline += 1;
@@ -991,9 +992,13 @@ function unparseMessageBlocks(message) {
 }
 
 function unparseMsg(msg) {
-  // TODO unparsing will be easier if we use the advanced parser
-  let trail = "\n".repeat(msg.gobbled_newline || 0);
-  return ["- " + msg.content, '\n  - Date: ' + msg.date, msg.blocks ? "\n\n" : "", unparseMessageBlocks(msg), trail].join("");
+  if (msg.blocks.length !== 0) {
+    let trail = msg.gobbled_newline ? "\n".repeat(msg.gobbled_newline) : "";
+    return ["- " + msg.content, '\n  - Date: ' + msg.date, "\n\n", unparseMessageBlocks(msg), trail].join("");
+  } else {
+    let trail = msg.gobbled_newline ? "\n".repeat(msg.gobbled_newline) : "";
+    return ["- " + msg.content, '\n  - Date: ' + msg.date, "\n", trail].join("");
+  }  
 }
 
 function unparseBlock(block) {
@@ -1110,6 +1115,7 @@ async function editMessage(item_origin, msg_id) {
     msg.content = `msg: ${new_msg_content}`; // TODO innerText might have newlines, so we need to prevent that by using the submission dealio we have for the main message box
     // i don't know why divs get introduced, that's pretty annoying.
     msg.blocks = parseSection(msg_block_content.innerText.split('\n'));  // innerText is unix newlines, only http request are dos newlines
+    // TODO need to be able to delete a textblock by deleting all of its content
 
     let new_content = unparseContent(page);
     await global_notes.writeFile(item_origin, new_content);
@@ -1117,6 +1123,11 @@ async function editMessage(item_origin, msg_id) {
     msg_content.innerHTML = htmlLine(rewriteLine(new_msg_content));
 
     msg_block_content.innerHTML = htmlMsgBlockContent(msg);
+    if (msg_block_content.innerHTML === '') {
+      msg_block_content.classList.remove('withcontent');
+    } else {
+      msg_block_content.classList.add('withcontent');
+    }
     msg_block_content.contentEditable = false;
 
     // make all edit links visible again
@@ -1162,6 +1173,10 @@ function htmlMsg(item, mode, origin_content) {
   let style_option = item.origin !== getCurrentNoteUuid() ? " style='background: #5f193f'": "";
 
   let block_content = htmlMsgBlockContent(item, origin_content);
+  let has_block_content = '';
+  if (block_content !== '') {
+    has_block_content = 'withcontent';
+  }
 
   let edit_link = '';
   let editable = '';
@@ -1197,7 +1212,7 @@ function htmlMsg(item, mode, origin_content) {
     <div class='msg' id='${item.date}'>
       <div class="msg_menu">${msg_timestamp_link} ${item.origin.split('/')[0]} ${edit_link}</div>
       <div class="msg_content" ${editable} ${style_option}>${line}</div>
-      <div class="msg_blocks" ${editable} onkeydown="return preventDivs(event)">${block_content}</div>
+      <div class="msg_blocks ${has_block_content}" ${editable} onkeydown="return preventDivs(event)">${block_content}</div>
     </div>`
   )
 }

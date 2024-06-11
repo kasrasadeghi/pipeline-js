@@ -361,7 +361,7 @@ blockquote {
   display: inline-block;
 }
 
-.msg_blocks {
+.msg_blocks.withcontent {
   padding: 5px;
   margin-top: 7px;
 }
