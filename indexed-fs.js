@@ -1093,8 +1093,7 @@ async function editMessage(item_origin, msg_id) {
     msg_content.contentEditable = true;
     msg_content.focus();
 
-    let blocks = unparseMessageBlocks(msg).replace(/\n/g, "<br>");
-    msg_block_content.innerHTML = `${blocks}`;
+    msg_block_content.innerHTML = htmlEditableMsgBlockContent(msg);
     msg_block_content.contentEditable = true;
 
     // make all other edit buttons invisible
@@ -1137,6 +1136,10 @@ async function editMessage(item_origin, msg_id) {
   }
 };
 
+function htmlEditableMsgBlockContent(msg) {
+  return unparseMessageBlocks(msg).replace(/\n/g, "<br>");
+}
+
 function htmlMsgBlockContent(msg, origin_content) {
   let block_content = msg.blocks.map(block => htmlMsgBlock(block, origin_content)).join("");
   block_content = trimTrailingRenderedBreak(block_content);
@@ -1168,6 +1171,7 @@ function htmlMsg(item, mode, origin_content) {
   let block_content = htmlMsgBlockContent(item, origin_content);
 
   let edit_link = '';
+  let editable = '';
   if (origin_content !== undefined && item.origin === getCurrentNoteUuid()) {
     if (!checkWellFormed(item.origin, origin_content)) {
       console.warn(item.origin, "should be well-formed");
@@ -1187,6 +1191,9 @@ function htmlMsg(item, mode, origin_content) {
         edit_state = 'submit';
         style_display = 'inline';
         line = item.content.slice("msg: ".length); // removeprefix
+
+        block_content = htmlEditableMsgBlockContent(item);
+        editable = "contenteditable='true'"
       }
 
       edit_link = `<a style="display: ${style_display}" class="edit_msg" onclick="return editMessage('${item.origin}', '${item.date}')" href="javascript:void(0)">${edit_state}</a>`;
@@ -1196,8 +1203,8 @@ function htmlMsg(item, mode, origin_content) {
   return (`
     <div class='msg' id='${item.date}'>
       <div class="msg_menu">${msg_timestamp_link} ${item.origin.split('/')[0]} ${edit_link}</div>
-      <div class="msg_content"${style_option}>${line}</div>
-      <div class="msg_blocks" onkeydown="return preventDivs(event)">${block_content}</div>
+      <div class="msg_content" ${editable} ${style_option}>${line}</div>
+      <div class="msg_blocks" ${editable} onkeydown="return preventDivs(event)">${block_content}</div>
     </div>`
   )
 }
