@@ -360,3 +360,12 @@ blockquote {
   margin-top: 7px;
   display: inline-block;
 }
+
+.msg_blocks {
+  padding: 5px;
+  margin-top: 7px;
+}
+
+p.msgblock {
+  margin: 0;
+}

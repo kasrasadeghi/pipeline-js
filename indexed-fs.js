@@ -611,16 +611,19 @@ function rewriteSection(section, note) {
         new_blocks.back().blocks.push(old_blocks[i]);
         i++;
       }
-      if (new_blocks.back().blocks.length !== 0) {
-        if (new_blocks.back().blocks[0] instanceof EmptyLine) {
-          new_blocks.back().blocks.splice(0, 1); // remove a single element at index 0
-        }
-      }
 
       // gobble trailing newlines
       while(new_blocks.back().blocks.back() instanceof EmptyLine) {
         new_blocks.back().blocks.pop();
         new_blocks.back().gobbled_newline += 1;
+      }
+
+      if (new_blocks.back().blocks.length !== 0) {
+        // remove one prefix EmptyLine when we have blocks
+        if (new_blocks.back().blocks[0] instanceof EmptyLine) {
+          new_blocks.back().blocks.splice(0, 1); // remove a single element at index 0
+          new_blocks.back().block_prefix_newline = 1;
+        }
       }
     }
   }
@@ -988,12 +991,6 @@ function unparseMessageBlocks(message) {
     let acc = [];
     for (const [i, block] of message.blocks.map(unparseBlock).entries()) {
       acc.push(block);
-      if (i < message.blocks.length - 1) {
-        acc.push("\n");
-        if (block !== "") { // Emptylines don't have separation between them, they just count the extra newlines between blocks
-          acc.push("\n");
-        }
-      }
     }
     return acc.join("");
   }
@@ -1002,8 +999,8 @@ function unparseMessageBlocks(message) {
 
 function unparseMsg(msg) {
   // TODO unparsing will be easier if we use the advanced parser
-  let trail = msg.gobbled_newline ? "\n".repeat(msg.gobbled_newline) : (msg.blocks.length === 0 ? "\n" : "");
-  return ["- " + msg.content, '\n  - Date: ' + msg.date, msg.blocks.length !== 0 ? "\n\n" : "", unparseMessageBlocks(msg), trail].join("");
+  let trail = "\n".repeat(msg.gobbled_newline || 0);
+  return ["- " + msg.content, '\n  - Date: ' + msg.date, msg.blocks ? "\n\n" : "", unparseMessageBlocks(msg), trail].join("");
 }
 
 function unparseBlock(block) {
@@ -1120,7 +1117,7 @@ async function editMessage(item_origin, msg_id) {
     let new_msg_content = msg_content.innerText;
     msg.content = `msg: ${new_msg_content}`; // TODO innerText might have newlines, so we need to prevent that by using the submission dealio we have for the main message box
     // i don't know why divs get introduced, that's pretty annoying.
-    msg.blocks = parseSection(msg_block_content.innerText);  // innerText is unix newlines, only http request are dos newlines
+    msg.blocks = parseSection(msg_block_content.innerText.split('\n'));  // innerText is unix newlines, only http request are dos newlines
 
     let new_content = unparseContent(page);
     await global_notes.writeFile(item_origin, new_content);
@@ -1147,8 +1144,8 @@ function htmlMsgBlockContent(msg, origin_content) {
 }
 
 function preventDivs(e) {
-  const is_enter = (e.key === 'Enter');
-  if (! is_enter) {
+  const is_weird = (e.key === 'Enter');
+  if (! is_weird) {
     return;
   }
 
