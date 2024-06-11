@@ -446,12 +446,9 @@ function parseContent(content) {
     }
   }
 
-  console.log('pre intrasection', JSON.stringify(sections, undefined, 2));
-
   for (let S of sections) {
     if (! ['METADATA', 'HTML'].includes(S.title)) {
       S.blocks = parseSection(S.lines);
-      console.log('parsed section', S.title, JSON.stringify(S.blocks, undefined, 2));
     }
   }
   return sections;
@@ -621,12 +618,11 @@ function rewriteSection(section, note) {
         }
       }
     } else {
+      new_blocks.push(old_blocks[i]);
       i++;
     }
   }
   section.blocks = new_blocks;
-
-  console.log('section', JSON.stringify(section, undefined, 2));
 
   return section;
 }
@@ -2335,6 +2331,9 @@ async function routineContent(flatRead) {
           
           let [element] = block;
           return renderRoutineBlockItem(element);
+        }
+        if (block instanceof EmptyLine) {
+          return '';
         }
         return error('unimpl block', block);
       }).join("");
