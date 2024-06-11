@@ -584,8 +584,6 @@ function rewriteSection(section, note) {
     new_blocks.push(rewriteBlock(block, note));
   }
 
-  console.log('before trailing newline', JSON.stringify(new_blocks, undefined, 2));
-
   // track trailing newlines to aid unparsing
   section.trailing_newline = 0;
   while (new_blocks.slice(-1)[0] instanceof EmptyLine) {
@@ -593,18 +591,15 @@ function rewriteSection(section, note) {
     section.trailing_newline += 1;
   }
 
-  console.log('trailing newlines:', section.trailing_newline);
-  console.log('before message gobbling newlines', JSON.stringify(new_blocks, undefined, 2));
-
   let old_blocks = new_blocks;
   new_blocks = [];
   
-  for (let i = 0; i < old_blocks.length; i++) {
+  for (let i = 0; i < old_blocks.length;) {
     const is_msg = (b) => b instanceof Msg;
 
     if (old_blocks[i] instanceof Msg) {
       new_blocks.push(old_blocks[i]);
-      i++;
+      i++; 
 
       // gather blocks
       while (i < old_blocks.length && !is_msg(old_blocks[i])) {
@@ -625,6 +620,8 @@ function rewriteSection(section, note) {
           new_blocks.back().block_prefix_newline = 1;
         }
       }
+    } else {
+      i++;
     }
   }
   section.blocks = new_blocks;
@@ -2275,6 +2272,7 @@ async function gotoRoutine() {
 }
 
 async function routineContent(flatRead) {
+  flatRead = flatRead || await buildFlatRead();
   const local_repo_name = await flatRead.local_repo_name();
   const notes = flatRead.metadata_map;
   const routine_notes = notes.filter(note => note.title === "ROUTINE");
