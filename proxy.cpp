@@ -156,7 +156,7 @@ int main() {
         // Perform the SSL handshake
         int result = 0;
         if ((result = SSL_accept(sslServer)) <= 0) {
-            perror("SSL_accept");
+            ERR_print_errors_fp(stdout);
             std::cerr << "Failed to perform SSL handshake: " << result << std::endl;
             return 1;
         }

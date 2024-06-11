@@ -161,6 +161,15 @@ class FileDB {
   }
 }
 
+// JAVASCRIPT UTIL
+
+// add .back() to arrays
+if (!Array.prototype.back) {
+  Array.prototype.back = function() {
+    return this[this.length - 1];
+  }
+}
+
 // GLOBALS
 
 const global_notes = new FileDB();
@@ -215,7 +224,10 @@ function timezoneCompatibility(datestring) {
     return datestring; // no compatibility needed
   }
   let chunks = datestring.split(" ").filter(x => x !== '');
-  console.assert(chunks.length == 6, chunks, "datestring should have 6 chunks: weekday, month, monthday, time, timezone, year");
+  if (chunks.length !== 6) {
+    console.warn("datestring should have 6 chunks: weekday, month, monthday, time, timezone, year", chunks, datestring);
+    return datestring;
+  }
   let time = chunks[3];
   let timezone = chunks[4];
   console.assert(timezone in COMPATIBILITY_TIMEZONES, timezone, "timezone should be in compatibility_timezones, from", datestring, COMPATIBILITY_TIMEZONES);
@@ -304,6 +316,21 @@ function today() {
 
 // FLAT DATABASE WRAPPER
 
+class Note {
+  uuid;
+  content;
+  // metadata:
+  title;
+  date;
+
+  constructor({uuid, content, title, date}) {
+    this.uuid = uuid;
+    this.content = content;
+    this.title = title;
+    this.date = date;
+  }
+};
+
 async function getNoteMetadataMap(caller) {
   if (caller === undefined) {
     console.log('raw note metadata used');
@@ -329,7 +356,7 @@ async function getNoteMetadataMap(caller) {
     if (metadata.Date === undefined) {
       metadata.Date = `${new Date()}`;
     }
-    return {uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content};
+    return new Note({uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content});
   });
   console.timeEnd('parse metadata');
   return result;
@@ -403,6 +430,7 @@ async function parseFile(filepath) {
 }
 
 function parseContent(content) {
+  console.assert(typeof content === 'string', 'content should be a string', content);
   // EXPL: a page is a list of sections, which each have a title and a list of blocks
   // - a block is a list of nodes
   // - a node can be either a line of type 'str', or a parsed tree
@@ -418,10 +446,12 @@ function parseContent(content) {
     }
   }
 
+  console.log('pre intrasection', JSON.stringify(sections, undefined, 2));
+
   for (let S of sections) {
     if (! ['METADATA', 'HTML'].includes(S.title)) {
       S.blocks = parseSection(S.lines);
-      delete S.lines;
+      console.log('parsed section', S.title, JSON.stringify(S.blocks, undefined, 2));
     }
   }
   return sections;
@@ -431,17 +461,17 @@ function parseSection(lines) {
   let blocks = [];
   for (let L of lines) {
     if (L === '') {
-      blocks.push([])
+      blocks.push(new EmptyLine())
     } else {
       // TODO what?  if there are no blocks or if the last block is a newline, add another one?
-      if (blocks.length === 0
-      //|| blocks.slice(-1).length === 0
-      ) {
-        blocks.push([])
+      if (blocks.length === 0 || blocks.slice(-1)[0] instanceof EmptyLine) {
+        blocks.push([]);
       }
       blocks.slice(-1)[0].push(L)
     }
   }
+  // console.log('block pre tree', blocks);
+  // return blocks;
   return blocks.map(parseTree);
 }
 
@@ -459,6 +489,9 @@ class TreeNode {
 }
 
 function parseTree(block) {
+  if (block instanceof EmptyLine) {
+    return block;
+  }
   let indent_lines = []
   for (let L of block) {
     if (L.startsWith("- ")) {
@@ -547,68 +580,89 @@ function rewriteSection(section, note) {
 
   let new_blocks = [];
   for (let block of section.blocks) {
+    if (block.length === 0) continue;
     new_blocks.push(rewriteBlock(block, note));
   }
 
-  // push blocks that aren't messages onto messages
-  let blocks = new_blocks;
-  new_blocks = [];
-  for (let block of blocks) {
-    let not_msg = !(block instanceof Msg);
-    let prev_back = new_blocks.slice(-1);
-    let prev_is_msg = prev_back.length === 1 && prev_back[0] instanceof Msg;
-    if (not_msg && prev_is_msg) {
-      prev_back[0].blocks.push(block);
-    } else {
-      new_blocks.push(block);
-    }
+  console.log('before trailing newline', JSON.stringify(new_blocks, undefined, 2));
+
+  // track trailing newlines to aid unparsing
+  section.trailing_newline = 0;
+  while (new_blocks.slice(-1)[0] instanceof EmptyLine) {
+    new_blocks.pop();
+    section.trailing_newline += 1;
   }
 
+  console.log('trailing newlines:', section.trailing_newline);
+  console.log('before message gobbling newlines', JSON.stringify(new_blocks, undefined, 2));
+
+  let old_blocks = new_blocks;
+  new_blocks = [];
+  
+  for (let i = 0; i < old_blocks.length; i++) {
+    const is_msg = (b) => b instanceof Msg;
+
+    if (old_blocks[i] instanceof Msg) {
+      new_blocks.push(old_blocks[i]);
+      i++;
+
+      // gather blocks
+      while (i < old_blocks.length && !is_msg(old_blocks[i])) {
+        new_blocks.back().blocks.push(old_blocks[i]);
+        i++;
+      }
+      if (new_blocks.back().blocks.length !== 0) {
+        if (new_blocks.back().blocks[0] instanceof EmptyLine) {
+          new_blocks.back().blocks.splice(0, 1); // remove a single element at index 0
+        }
+      }
+
+      // gobble trailing newlines
+      while(new_blocks.back().blocks.back() instanceof EmptyLine) {
+        new_blocks.back().blocks.pop();
+        new_blocks.back().gobbled_newline += 1;
+      }
+    }
+  }
   section.blocks = new_blocks;
+
+  console.log('section', JSON.stringify(section, undefined, 2));
+
   return section;
-  // return rewriteDiscSection(section, isJournal);
 }
 
-// function rewriteDiscSection(section, isJournal) {
-//   let disc_section = section.title === 'DISCUSSION';
-//   let journal_disc_section = (section.title === 'entry' && isJournal);
-
-//   if (! (disc_section || journal_disc_section)) {
-//     return section;
-//   }
-
-//   let roots = [{roots: 'pre_roots', children: []}];
-//   for (let block of section.blocks) {
-
-//   }
-// }
-
 class Msg {
-  msg;
-  content;
+  msg;  // rewritten and parsed into tags and links
+  content;  // raw string content from the line
   date;
-  origin;
+  origin;  // the note that this message came from
   blocks;
+  gobbled_newline;  // how many newlines came from after this message (and its blocks)
+  msg;
   constructor(properties) {
     console.assert(['content', 'date', 'msg', 'origin'].every(x => Object.keys(properties).includes(x)), properties, 'huh');
     Object.assign(this, properties);
     this.blocks = [];
   }
+
+  toJSON() {
+    return Object.assign({}, this);
+  }
 }
 
-class Newline {
+class EmptyLine {
   constructor() {}
+  toJSON() {
+    return 'EmptyLine{}';
+  }
 }
 
 function rewriteBlock(block, note) {
-  if (block.length === 0) { // newline
-    return new Newline();
-  }
   if (block.length === 1) {
     try {
       // console.log('rewrite block', block);
       let item = block[0];
-      if (item instanceof Object && 'value' in item && item.value.startsWith("msg: ") && item.indent === 0 && item.children.length === 1) {
+      if (item instanceof TreeNode && 'value' in item && item.value.startsWith("msg: ") && item.indent === 0 && item.children.length === 1) {
         let child = item.children[0];
         if (child.value.startsWith("Date: ") && child.indent === 1 && child.children.length === 0) {
           return new Msg({
@@ -782,11 +836,11 @@ function htmlNoteContent(uuid, content) {
   console.assert(content !== null, content, 'content should not be null');
   let page = parseContent(content);
   let rewritten = rewrite(page, uuid);
-  let rendered = rewritten.map(htmlSection).join("");
-  return "<div class='msglist'>" + rendered + "</div>";
+  let rendered = rewritten.map((s, i) => htmlSection(s, i, content)).join("");
+  return "<div class='msglist'>" + rendered + "</div>"; // TODO it might make sense to move this _within_ section rendering
 }
 
-function htmlSection(section, i) {
+function htmlSection(section, i, content) {
   let output = [];
   if (! ('entry' === section.title && i === 0)) {
     output.push(`--- ${section.title} ---`)
@@ -800,18 +854,18 @@ function htmlSection(section, i) {
     return '\n';
   }
 
-  output.push(...section.blocks.map(htmlBlock));
+  output.push(...section.blocks.map(b => htmlBlock(b, content)));
 
   let result = output.join("");
   result = trimTrailingRenderedBreak(result);
   return result;
 }
 
-function htmlMsgBlock(block) {
+function htmlMsgBlock(block, content) {
   if (block instanceof Msg) {
-    return htmlMsg(block);
+    return htmlMsg(block, /*mode*/undefined, content);
   }
-  if (block instanceof Newline) {
+  if (block instanceof EmptyLine) {
     return "<br/>";
   }
   if (block instanceof Array) {
@@ -829,11 +883,11 @@ function htmlMsgBlock(block) {
   return JSON.stringify(block, undefined, 2);
 }
 
-function htmlBlock(block) {
+function htmlBlock(block, content) {
   if (block instanceof Msg) {
-    return htmlMsg(block);
+    return htmlMsg(block, /*mode*/undefined, content);
   }
-  if (block instanceof Newline) {
+  if (block instanceof EmptyLine) {
     return "<br/>";
   }
   if (block instanceof Array) {
@@ -897,7 +951,213 @@ function trimTrailingRenderedBreak(content) {
   return content;
 }
 
-function htmlMsg(item, mode) {
+function unparseContent(page) {
+  let content = [];
+  let first = true;
+  for (let section of page) {
+    let section_content = [];
+    if (! first) {
+      section_content.push(`--- ${section.title} ---`);
+    }
+    first = false;
+    if (['METADATA', 'HTML'].includes(section.title)) {
+      section_content.push(...section.lines);
+      content.push(section_content.join("\n"));
+      continue;
+    }
+    section_content.push(...unparseSectionContent(section));
+
+    let trailing = section.trailing_newline ? "\n".repeat(section.trailing_newline) : "";
+    content.push(section_content.join("") + trailing);
+  }
+  return content.join("");
+}
+
+function unparseSectionContent(section) {
+  let acc = [];
+  for (let block of section.blocks) {
+    let block_content = unparseBlock(block);
+    console.assert(typeof block_content === 'string', block_content, 'block_content should be a string')
+    acc.push(block_content);
+  }
+  return acc;
+}
+
+function unparseMessageBlocks(message) {
+  if (message.blocks.length > 0) {
+    let acc = [];
+    for (const [i, block] of message.blocks.map(unparseBlock).entries()) {
+      acc.push(block);
+      if (i < message.blocks.length - 1) {
+        acc.push("\n");
+        if (block !== "") { // Emptylines don't have separation between them, they just count the extra newlines between blocks
+          acc.push("\n");
+        }
+      }
+    }
+    return acc.join("");
+  }
+  return "";
+}
+
+function unparseMsg(msg) {
+  // TODO unparsing will be easier if we use the advanced parser
+  let trail = msg.gobbled_newline ? "\n".repeat(msg.gobbled_newline) : (msg.blocks.length === 0 ? "\n" : "");
+  return ["- " + msg.content, '\n  - Date: ' + msg.date, msg.blocks.length !== 0 ? "\n\n" : "", unparseMessageBlocks(msg), trail].join("");
+}
+
+function unparseBlock(block) {
+  if (block instanceof Msg) {
+    return unparseMsg(block);
+  }
+  if (block instanceof EmptyLine) {
+    return "\n";
+  }
+  if (block instanceof Array) {
+    return block.map(x => unparseLineContent(x) + "\n").join("");
+  }
+  // throw new Error("failed unparseBlock", block);
+  return ['ERROR'];
+}
+
+function unparseLineContent(l) {
+  if (typeof l === 'string') {
+    return l;
+  }
+  // throw new Error("failed unparseLine", l);
+  return 'ERROR';
+}
+
+async function rewriteCurrentNote() {
+  return rewrite(parseContent(await global_notes.readFile(getCurrentNoteUuid())), getCurrentNoteUuid());
+}
+
+async function checkCurrentWellFormed() {
+  return checkWellFormed(getCurrentNoteUuid(), await global_notes.readFile(getCurrentNoteUuid()));
+}
+
+function checkWellFormed(uuid, content) {
+  let page = parseContent(content);
+  let rewritten = rewrite(page, uuid);
+  console.log('REFERENCE\n', content);
+  console.log('UNPARSED\n', unparseContent(rewritten));
+  return unparseContent(rewritten) === content;
+}
+
+async function editMessage(item_origin, msg_id) {
+  // 1. only allow editing if msg is from local repo and if the page is well-formed
+  //    - a page is well formed if unparse(parse(page)) === page
+  // 2. only allow editing a single message at a time
+  // 3. go from edit to awaiting submit
+  // 4. handle submit
+  //    - parse the page, replace the message, unparse the page and write it out.
+  //    - probably also using updateFile
+
+  // TODO figure out how to use updateFile for this
+
+  // TODO could do split, could do `getLocalRepo()`
+  console.log('edit link button');
+  if (item_origin.split('/')[0] !== getCurrentNoteUuid().split('/')[0]) {
+    console.log('not from local repo');
+    return;
+  }
+
+  let item_origin_content = await global_notes.readFile(item_origin);
+
+  let well_formed = checkWellFormed(item_origin, item_origin_content);
+  if (! well_formed) {
+    console.log('not well formed');
+    return;
+  }
+
+  let parsed = parseContent(item_origin_content);
+  let page = rewrite(parsed, item_origin);
+  let msg = page.filter(section => section.title === 'entry').flatMap(x => x.blocks).find(block => block.date === msg_id);
+  console.assert(msg !== undefined, 'could not find message with id', msg_id, 'in', page);
+
+  // TODO handle syntax coloring and highlighting by maybe replacing the insides
+
+  // "https://[ip]" + "/disc/[uuid]" + "?editmsg=[datetime_id]"
+  let new_url = window.location.origin + window.location.pathname;
+  let msg_element = document.getElementById(msg_id);
+  let edit_msg = msg_element.getElementsByClassName('edit_msg')[0];
+  let msg_content = msg_element.getElementsByClassName('msg_content')[0];
+  let msg_block_content = msg_element.getElementsByClassName('msg_blocks')[0];
+  console.log(edit_msg);
+  if (edit_msg.innerText === 'edit') {
+    new_url += `?editmsg=${msg_id}`;
+    window.history.pushState({}, '', new_url);
+    edit_msg.innerText = 'submit';
+
+    // instead of this, we could just leave the content as-is, and react to keyboard and clicking events, onchange() or onkeypress() or something.
+    // actually no, we'd still need to re-render the content because we need to undo the stuff _after_ rewrite, like shortening links.
+    msg_content.innerHTML = msg.content.slice("msg: ".length); // removeprefix
+
+    msg_content.contentEditable = true;
+    msg_content.focus();
+
+    let blocks = unparseMessageBlocks(msg).replace(/\n/g, "<br>");
+    msg_block_content.innerHTML = `${blocks}`;
+    msg_block_content.contentEditable = true;
+
+    // make all other edit buttons invisible
+    let all_edit_links = document.getElementsByClassName('edit_msg');
+    for (let edit_link of all_edit_links) {
+      if (edit_link === edit_msg) {
+        continue;
+      }
+      edit_link.style.display = 'none';
+    }
+
+    return false;
+  } else {
+    // handle submitting
+    window.history.pushState({}, '', new_url);
+    edit_msg.innerText = 'edit';
+    msg_content.contentEditable = false;
+
+    // modify message
+    let new_msg_content = msg_content.innerText;
+    msg.content = `msg: ${new_msg_content}`; // TODO innerText might have newlines, so we need to prevent that by using the submission dealio we have for the main message box
+    // i don't know why divs get introduced, that's pretty annoying.
+    msg.blocks = parseSection(msg_block_content.innerText);  // innerText is unix newlines, only http request are dos newlines
+
+    let new_content = unparseContent(page);
+    await global_notes.writeFile(item_origin, new_content);
+    console.log('rendering inner html from submitted individual message edit', msg_content, htmlLine(msg_content.innerHTML));
+    msg_content.innerHTML = htmlLine(rewriteLine(new_msg_content));
+
+    msg_block_content.innerHTML = htmlMsgBlockContent(msg);
+    msg_block_content.contentEditable = false;
+
+    // make all edit links visible again
+    let all_edit_links = document.getElementsByClassName('edit_msg');
+    for (let edit_link of all_edit_links) {
+      edit_link.style.display = 'inline';
+    }
+
+    return false;
+  }
+};
+
+function htmlMsgBlockContent(msg, origin_content) {
+  let block_content = msg.blocks.map(block => htmlMsgBlock(block, origin_content)).join("");
+  block_content = trimTrailingRenderedBreak(block_content);
+  return block_content;
+}
+
+function preventDivs(e) {
+  const is_enter = (e.key === 'Enter');
+  if (! is_enter) {
+    return;
+  }
+
+  // insert newline
+  document.execCommand('insertHTML', false, '<br><br>');
+  return false;
+}
+
+function htmlMsg(item, mode, origin_content) {
 
   let date = Date.parse(timezoneCompatibility(item.date));
   
@@ -908,15 +1168,40 @@ function htmlMsg(item, mode) {
   let line = htmlLine(item.msg);
   let style_option = item.origin !== getCurrentNoteUuid() ? " style='background: #5f193f'": "";
 
-  let block_content = item.blocks.map(block => htmlMsgBlock(block)).join("");
-  block_content = trimTrailingRenderedBreak(block_content);
+  let block_content = htmlMsgBlockContent(item, origin_content);
+
+  let edit_link = '';
+  if (origin_content !== undefined && item.origin === getCurrentNoteUuid()) {
+    if (!checkWellFormed(item.origin, origin_content)) {
+      console.warn(item.origin, "should be well-formed");
+    } else {
+      // get 'editmsg' query param
+      let url = new URL(window.location.href);
+      let editmsg = url.searchParams.get('editmsg');
+      
+      // if the query param exists, only render submit for the one we're editing, make the rest invisible
+      let style_display = 'inline';
+      if (editmsg !== null) {
+        style_display = 'none';
+      }
+
+      let edit_state = 'edit';
+      if (editmsg === item.date) {
+        edit_state = 'submit';
+        style_display = 'inline';
+        line = item.content.slice("msg: ".length); // removeprefix
+      }
+
+      edit_link = `<a style="display: ${style_display}" class="edit_msg" onclick="return editMessage('${item.origin}', '${item.date}')" href="javascript:void(0)">${edit_state}</a>`;
+    }
+  }
 
   return (`
     <div class='msg' id='${item.date}'>
-      <div class="msg_menu">${msg_timestamp_link} ${item.origin.split('/')[0]}</div>
+      <div class="msg_menu">${msg_timestamp_link} ${item.origin.split('/')[0]} ${edit_link}</div>
       <div class="msg_content"${style_option}>${line}</div>
-    </div>
-    ${block_content}`
+      <div class="msg_blocks" onkeydown="return preventDivs(event)">${block_content}</div>
+    </div>`
   )
 }
 
@@ -946,7 +1231,7 @@ async function retrieveMsg(ref) {
   return found_msg; // returns a list
 }
 
-function htmlLine(line, storage) {
+function htmlLine(line) {
   if (line instanceof Array) {
     return line.map(x => {
       if (x instanceof Tag) {
@@ -995,6 +1280,8 @@ function htmlLine(line, storage) {
       return x;
     }).join("");
   }
+
+  // TODO actually render these lines by parsing them.  for some reason they're not parsed.
   console.log('huh', line);
   return line;
 }
@@ -1092,8 +1379,9 @@ async function renderDiscMixedBody(uuid, flatRead) {
   if (page === null) {
     return `couldn't find file '${uuid}'`;
   }
-  
-  let rendered = page.map(htmlSection).join("\n");
+
+  const content = flatRead.get_note(uuid).content;  
+  let rendered = page.map((s, i) => htmlSection(s, i, content)).join("\n");
   return "<div class='msglist'>" + rendered + "</div>";
 }
 
@@ -1114,6 +1402,9 @@ async function paintDiscRoutine(flatRead) {
 
 async function paintDiscFooter(uuid, flatRead) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
+  setTimeout(() => {
+    document.getElementById('well_formed_display').innerHTML = checkWellFormed(uuid, flatRead.get_note(uuid).content) ? 'well-formed' : 'not well-formed';
+  }, 100);
 
   global.handlers = {};
 
@@ -1226,7 +1517,8 @@ async function paintDiscFooter(uuid, flatRead) {
       <button class='menu-button' onclick="return global.handlers.toggleMenu()">${lookupIcon('routine')}</button>
       ${mix_button}
     </div>
-    <div id='state_display'></div>`;
+    <div id='state_display'></div>
+    <div id='well_formed_display'></div>`;
   await paintDiscRoutine(flatRead);
 }
 
@@ -1288,18 +1580,18 @@ async function renderEdit(uuid) {
   if (content === null) {
     return `couldn't find file '${uuid}'`;
   }
-  const submitEdit = async () => {
+  global.handlers.submitEdit = async () => {
     let textarea = document.getElementsByTagName('textarea')[0];
-    let content = textarea.value.split("\r\n").join("\n");  // dos2unix because textarea.value is dos by default
+    let content = textarea.value;  // textareas are not dos newlined, http requests are.  i think?
     // TODO consider using .replace instead of .split and .join
     await global_notes.writeFile(uuid, content);
     gotoDisc(uuid);
   };
-  global.handlers = {submitEdit};
-  // TODO if coming frmo routine, we might want to go back to where we came from, rather than going to the routine disc.
+  // TODO if coming from routine, we might want to go back to where we came from, rather than going to the routine disc.
   // - TEMP (lol) adding a JRNL button to go to the journal, which is usually where we need to go back to.
   return [
-    `<textarea class='editor_textarea'>` + content + "</textarea>",
+    // you need a newline after the start textarea tag, otherwise empty first lines are eaten and lost on submit.
+    `<textarea class='editor_textarea'>\n` + content + "</textarea>",
     `<button class='menu-button' onclick="global.handlers.submitEdit()">${lookupIcon('submit')}</button>
      <button class='menu-button' onclick="gotoDisc('${uuid}')">${lookupIcon('back')}</button>
      <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>

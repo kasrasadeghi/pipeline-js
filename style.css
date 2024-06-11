@@ -347,3 +347,16 @@ blockquote {
   padding: 5px;
   min-width: -webkit-fill-available;
 }
+
+.msg_blocks {
+  width: -webkit-fill-available;
+}
+
+/* msg blocks when editable */
+.msg_blocks[contenteditable="true"] {
+  background: var(--input_background_color);
+  border-radius: 5px;
+  padding: 5px;
+  margin-top: 7px;
+  display: inline-block;
+}
