@@ -399,7 +399,7 @@ class FlatRead { // a single "read" operation for the flat note database.
   }
 
   get_note(uuid) {
-    return this.metadata_map.find(note => note.uuid === uuid);
+    return this.metadata_map.find(note => note.uuid === uuid) || null;
   }
 
   rewrite(uuid) {
@@ -1430,6 +1430,9 @@ async function paintDiscRoutine(flatRead) {
 async function paintDiscFooter(uuid, flatRead) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
   setTimeout(() => {
+    if (flatRead.get_note(uuid) === null) {
+      return;
+    }
     document.getElementById('well_formed_display').innerHTML = checkWellFormed(uuid, flatRead.get_note(uuid).content) ? 'well-formed' : 'not well-formed';
   }, 100);
 
@@ -1475,11 +1478,27 @@ async function paintDiscFooter(uuid, flatRead) {
 
       let msg_input = document.getElementById('msg_input');
       let msg = msg_input.innerText;
+      let current_uuid = getCurrentNoteUuid();
       if (msg.trim().length > 0) {
         console.log('msg', msg);
         msg_input.innerText = '';
 
-        await global_notes.updateFile(uuid, (content) => {
+
+        let flatRead = await buildFlatRead();
+        let page = flatRead.rewrite(current_uuid);
+        
+        let is_journal = pageIsJournal(page);
+
+        // if we're in a journal and we're not on the current one, redirect to the current journal
+        if (is_journal) {
+          let today_uuid = await getJournalUUID(flatRead);
+          if (current_uuid !== today_uuid) {
+            current_uuid = today_uuid;
+            window.history.pushState({}, "", `/disc/${current_uuid}`);
+          }
+        }
+
+        await global_notes.updateFile(current_uuid, (content) => {
           let lines = content.split("\n");
           const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
           const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
@@ -1490,7 +1509,7 @@ async function paintDiscFooter(uuid, flatRead) {
           return new_content + metadata;
         });
       }
-      await paintDisc(uuid, 'only main');
+      await paintDisc(current_uuid, 'only main');
       await paintDiscRoutine();
 
       let repos = await getRepos();
@@ -2404,8 +2423,8 @@ async function getTagsFromMixedNote(uuid, flatRead) {
 
 const cache = new FileDB("pipeline-db-cache", "cache");
 
-async function gotoJournal() {
-  let flatRead = await buildFlatRead();
+async function getJournalUUID(flatRead) {
+  flatRead = flatRead || await buildFlatRead();
   let notes = flatRead.getNotesWithTitle(today(), await flatRead.local_repo_name());
   if (notes.length === 0) {
     let uuid = await newJournal(today());
@@ -2413,7 +2432,13 @@ async function gotoJournal() {
     flatRead = await buildFlatRead();  // TODO maybe this is a case where updating the cache is okay.
     // TODO maybe we only want to do a full update of the cache on sync, hmm.  nah, it seems like it should be on every database operation, for _consistency_'s (ACID) sake.
   }
-  await gotoDisc(notes[0], flatRead);
+  return notes[0];
+}
+
+async function gotoJournal() {
+  let flatRead = await buildFlatRead();
+  let uuid = await getJournalUUID(flatRead);
+  await gotoDisc(uuid, flatRead);
 }
 
 window.addEventListener("popstate", (event) => {
