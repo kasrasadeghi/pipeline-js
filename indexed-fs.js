@@ -859,6 +859,9 @@ function htmlSection(section, i, content) {
 }
 
 function htmlMsgBlock(block, content) {
+  if (block instanceof Deleted) {
+    return '';
+  }
   if (block instanceof Msg) {
     return htmlMsg(block, /*mode*/undefined, content);
   }
@@ -992,7 +995,10 @@ function unparseMessageBlocks(message) {
 }
 
 function unparseMsg(msg) {
-  if (msg.blocks.length !== 0) {
+  if (msg.blocks.length === 1 && msg.blocks[0] instanceof Deleted) {
+    let trail = msg.gobbled_newline ? "\n".repeat(msg.gobbled_newline) : "";
+    return ["- " + msg.content, '\n  - Date: ' + msg.date, "\n", trail].join("");
+  } else if (msg.blocks.length !== 0) {
     let trail = msg.gobbled_newline ? "\n".repeat(msg.gobbled_newline) : "";
     return ["- " + msg.content, '\n  - Date: ' + msg.date, "\n\n", unparseMessageBlocks(msg), trail].join("");
   } else {
@@ -1037,6 +1043,11 @@ function checkWellFormed(uuid, content) {
   console.log('REFERENCE\n', content);
   console.log('UNPARSED\n', unparseContent(rewritten));
   return unparseContent(rewritten) === content;
+}
+
+// used for when a text block is deleted
+class Deleted {
+  constructor() {}
 }
 
 async function editMessage(item_origin, msg_id) {
@@ -1114,7 +1125,11 @@ async function editMessage(item_origin, msg_id) {
     let new_msg_content = msg_content.innerText;
     msg.content = `msg: ${new_msg_content}`; // TODO innerText might have newlines, so we need to prevent that by using the submission dealio we have for the main message box
     // i don't know why divs get introduced, that's pretty annoying.
-    msg.blocks = parseSection(msg_block_content.innerText.split('\n'));  // innerText is unix newlines, only http request are dos newlines
+    if (msg_block_content.innerText.trim() === '') {
+      msg.blocks = [new Deleted()];
+    } else {
+      msg.blocks = parseSection(msg_block_content.innerText.split('\n'));  // innerText is unix newlines, only http request are dos newlines
+    }
     // TODO need to be able to delete a textblock by deleting all of its content
 
     let new_content = unparseContent(page);
