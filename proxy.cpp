@@ -158,7 +158,7 @@ int main() {
         if ((result = SSL_accept(sslServer)) <= 0) {
             ERR_print_errors_fp(stdout);
             std::cerr << "Failed to perform SSL handshake: " << result << std::endl;
-            return 1;
+            continue;  // this is not a fatal error, just go next
         }
 
         // SSL connection established with client.
