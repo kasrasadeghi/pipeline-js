@@ -67,6 +67,8 @@ input[type=checkbox] { width: 18px; height: 18px; margin: 1px 3px 1px 3px; paddi
 .msg_timestamp { border-radius: 18px; color: var(--msg_timestamp_color); font-family: var(--time-font); }
 .msg_menu { white-space: nowrap; }
 .msg_content {
+  display: inline;
+  overflow-wrap: anywhere;
   padding: 7px 12px 8px 12px;
   border-radius: 18px;
   background: var(--msg_color); color: rgb(250, 250, 250);
@@ -78,7 +80,7 @@ pre { font-family: Courier; margin: 0px; color: var(--base_text_color); }
 .selected > .msg_menu > .msg_timestamp { color: #ddd; }
 
 /* tags */
-emph.tag { color: var(--tag_color); font-weight: 500; }
+emph.tag { color: var(--tag_color); font-weight: 500; display: inline; }
 emph.cmd { color: var(--cmd_color); }
 
 /* note title */
