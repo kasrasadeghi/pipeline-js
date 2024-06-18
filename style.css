@@ -371,3 +371,46 @@ blockquote {
 p.msgblock {
   margin: 0;
 }
+
+.calendar.week {
+  border-radius: 10px;
+  border: 2px solid var(--header_color);
+  margin-top: 20px;
+}
+
+.weekdays { 
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.calendar.links {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  margin: 5px;
+}
+
+.calendar.day {
+  flex: 1;
+  min-height: 60px;
+  border-radius: 5px;
+  margin: 2px;
+}
+
+.calendar.notelist {
+  padding-inline-start: 15px;
+}
+
+.calendar.note {
+  margin-left: 20px;
+}
+
+.calendar.week-header {
+  display: flex;
+  justify-content: space-between;
+  margin-left: 5px;
+  margin-right: 5px;
+}

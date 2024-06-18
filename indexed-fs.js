@@ -319,15 +319,16 @@ function today() {
 class Note {
   uuid;
   content;
-  // metadata:
+  metadata;
   title;
   date;
 
-  constructor({uuid, content, title, date}) {
+  constructor({uuid, content, title, date, metadata}) {
     this.uuid = uuid;
     this.content = content;
     this.title = title;
     this.date = date;
+    this.metadata = metadata;
   }
 };
 
@@ -356,7 +357,7 @@ async function getNoteMetadataMap(caller) {
     if (metadata.Date === undefined) {
       metadata.Date = `${new Date()}`;
     }
-    return new Note({uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content});
+    return new Note({uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content, metadata});
   });
   console.timeEnd('parse metadata');
   return result;
@@ -905,11 +906,20 @@ function htmlBlock(block, content) {
   return JSON.stringify(block, undefined, 2);
 }
 
+// calendar format, just the weekday
+const weekday_format = new Intl.DateTimeFormat('en-us', { weekday: 'short', timeZone: 'UTC' });
+
+// calendar header format, just the month and year
+const calendar_header_format = new Intl.DateTimeFormat('en-us', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+
 // date timestamp, like hh:mm:ss in 24-hour clock
 const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
 // datetime format for "search" mode, like "Wed, Jan 15, hh:mm:ss" in 24-hour clock
 const datetime_format = new Intl.DateTimeFormat('en-us', { month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
+// utc format
+const utc_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'UTC' });
 
 // datetime format for "search" mode with year, like "Wed, Jan 15 2024, hh:mm:ss" in 24-hour clock
 const datetime_year_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
@@ -1653,15 +1663,191 @@ async function gotoList() {
   painted.main.scrollTop = 0;
 }
 
+const date_into_ymd = (date) => {
+  let day = `${date.getDate()}`.padStart(2, '0');
+  let month = `${date.getMonth() + 1}`.padStart(2, '0');
+  let year = date.getFullYear();
+  let key = `${year}-${month}-${day}`;
+  return key;
+};
+
+const utcdate_into_ymd = (date) => {
+  let day = `${date.getUTCDate()}`.padStart(2, '0');
+  let month = `${date.getUTCMonth() + 1}`.padStart(2, '0');
+  let year = date.getUTCFullYear();
+  let key = `${year}-${month}-${day}`;
+  return key;
+};
+
+const utcdate_to_weekday = (date) => {
+  let day_of_week = date.getUTCDay(); // because days parsed from yyyy-mm-dd format will be in utc
+  return day_of_week;
+}
+
+const compute_seasonal_color = (date_obj) => {
+  let color = "black";
+  let month = date_obj.getUTCMonth();
+
+  const make = (r, g, b) => {  // each is a pair of [base, random factor]
+    return {
+      r: r[0] + Math.random() * r[1], 
+      g: g[0] + Math.random() * g[1], 
+      b: b[0] + Math.random() * b[1],
+    };
+  }
+
+  let offset = (month % 3) * 30 + date_obj.getDate();
+
+  let winter = make([70, offset], [70, offset], [160, 55]); // blue-purple
+  let spring = make([170, 40], [70, 25], [100, 55]);  // pink
+  let summer = make([50, 70], [150, 40], [50, 70]);  // green
+  let fall = make([90 + offset, 50], [120, 50], [30, 10]);  // red-orange-yellow-green
+
+  if (0 <= month && month < 3) {
+    // blue-ish
+    color = "rgb(" + winter.r + ", " + winter.g + ", " + winter.b + ")";
+  } else if (3 <= month && month < 6) {
+    // pink-ish
+    color = "rgb(" + spring.r + ", " + spring.g + ", " + spring.b + ")";
+  } else if (6 <= month && month < 9) {
+    // green-ish
+    color = "rgb(" + summer.r + ", " + summer.g + ", " + summer.b + ")";
+  } else { // 9 <= month && month < 12
+    // orange-ish
+    color = "rgb(" + fall.r + ", " + fall.g + ", " + fall.b + ")";
+  }
+  return color;
+}
+
 async function renderList(flatRead) {
   flatRead = flatRead || await buildFlatRead();
+
+  // calendar view
+
+  // draw boxes in a 7 wide grid like a calendar
+  // each box is a day
+  // each day has a number of notes
+
+  // non-journal notes might be a bit more complicated, as they might have notes on separate days
+
+  // gather notes to days
+  let notes_by_day = flatRead.metadata_map.reduce((acc, note) => {
+    let date = new Date(timezoneCompatibility(note.date));
+    let key = date_into_ymd(date);
+    if (acc[key] === undefined) {
+      acc[key] = [];
+    }
+    acc[key].push(note);
+    return acc;
+  }, {});
+
+  let days = Object.entries(notes_by_day).sort();
+
+  if (days.length > 0) {
+    let last = days[days.length - 1];
+    let first = days[0];
+    let first_date = new Date(first[0]);
+    let last_date = new Date(last[0]);
+
+    // put [] in days that have no notes between first and last
+    
+    while (first_date < last_date) {
+      let key = utcdate_into_ymd(first_date);
+      if (notes_by_day[key] === undefined) {
+        notes_by_day[key] = [];  // populate empty days with empty lists
+      }
+      first_date.setDate(first_date.getDate() + 1); // increment days, even looping over months and years.  thanks javascript
+    }
+
+    last_date = new Date(last[0]);
+    while (true) {
+      last_date.setDate(last_date.getDate() + 1);  // go forward to the last saturday
+      let key = utcdate_into_ymd(last_date);
+      if (notes_by_day[key] === undefined) {
+        notes_by_day[key] = [];  // populate empty days with empty lists
+      }
+      if (utcdate_to_weekday(last_date) === 6) {
+        break;
+      }
+    }
+
+    first_date = new Date(first[0]);
+    while (true) {
+      first_date.setDate(first_date.getDate() - 1);  // go back to the first sunday
+      let key = utcdate_into_ymd(first_date);
+      if (notes_by_day[key] === undefined) {
+        notes_by_day[key] = [];  // populate empty days with empty lists
+      }
+      if (utcdate_to_weekday(first_date) === 0) {
+        break;
+      }
+    }
+  }
+
+  let local_repo_name = await flatRead.local_repo_name();
+
+  let grid = Object.entries(notes_by_day).sort().reverse().map(([date, notes]) => {
+    let date_obj = new Date(date);
+    let color = compute_seasonal_color(date_obj);
+    let weekday_name = weekday_format.format(date_obj);
+    return {date, notes, color, weekday_name};
+  });
+
+  // split into chunks of 7
+  
+  let acc = [];
+  const week_length = 7;
+  for (let i = 0; i < grid.length; i += week_length) {
+    acc.push(grid.slice(i, i + week_length));
+  }
+
+  let weeks = acc
+    // .slice(0, 1)
+    .map((week) => {
+      let year_months_in_week = {};
+      let week_notes = [];
+      let days = week.map(({date, notes, color, weekday_name}) => {
+        let date_obj = new Date(date);
+        year_months_in_week[calendar_header_format.format(date_obj)] = true;
+        const is_journal = note => note.metadata.Tags && note.metadata.Tags.includes('Journal');
+        let journals = notes.filter(n => is_journal(n));
+        let not_journals = notes.filter(n => !is_journal(n));
+        if (not_journals.length > 0) {
+          week_notes.push({date, notes: not_journals});
+        }
+        let link = `<div class='calendar links'>${weekday_name}</div>`;
+        if (journals.length > 0) {
+          let has_local_journal = journals.some(n => n.uuid.startsWith(local_repo_name));
+          let note = (has_local_journal) ? journals.find(n => n.uuid.startsWith(local_repo_name)) : journals[0];
+
+          let title = note.title;
+          if (note.title.split(" ").length === 3) {
+            // January 12th, 2024 -> 12
+            let [month, day, year] = note.title.split(" ");
+            
+            title = day.slice(0, day.length - 3);
+          }
+          
+          let journal_link = `<a href="/disc/${note.uuid}">${title}</a>`
+          link = `<div class='calendar links'>${weekday_name} ${journal_link}</div>`;
+        }
+        return `<div class='calendar day' style="background-color: ${color}">${link}</div>`;
+      });
+      const notelist = (notes) => notes.map(note => `<li class='calendar note'><a href="/disc/${note.uuid}">${note.title}</a></li>`).join("");
+      let all_notes = week_notes.map(({date, notes}) => `<ul class="calendar notelist">${date}` + notelist(notes) + `</ul>`).join("");
+      let notes =`<div class='calendar noteset'>` + all_notes + "</div>";
+
+      let year_months = Object.keys(year_months_in_week).reverse().map(x => `<div class='calendar year-month'>${x}</div>`);
+      return `<div class='calendar week'><div class='calendar week-header'>${year_months.join(" ")}</div><div class='weekdays'>` + days.reverse().join("") + `</div>${notes}</div>`;
+    }).join("");
+  
+
   let rows = flatRead.metadata_map.sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
   let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
   return [
-    table,
+    weeks + table,
     `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
-    <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>
-    `
+    <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>`
   ];
 }
 
