@@ -1501,7 +1501,8 @@ async function paintDiscFooter(uuid, flatRead) {
 
         // if we're in a journal and we're not on the current one, redirect to the current journal
         if (is_journal) {
-          let today_uuid = await getJournalUUID(flatRead);
+          let today_uuid = undefined;
+          [today_uuid, flatRead] = await getJournalUUID(flatRead);
           if (current_uuid !== today_uuid) {
             current_uuid = today_uuid;
             window.history.pushState({}, "", `/disc/${current_uuid}`);
@@ -2618,12 +2619,13 @@ async function getJournalUUID(flatRead) {
     flatRead = await buildFlatRead();  // TODO maybe this is a case where updating the cache is okay.
     // TODO maybe we only want to do a full update of the cache on sync, hmm.  nah, it seems like it should be on every database operation, for _consistency_'s (ACID) sake.
   }
-  return notes[0];
+  return [notes[0], flatRead];
 }
 
 async function gotoJournal() {
   let flatRead = await buildFlatRead();
-  let uuid = await getJournalUUID(flatRead);
+  let uuid = undefined;
+  [uuid, flatRead] = await getJournalUUID(flatRead);
   await gotoDisc(uuid, flatRead);
 }
 
