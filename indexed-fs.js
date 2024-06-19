@@ -1454,14 +1454,12 @@ async function paintDiscFooter(uuid, flatRead) {
   if (has_remote) {
     global.handlers.mix = async () => {
       // toggle mix state in the file
-      let mix_state = await getMixState();
-      mix_state = mix_state === "true" ? "false" : "true"
-      await cache.writeFile(MIX_FILE, mix_state);
+      let mix_state = await toggleBooleanFile(MIX_FILE, "false");
       await paintDisc(uuid, 'only main');
       document.getElementById('mix-button').innerHTML = lookupIcon(mix_state === "true" ? 'focus' : 'mix');
       return false;
     };
-    mix_state = await getMixState();
+    mix_state = await readBooleanFile(MIX_FILE, "false");
     mix_button_value = lookupIcon(mix_state === 'true' ? 'focus' :'mix');
     mix_button = `<button id="mix-button" class='menu-button' onclick="return global.handlers.mix(event)">${mix_button_value}</button>`;
   }
@@ -1552,11 +1550,11 @@ async function paintDiscFooter(uuid, flatRead) {
   }
 
   global.handlers.toggleMenu = async () => {
-    let menu_state = await toggleMenuState();
+    let menu_state = await toggleBooleanFile(MENU_TOGGLE_FILE, "false");
     document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "none" : "flex");
   }
 
-  let menu_state = await getMenuState();
+  let menu_state = await readBooleanFile(MENU_TOGGLE_FILE, "false");
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "none" : "flex");
 
   let footer = document.getElementsByTagName('footer')[0];
@@ -1579,26 +1577,8 @@ async function paintDiscFooter(uuid, flatRead) {
   await paintDiscRoutine(flatRead);
 }
 
-async function getMixState() {
-  return await cache.updateFile(MIX_FILE, state =>
-    state === null ? "false" : state
-  );
-}
-
-async function getMenuState() {
-  return await cache.updateFile(MENU_TOGGLE_FILE, (state) => 
-    state === null ? "false" : state
-  );
-}
-
-async function toggleMenuState() {
-  return await cache.updateFile(MENU_TOGGLE_FILE, (state) => 
-    (state === null || state === "true") ? "false" : "true"  // flip, default "false"
-  );
-}
-
 async function renderDiscBody(uuid, flatRead) {
-  let mix_state = await getMixState();
+  let mix_state = await readBooleanFile(MIX_FILE, "false");
   console.log('mix state', mix_state);
   let rendered_note = '';
   if (mix_state === "true") {
@@ -1807,7 +1787,7 @@ async function renderList(flatRead) {
     .map((week) => {
       let year_months_in_week = {};
       let week_notes = [];
-      let days = week.map(({date, notes, color, weekday_name}) => {
+      let days = week.reverse().map(({date, notes, color, weekday_name}) => {
         let date_obj = new Date(date);
         year_months_in_week[calendar_header_format.format(date_obj)] = true;
         const is_journal = note => note.metadata.Tags && note.metadata.Tags.includes('Journal');
@@ -1838,8 +1818,8 @@ async function renderList(flatRead) {
       let all_notes = week_notes.map(({date, notes}) => `<ul class="calendar notelist">${date}` + notelist(notes) + `</ul>`).join("");
       let notes =`<div class='calendar noteset'>` + all_notes + "</div>";
 
-      let year_months = Object.keys(year_months_in_week).reverse().map(x => `<div class='calendar year-month'>${x}</div>`);
-      return `<div class='calendar week'><div class='calendar week-header'>${year_months.join(" ")}</div><div class='weekdays'>` + days.reverse().join("") + `</div>${notes}</div>`;
+      let year_months = Object.keys(year_months_in_week).map(x => `<div class='calendar year-month'>${x}</div>`);
+      return `<div class='calendar week'><div class='calendar week-header'>${year_months.join(" ")}</div><div class='weekdays'>` + days.join("") + `</div>${notes}</div>`;
     }).join("");
   
 
@@ -2357,6 +2337,39 @@ function TextAction({id, label, value, action}) {
   return (
     `<input onkeydown="return handleTextAction(event, '${id}', ${action})" type='text' id='${id}' value="${value}"></input>
     <button class='menu-button' onclick="return handleTextAction(true, '${id}', ${action})">${label}</button>`
+  );
+}
+
+// COMPONENT TOGGLE-BUTTON
+
+async function toggleBooleanFile(file, default_value) {
+  return await cache.updateFile(file, (state) => {
+    if (state === null) {
+      state = default_value;
+    }
+    return state === "true" ? "false" : "true";
+  });
+}
+
+async function readBooleanFile(file, default_value) {
+  return await cache.updateFile(file, (state) => {
+    if (state === null) {
+      state = default_value;
+    }
+    return state;
+  });
+}
+
+async function handleToggle(event, id, file, action, default_value) {
+  await toggleBooleanFile(file, default_value);
+  // await action();
+  // TODO add or remove 'enabled' class to indicate that the toggle is on or off
+  return false;
+}
+
+function ToggleButton({id, label, action, default_value}) {
+  return (
+    `<button id="${id}" onclick="return handleToggle(event, '${id}', '${file}', ${action}, '${default_value}')" class='menu-button'>${label}</button>`
   );
 }
 
