@@ -1327,6 +1327,7 @@ function htmlLine(line) {
 
 const MIX_FILE = 'disc mix state';
 const MENU_TOGGLE_FILE = 'disc menu toggle state';
+const LIST_NOTES_TOGGLE_FILE = 'list notes toggle state';
 
 async function buildFlatRead() {
   console.log('building flat read');
@@ -1782,6 +1783,8 @@ async function renderList(flatRead) {
     acc.push(grid.slice(i, i + week_length));
   }
 
+  let render_notes = await readBooleanFile(LIST_NOTES_TOGGLE_FILE, "false");
+
   let weeks = acc
     // .slice(0, 1)
     .map((week) => {
@@ -1814,9 +1817,12 @@ async function renderList(flatRead) {
         }
         return `<div class='calendar day' style="background-color: ${color}">${link}</div>`;
       });
-      const notelist = (notes) => notes.map(note => `<li class='calendar note'><a href="/disc/${note.uuid}">${note.title}</a></li>`).join("");
-      let all_notes = week_notes.map(({date, notes}) => `<ul class="calendar notelist">${date}` + notelist(notes) + `</ul>`).join("");
-      let notes =`<div class='calendar noteset'>` + all_notes + "</div>";
+      let notes = "";
+      if (render_notes === "true") {
+        const notelist = (notes) => notes.map(note => `<li class='calendar note'><a href="/disc/${note.uuid}">${note.title}</a></li>`).join("");
+        let all_notes = week_notes.map(({date, notes}) => `<ul class="calendar notelist">${date}` + notelist(notes) + `</ul>`).join("");
+        notes =`<div class='calendar noteset'>` + all_notes + "</div>";
+      }
 
       let year_months = Object.keys(year_months_in_week).map(x => `<div class='calendar year-month'>${x}</div>`);
       return `<div class='calendar week'><div class='calendar week-header'>${year_months.join(" ")}</div><div class='weekdays'>` + days.join("") + `</div>${notes}</div>`;
@@ -1828,7 +1834,9 @@ async function renderList(flatRead) {
   return [
     weeks + table,
     `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
-    <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>`
+    <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>
+    ${await ToggleButton({id: 'list_notes_toggle', file: LIST_NOTES_TOGGLE_FILE, label: lookupIcon('notes'), rerender: 'renderList'})}
+    `
   ];
 }
 
@@ -2360,16 +2368,23 @@ async function readBooleanFile(file, default_value) {
   });
 }
 
-async function handleToggle(event, id, file, action, default_value) {
+async function handleToggle(event, id, file, default_value, rerender) {
   await toggleBooleanFile(file, default_value);
+  paintSimple(await rerender());
   // await action();
   // TODO add or remove 'enabled' class to indicate that the toggle is on or off
   return false;
 }
 
-function ToggleButton({id, label, action, default_value}) {
+async function ToggleButton({id, label, file, default_value, rerender}) {
+  let status = await readBooleanFile(file, default_value);
+
+  let enabled = "";
+  if (status === 'true') {
+    enabled = " enabled";
+  }
   return (
-    `<button id="${id}" onclick="return handleToggle(event, '${id}', '${file}', ${action}, '${default_value}')" class='menu-button'>${label}</button>`
+    `<button id="${id}" onclick="return handleToggle(event, '${id}', '${file}', '${default_value}', ${rerender})" class='menu-button${enabled}'>${label}</button>`
   );
 }
 
@@ -2506,6 +2521,7 @@ function lookupIcon(full_name) {
     'back': 'BACK',
     'routine': 'RTNE',
     'new note': 'NEW_',
+    'notes': "NOTE",
   }[full_name];
 }
 

@@ -2,6 +2,7 @@
   --footer_menu_size: 111px;
   --header_color: #bb6;
   --link_button_main_color: orange;
+  --link_button_main_color_enabled: rgb(255, 165, 0, 0.5);
   --link_button_hover_color: red;
   --msg_color: #243d28;
   --nav_button_color: #611;
@@ -183,6 +184,12 @@ details[open] > summary > .tags-summary {
   padding: 10px 5px;
   border-radius: 3px;
 }
+
+.menu-button.enabled {
+  background: var(--link_button_main_color_enabled);
+  color: var(--base_text_color);
+}
+
 .menu-button:hover, .menu-button:focus { border-color: var(--link_button_hover_color); outline: none; }
 .menu-button:active { color: var(--link_button_hovercolor); }
 
