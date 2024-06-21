@@ -1328,6 +1328,7 @@ function htmlLine(line) {
 const MIX_FILE = 'disc mix state';
 const MENU_TOGGLE_FILE = 'disc menu toggle state';
 const LIST_NOTES_TOGGLE_FILE = 'list notes toggle state';
+const SEARCH_CASE_SENSITIVE_FILE = 'search case sensitive state';
 
 async function buildFlatRead() {
   console.log('building flat read');
@@ -1835,7 +1836,7 @@ async function renderList(flatRead) {
     weeks + table,
     `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
     <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>
-    ${await ToggleButton({id: 'list_notes_toggle', file: LIST_NOTES_TOGGLE_FILE, label: lookupIcon('notes'), rerender: 'renderList'})}
+    ${await ToggleButton({id: 'list_notes_toggle', file: LIST_NOTES_TOGGLE_FILE, query_param: 'show_notes', label: lookupIcon('notes'), rerender: 'renderList'})}
     `
   ];
 }
@@ -2196,14 +2197,19 @@ async function perfStatus() {
 
 // SEARCH
 
-async function search(text) {
+async function search(text, is_case_sensitive=false) {
   if (text === '' || text === null || text === undefined) {
     return [];
   }
   let notes = await getNoteMetadataMap('search');
   let cache_log = console.log;
   console.log = (x) => {};
-  let filtered_notes = notes.filter(note => note.content.includes(text));  // first pass filter without parsing using a hopefully fast impl-provided string-includes.
+
+  let case_insensitive = (a, b) => a.toLowerCase().includes(b.toLowerCase());
+  let case_sensitive = (a, b) => a.includes(b);
+  let includes = (is_case_sensitive) ? case_sensitive : case_insensitive;
+
+  let filtered_notes = notes.filter(note => includes(note.content, (text)));  // first pass filter without parsing using a hopefully fast impl-provided string-includes.
   let pages = filtered_notes.map(note => rewrite(parseContent(note.content), note.uuid));
 
   let messages = [];
@@ -2211,7 +2217,7 @@ async function search(text) {
 
   pages.forEach(sections =>
     sections.filter(s => s.blocks).forEach(section =>
-      section.blocks.filter(b => b instanceof Msg && b.content.includes(text)).forEach(message =>
+      section.blocks.filter(b => b instanceof Msg && includes(b.content, text)).forEach(message =>
         messages.push(message))));
 
   messages.sort((a, b) => dateComp(b, a));
@@ -2274,14 +2280,16 @@ function runSearch() {
   document.getElementsByTagName('main')[0].innerHTML = 'searching...';
   const urlParams = new URLSearchParams(window.location.search);
   const text = urlParams.get('q');
-  searchResults = search(text).then(all_messages => {
+  const case_sensitive = urlParams.get('case') === 'true';
+
+  searchResults = search(text, case_sensitive).then(async all_messages => {
     renderSearchMain(all_messages);
-    document.getElementsByTagName("footer")[0].innerHTML = renderSearchFooter();
+    document.getElementsByTagName("footer")[0].innerHTML = await renderSearchFooter();
     renderSearchPagination(all_messages);
   });
 }
 
-function renderSearchFooter() {
+async function renderSearchFooter() {
   const urlParams = new URLSearchParams(window.location.search);
   const text = urlParams.get('q') || '';
   let menu = `
@@ -2290,6 +2298,9 @@ function renderSearchFooter() {
     <button class='menu-button' onclick="return global.handlers.handleSearch(true)">${lookupIcon('search')}</button>
     <br/>
     <div id='search-pagination'></div>
+    <div id='search-options'>
+    ${await ToggleButton({id: "case-sensitive-enabled", label: lookupIcon("case"), file: SEARCH_CASE_SENSITIVE_FILE, query_param: "case", default_value: "true", rerender: 'runSearch'})}
+    </div>
   `;
   global.handlers = {};
   global.handlers.handleSearch = (event) => {
@@ -2297,7 +2308,12 @@ function renderSearchFooter() {
     if (event == true || event.key === 'Enter') {
       let text = document.getElementById('search_query').value;
       console.log('handling search', text);
-      window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=0");
+
+      const urlParams = new URLSearchParams(window.location.search);
+      urlParams.set('q', encodeURIComponent(text));
+      urlParams.set('page', '0');
+
+      window.history.pushState({}, "", "/search/?" + urlParams.toString());
       runSearch();
       return false;
     }
@@ -2307,8 +2323,10 @@ function renderSearchFooter() {
 
 async function gotoSearch() {
   let footer = document.getElementsByTagName('footer')[0];
-  window.history.pushState({}, "", "/search/");
-  footer.innerHTML = renderSearchFooter();
+  const urlParams = new URLSearchParams(window.location.search);
+  urlParams.set('case', await readBooleanFile(SEARCH_CASE_SENSITIVE_FILE, "true"));
+  window.history.pushState({}, "", "/search/?" + urlParams.toString());
+  footer.innerHTML = await renderSearchFooter();
   runSearch();
   return false;
 }
@@ -2368,23 +2386,71 @@ async function readBooleanFile(file, default_value) {
   });
 }
 
-async function handleToggle(event, id, file, default_value, rerender) {
-  await toggleBooleanFile(file, default_value);
-  paintSimple(await rerender());
+async function handleToggle(event, id, file, query_param, default_value, rerender) {
+  let indexedDB_result = undefined;
+  if (file) {
+    indexedDB_result = await toggleBooleanFile(file, default_value);
+  }
+
+  if (query_param && indexedDB_result) {
+    setBooleanQueryParam(query_param, indexedDB_result);
+  } else if (query_param) {
+    toggleBooleanQueryParam(query_param, default_value);
+  }
+  if (rerender) {
+    let result = await rerender();
+    if (result && result.length === 2) {
+      paintSimple(result);
+    }
+  }
   // await action();
   // TODO add or remove 'enabled' class to indicate that the toggle is on or off
   return false;
 }
 
-async function ToggleButton({id, label, file, default_value, rerender}) {
-  let status = await readBooleanFile(file, default_value);
+function readBooleanQueryParam(query_param, default_value) {
+  const urlParams = new URLSearchParams(window.location.search);
+  const param = urlParams.get(query_param);
+  if (param === null) {
+    return default_value;
+  }
+  return param === 'true';
+}
+
+function toggleBooleanQueryParam(query_param, default_value) {
+  const urlParams = new URLSearchParams(window.location.search);
+  const param = urlParams.get(query_param);
+  if (param === null) {
+    urlParams.set(query_param, default_value);
+  } else {
+    urlParams.set(query_param, param === 'true' ? 'false' : 'true');
+  }
+  window.history.pushState({}, "", window.location.pathname + "?" + urlParams.toString());
+  return urlParams.get(query_param);
+}
+
+function setBooleanQueryParam(query_param, value) {
+  const urlParams = new URLSearchParams(window.location.search);
+  urlParams.set(query_param, value);
+  window.history.pushState({}, "", window.location.pathname + "?" + urlParams.toString());
+  return urlParams.get(query_param);
+}
+
+async function ToggleButton({id, label, file, query_param, default_value, rerender}) {
+  let status = undefined;
+  if (file) {
+    status = await readBooleanFile(file, default_value);
+  }
+  if (query_param) {
+    // status = await readBooleanQueryParam(query_param, default_value);
+  }
 
   let enabled = "";
   if (status === 'true') {
     enabled = " enabled";
   }
   return (
-    `<button id="${id}" onclick="return handleToggle(event, '${id}', '${file}', '${default_value}', ${rerender})" class='menu-button${enabled}'>${label}</button>`
+    `<button id="${id}" onclick="return handleToggle(event, '${id}', '${file}', '${query_param}', '${default_value}', ${rerender})" class='menu-button${enabled}'>${label}</button>`
   );
 }
 
@@ -2522,6 +2588,7 @@ function lookupIcon(full_name) {
     'routine': 'RTNE',
     'new note': 'NEW_',
     'notes': "NOTE",
+    'case': "CASE"
   }[full_name];
 }
 
@@ -2699,7 +2766,7 @@ async function handleRouting() {
     paintSimple(await renderSync());
 
   } else if (window.location.pathname.startsWith('/search')) {
-    document.getElementsByTagName("footer")[0] = renderSearchFooter();
+    document.getElementsByTagName("footer")[0] = await renderSearchFooter();
     runSearch();
   } else if (window.location.pathname.startsWith('/setup')) {
     paintSimple(await renderSetup());

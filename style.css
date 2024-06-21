@@ -421,3 +421,11 @@ p.msgblock {
   margin-left: 5px;
   margin-right: 5px;
 }
+
+#search-pagination {
+  display: inline;
+}
+
+#search-options {
+  display: inline;
+}
