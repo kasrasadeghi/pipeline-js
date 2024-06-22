@@ -2616,17 +2616,6 @@ async function renderMenu() {
 // ICONS
 
 function lookupIcon(full_name) {
-  // return {
-  //   'search' : '🔍',
-  //   'sync' : '🔄',
-  //   'setup' : '⚙️',
-  //   'journal' : '📓',
-  //   'edit' : '✏️',
-  //   'list' : '📜',
-  //   'menu' : '🍔',
-  //   'mix' : '🔀',
-  //   'focus' : '',  // arrow pointing to the right
-  // }[full_name];
   return {
     'search': 'SRCH',
     'sync': 'SYNC',
