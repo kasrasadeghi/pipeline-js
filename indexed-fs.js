@@ -2259,8 +2259,8 @@ function renderSearchPagination(all_messages) {
   global.handlers.paginate = (delta) => {
     if (delta === 'all') {
       const urlParams = new URLSearchParams(window.location.search);
-      const text = urlParams.get('q');
-      window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=all");
+      urlParams.set('page', 'all');
+      window.history.pushState({}, "", "/search/?" + urlParams.toString());
       renderSearchMain(all_messages);
       return;
     }
@@ -2302,7 +2302,7 @@ function handleSearch(event) {
     console.log('handling search', text);
 
     const urlParams = new URLSearchParams(window.location.search);
-    urlParams.set('q', encodeURIComponent(text));
+    urlParams.set('q', text);
     urlParams.set('page', '0');
 
     window.history.pushState({}, "", "/search/?" + urlParams.toString());
