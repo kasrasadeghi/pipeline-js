@@ -1268,6 +1268,35 @@ async function retrieveMsg(ref) {
   return found_msg; // returns a list
 }
 
+function clickInternalLink(url) {
+  window.history.pushState({}, '', url); handleRouting();
+  return false;
+}
+
+async function expandRef(obj, url) {
+  console.log(obj);
+  let parent = obj.parentElement;
+  while (! parent.classList.contains('msg')) {
+    parent = parent.parentElement;
+  }
+
+  let found_msg = await retrieveMsg(url);
+  // TODO persist quotes to cache so they work on refresh
+  // TODO UI to remove quotes
+  if (found_msg.length > 0) {
+    console.log(found_msg);
+    if (parent.previousElementSibling.classList.contains('quotes')) {
+      parent.previousElementSibling.innerHTML += htmlMsg(found_msg[0]);
+      // TODO make sure to replace the element with the same id if it exists
+    } else {
+      parent.insertAdjacentHTML('beforebegin', "<div class='quotes'>" + htmlMsg(found_msg[0]) + "</div>");
+    }
+  } else {
+    console.log(`couldn't find ${url_ref.datetime_id} in ${url_ref.uuid}`);
+    // TODO error messaging
+  }
+};
+
 function htmlLine(line) {
   if (line instanceof Array) {
     return line.map(x => {
@@ -1281,35 +1310,9 @@ function htmlLine(line) {
         if (x.type === 'internal') {
           let ref = parseRef(x.display);
           let shorter_datetime = renderDatetime(new Date(ref.datetime_id), 'brief');
-          global.handlers.click = (url) => {
-            window.history.pushState({}, '', url); handleRouting(); return false;
-          }
-          global.handlers.expandRef = async (obj, url) => {
-            console.log(obj);
-            let parent = obj.parentElement;
-            while (! parent.classList.contains('msg')) {
-              parent = parent.parentElement;
-            }
-
-            let found_msg = await retrieveMsg(url);
-            // TODO persist quotes to cache so they work on refresh
-            // TODO UI to remove quotes
-            if (found_msg.length > 0) {
-              console.log(found_msg);
-              if (parent.previousElementSibling.classList.contains('quotes')) {
-                parent.previousElementSibling.innerHTML += htmlMsg(found_msg[0]);
-                // TODO make sure to replace the element with the same id if it exists
-              } else {
-                parent.insertAdjacentHTML('beforebegin', "<div class='quotes'>" + htmlMsg(found_msg[0]) + "</div>");
-              }
-            } else {
-              console.log(`couldn't find ${url_ref.datetime_id} in ${url_ref.uuid}`);
-              // TODO error messaging
-            }
-          };
           return `<div style="display:inline">
-            <button onclick="return global.handlers.expandRef(this, '${x.display}')">get</button>
-            <a onclick="return global.handlers.click('${x.url}')" href="${x.url}">${shorter_datetime}</a>
+            <button onclick="return expandRef(this, '${x.display}')">get</button>
+            <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${shorter_datetime}</a>
           </div>`;
         }
         return `<a href="${x.url}">${x.display}</a>`;
@@ -1439,8 +1442,89 @@ async function paintDiscRoutine(flatRead) {
   document.getElementsByClassName("menu-modal")[0].scrollTop = top;
 }
 
-async function paintDiscFooter(uuid, flatRead) {
+async function clickMix() {
+  // toggle mix state in the file
+  let mix_state = await toggleBooleanFile(MIX_FILE, "false");
+  await paintDisc(uuid, 'only main');
+  document.getElementById('mix-button').innerHTML = lookupIcon(mix_state === "true" ? 'focus' : 'mix');
+  return false;
+};
+
+async function handleMsg(event) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
+
+  console.log(event);
+
+  // yield to the UI thread with settimeout 0, so the msg_input clientHeight uses the post-keyboardEvent UI state.
+  setTimeout(() => {
+    let footer_menu_size = (document.getElementById('msg_input').clientHeight) + 80; // for one line, client height is 31px
+    console.log('setting footer menu to ', footer_menu_size, 'px');
+    document.documentElement.style.setProperty("--footer_menu_size", footer_menu_size + "px");
+  }, 0);
+
+  const should_submit = (event.key === 'Enter');
+  if (! should_submit) {
+    return;
+  }
+
+  event.preventDefault();
+
+  let msg_input = document.getElementById('msg_input');
+  let msg = msg_input.innerText;
+  let current_uuid = getCurrentNoteUuid();
+  if (msg.trim().length > 0) {
+    console.log('msg', msg);
+    msg_input.innerText = '';
+
+
+    let flatRead = await buildFlatRead();
+    let page = flatRead.rewrite(current_uuid);
+    
+    let is_journal = pageIsJournal(page);
+
+    // if we're in a journal and we're not on the current one, redirect to the current journal
+    if (is_journal) {
+      let today_uuid = undefined;
+      [today_uuid, flatRead] = await getJournalUUID(flatRead);
+      if (current_uuid !== today_uuid) {
+        current_uuid = today_uuid;
+        window.history.pushState({}, "", `/disc/${current_uuid}`);
+      }
+    }
+
+    await global_notes.updateFile(current_uuid, (content) => {
+      let lines = content.split("\n");
+      const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
+      const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
+      const old_content = content_lines.join("\n");
+      const metadata = metadata_lines.join("\n");
+
+      const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
+      return new_content + metadata;
+    });
+  }
+  await paintDisc(current_uuid, 'only main');
+  await paintDiscRoutine();
+
+  let repos = await getRepos();
+  let combined_remote_status = await getRemoteStatus(repos.join(","));
+  displayState("syncing...");
+  await pullRemoteSimple(combined_remote_status);
+  
+  // don't paint after syncing as it is quite disruptive as sync is sometimes slow (500ms)
+  // await paintDisc(uuid, 'only main'); 
+
+  displayState("done");
+  await pushLocalSimple(combined_remote_status);
+  return false;
+};
+
+async function toggleMenu () {
+  let menu_state = await toggleBooleanFile(MENU_TOGGLE_FILE, "false");
+  document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "none" : "flex");
+}
+
+async function paintDiscFooter(uuid, flatRead) {
   setTimeout(() => {
     if (flatRead.get_note(uuid) === null) {
       return;
@@ -1448,96 +1532,20 @@ async function paintDiscFooter(uuid, flatRead) {
     document.getElementById('well_formed_display').innerHTML = checkWellFormed(uuid, flatRead.get_note(uuid).content) ? 'well-formed' : 'not well-formed';
   }, 100);
 
-  global.handlers = {};
-
   const has_remote = await hasRemote();
   let mix_state = "false";
   let mix_button = '';
   if (has_remote) {
-    global.handlers.mix = async () => {
-      // toggle mix state in the file
-      let mix_state = await toggleBooleanFile(MIX_FILE, "false");
-      await paintDisc(uuid, 'only main');
-      document.getElementById('mix-button').innerHTML = lookupIcon(mix_state === "true" ? 'focus' : 'mix');
-      return false;
-    };
     mix_state = await readBooleanFile(MIX_FILE, "false");
     mix_button_value = lookupIcon(mix_state === 'true' ? 'focus' :'mix');
-    mix_button = `<button id="mix-button" class='menu-button' onclick="return global.handlers.mix(event)">${mix_button_value}</button>`;
+    mix_button = `<button id="mix-button" class='menu-button' onclick="return clickMix(event)">${mix_button_value}</button>`;
   }
 
   let msg_form = "";
   let edit_button = "";
   if (uuid.startsWith(flatRead._local_repo)) {
-    global.handlers.handleMsg = async (event) => {
-      console.log(event);
-
-      // yield to the UI thread with settimeout 0, so the msg_input clientHeight uses the post-keyboardEvent UI state.
-      setTimeout(() => {
-        let footer_menu_size = (document.getElementById('msg_input').clientHeight) + 80; // for one line, client height is 31px
-        console.log('setting footer menu to ', footer_menu_size, 'px');
-        document.documentElement.style.setProperty("--footer_menu_size", footer_menu_size + "px");
-      }, 0);
-
-      const should_submit = (event.key === 'Enter');
-      if (! should_submit) {
-        return;
-      }
-
-      event.preventDefault();
-
-      let msg_input = document.getElementById('msg_input');
-      let msg = msg_input.innerText;
-      let current_uuid = getCurrentNoteUuid();
-      if (msg.trim().length > 0) {
-        console.log('msg', msg);
-        msg_input.innerText = '';
-
-
-        let flatRead = await buildFlatRead();
-        let page = flatRead.rewrite(current_uuid);
-        
-        let is_journal = pageIsJournal(page);
-
-        // if we're in a journal and we're not on the current one, redirect to the current journal
-        if (is_journal) {
-          let today_uuid = undefined;
-          [today_uuid, flatRead] = await getJournalUUID(flatRead);
-          if (current_uuid !== today_uuid) {
-            current_uuid = today_uuid;
-            window.history.pushState({}, "", `/disc/${current_uuid}`);
-          }
-        }
-
-        await global_notes.updateFile(current_uuid, (content) => {
-          let lines = content.split("\n");
-          const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
-          const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
-          const old_content = content_lines.join("\n");
-          const metadata = metadata_lines.join("\n");
-
-          const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
-          return new_content + metadata;
-        });
-      }
-      await paintDisc(current_uuid, 'only main');
-      await paintDiscRoutine();
-
-      let repos = await getRepos();
-      let combined_remote_status = await getRemoteStatus(repos.join(","));
-      displayState("syncing...");
-      await pullRemoteSimple(combined_remote_status);
-      
-      // don't paint after syncing as it is quite disruptive as sync is sometimes slow (500ms)
-      // await paintDisc(uuid, 'only main'); 
-
-      displayState("done");
-      await pushLocalSimple(combined_remote_status);
-      return false;
-    };
-
     msg_form = `<div
-      onkeydown="return global.handlers.handleMsg(event);"
+      onkeydown="return handleMsg(event);"
       id="msg_input"
       class="msg_input"
       aria-describedby=":r4u:"
@@ -1549,11 +1557,6 @@ async function paintDiscFooter(uuid, flatRead) {
       data-lexical-editor="true"><br></div>`
 
     edit_button = `<button class='menu-button' onclick="gotoEdit('${uuid}')">${lookupIcon('edit')}</button>`;
-  }
-
-  global.handlers.toggleMenu = async () => {
-    let menu_state = await toggleBooleanFile(MENU_TOGGLE_FILE, "false");
-    document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "none" : "flex");
   }
 
   let menu_state = await readBooleanFile(MENU_TOGGLE_FILE, "false");
@@ -1571,7 +1574,7 @@ async function paintDiscFooter(uuid, flatRead) {
       <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
       <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
       <button class='menu-button' onclick="gotoSearch()">${lookupIcon('search')}</button>
-      <button class='menu-button' onclick="return global.handlers.toggleMenu()">${lookupIcon('routine')}</button>
+      <button class='menu-button' onclick="return toggleMenu()">${lookupIcon('routine')}</button>
       ${mix_button}
     </div>
     <div id='state_display'></div>
@@ -1613,25 +1616,26 @@ async function gotoEdit(uuid) {
   await paintEdit(uuid);
 }
 
+async function submitEdit() {
+  let textarea = document.getElementsByTagName('textarea')[0];
+  let content = textarea.value;  // textareas are not dos newlined, http requests are.  i think?
+  // TODO consider using .replace instead of .split and .join
+  await global_notes.writeFile(uuid, content);
+  gotoDisc(uuid);
+};
+
 async function renderEdit(uuid) {
   console.log('rendering /edit/ for ', uuid);
   let content = await global_notes.readFile(uuid);
   if (content === null) {
     return `couldn't find file '${uuid}'`;
   }
-  global.handlers.submitEdit = async () => {
-    let textarea = document.getElementsByTagName('textarea')[0];
-    let content = textarea.value;  // textareas are not dos newlined, http requests are.  i think?
-    // TODO consider using .replace instead of .split and .join
-    await global_notes.writeFile(uuid, content);
-    gotoDisc(uuid);
-  };
   // TODO if coming from routine, we might want to go back to where we came from, rather than going to the routine disc.
   // - TEMP (lol) adding a JRNL button to go to the journal, which is usually where we need to go back to.
   return [
     // you need a newline after the start textarea tag, otherwise empty first lines are eaten and lost on submit.
     `<textarea class='editor_textarea'>\n` + content + "</textarea>",
-    `<button class='menu-button' onclick="global.handlers.submitEdit()">${lookupIcon('submit')}</button>
+    `<button class='menu-button' onclick="submitEdit()">${lookupIcon('submit')}</button>
      <button class='menu-button' onclick="gotoDisc('${uuid}')">${lookupIcon('back')}</button>
      <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
      `
@@ -2250,6 +2254,8 @@ function renderSearchMain(all_messages) {
 }
 
 function renderSearchPagination(all_messages) {
+
+  // must be global because it captures `all_messages`
   global.handlers.paginate = (delta) => {
     if (delta === 'all') {
       const urlParams = new URLSearchParams(window.location.search);
@@ -2289,35 +2295,35 @@ function runSearch() {
   });
 }
 
+function handleSearch(event) {
+  console.log(event);
+  if (event == true || event.key === 'Enter') {
+    let text = document.getElementById('search_query').value;
+    console.log('handling search', text);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.set('q', encodeURIComponent(text));
+    urlParams.set('page', '0');
+
+    window.history.pushState({}, "", "/search/?" + urlParams.toString());
+    runSearch();
+    return false;
+  }
+};
+
 async function renderSearchFooter() {
   const urlParams = new URLSearchParams(window.location.search);
   const text = urlParams.get('q') || '';
   let menu = `
     <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
-    <input onkeydown="return global.handlers.handleSearch(event)" type='text' id='search_query' value="${text}"></input>
-    <button class='menu-button' onclick="return global.handlers.handleSearch(true)">${lookupIcon('search')}</button>
+    <input onkeydown="return handleSearch(event)" type='text' id='search_query' value="${text}"></input>
+    <button class='menu-button' onclick="return handleSearch(true)">${lookupIcon('search')}</button>
     <br/>
     <div id='search-pagination'></div>
     <div id='search-options'>
     ${await ToggleButton({id: "case-sensitive-enabled", label: lookupIcon("case"), file: SEARCH_CASE_SENSITIVE_FILE, query_param: "case", default_value: "true", rerender: 'runSearch'})}
     </div>
   `;
-  global.handlers = {};
-  global.handlers.handleSearch = (event) => {
-    console.log(event);
-    if (event == true || event.key === 'Enter') {
-      let text = document.getElementById('search_query').value;
-      console.log('handling search', text);
-
-      const urlParams = new URLSearchParams(window.location.search);
-      urlParams.set('q', encodeURIComponent(text));
-      urlParams.set('page', '0');
-
-      window.history.pushState({}, "", "/search/?" + urlParams.toString());
-      runSearch();
-      return false;
-    }
-  };
   return menu;
 }
 
@@ -2461,8 +2467,6 @@ const colorize_repo = (repo) => `<span style="color: #ffcc55; font-family: monos
 async function renderSetup() {
 
   // TODO allow renaming local repo?
-  global.handlers = {};
-
   let add_links = '<div style="margin: 10px">Please set a local repo name to continue.</div>';
   let local_repo_name_message = 'Local repo name is unset.';
   let local_repo_name = await cache.readFile(LOCAL_REPO_NAME_FILE);
@@ -2521,20 +2525,19 @@ async function gotoNewNote(title) {
 
 const tag_color = (x) => `<span style="color: var(--link_button_main_color)">${x}</span>`
 
-async function renderMenu() {
-  global.handlers = {};
-  global.handlers.clearServiceWorkerCaches = async () => {
-    if ('serviceWorker' in navigator) {
-      caches.keys().then(function(cacheNames) {
-        cacheNames.forEach(function(cacheName) {
-          console.log('deleting', cacheName, 'from', caches);
-          caches.delete(cacheName);
-        });
+async function clearServiceWorkerCaches() {
+  if ('serviceWorker' in navigator) {
+    caches.keys().then(function(cacheNames) {
+      cacheNames.forEach(function(cacheName) {
+        console.log('deleting', cacheName, 'from', caches);
+        caches.delete(cacheName);
       });
-    }
-    return false;
+    });
   }
+  return false;
+}
 
+async function renderMenu() {
   return [
     `${TextAction({id: 'new_note', label: lookupIcon('new note'), value: '', action: 'gotoNewNote'})}
     <br/>
@@ -2543,7 +2546,7 @@ async function renderMenu() {
     <div>
       <p> Advanced Debugging Tools: </p>
       <ul>
-      <li><button class='menu-button' onclick="return global.handlers.clearServiceWorkerCaches();">clear service worker cache</button></li>
+      <li><button class='menu-button' onclick="return clearServiceWorkerCaches();">clear service worker cache</button></li>
       </ul>
     </div>`,
     `<div>
@@ -2830,6 +2833,7 @@ async function run() {
   console.log('today is', today());
 
   global = {};
+  global.handlers = {};
 
   await handleRouting();
 }
