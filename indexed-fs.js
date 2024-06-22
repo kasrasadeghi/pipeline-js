@@ -1719,6 +1719,7 @@ async function paintList(flatRead) {
   // non-journal notes might be a bit more complicated, as they might have notes on separate days
 
   // gather notes to days
+  console.time('paintList get days');
   let notes_by_day = flatRead.metadata_map.reduce((acc, note) => {
     let date = new Date(timezoneCompatibility(note.date));
     let key = date_into_ymd(date);
@@ -1728,9 +1729,13 @@ async function paintList(flatRead) {
     acc[key].push(note);
     return acc;
   }, {});
+  console.timeEnd('paintList get days');
 
+  console.time('paintList sort days');
   let days = Object.entries(notes_by_day).sort();
+  console.timeEnd('paintList sort days');
 
+  console.time('paintList fill in days');
   if (days.length > 0) {
     let last = days[days.length - 1];
     let first = days[0];
@@ -1771,15 +1776,17 @@ async function paintList(flatRead) {
       }
     }
   }
+  console.timeEnd('paintList fill in days');
 
+  console.time('paintList compute day features');
   let local_repo_name = await flatRead.local_repo_name();
-
   let grid = Object.entries(notes_by_day).sort().reverse().map(([date, notes]) => {
     let date_obj = new Date(date);
     let color = compute_seasonal_color(date_obj);
     let weekday_name = weekday_format.format(date_obj);
     return {date, notes, color, weekday_name};
   });
+  console.timeEnd('paintList compute day features');
 
   // split into chunks of 7
   
@@ -1791,6 +1798,7 @@ async function paintList(flatRead) {
 
   let render_notes = await readBooleanFile(LIST_NOTES_TOGGLE_FILE, "false");
 
+  console.time('paintList render weeks');
   let weeks = acc
     // .slice(0, 1)
     .map((week) => {
@@ -1884,7 +1892,7 @@ async function paintList(flatRead) {
       // return `<div class='calendar week'><div class='calendar week-header'>${year_months.join(" ")}</div><div class='weekdays'>` + days.join("") + `</div>${notes}</div>`;
       return week_el;
     });
-  // done `weeks`
+  console.timeEnd('paintList render weeks');
   
   // elements seem faster than strings and innerHtml
   let main = document.getElementsByTagName('main')[0];
@@ -2267,18 +2275,26 @@ async function search(text, is_case_sensitive=false) {
   let case_sensitive = (a, b) => a.includes(b);
   let includes = (is_case_sensitive) ? case_sensitive : case_insensitive;
 
+  console.time('search pre-filter');
   let filtered_notes = notes.filter(note => includes(note.content, (text)));  // first pass filter without parsing using a hopefully fast impl-provided string-includes.
+  console.timeEnd('search pre-filter');
+  console.time('search parse');
   let pages = filtered_notes.map(note => rewrite(parseContent(note.content), note.uuid));
+  console.timeEnd('search parse');
 
   let messages = [];
   console.log = cache_log;
 
+  console.time('search gather msgs');
   pages.forEach(sections =>
     sections.filter(s => s.blocks).forEach(section =>
       section.blocks.filter(b => b instanceof Msg && includes(b.content, text)).forEach(message =>
         messages.push(message))));
+  console.timeEnd('search gather msgs');
 
+  console.time('search sort');
   messages.sort((a, b) => dateComp(b, a));
+  console.timeEnd('search sort');
   return messages;
 }
 
