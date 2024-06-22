@@ -1646,8 +1646,9 @@ async function renderEdit(uuid) {
 
 async function gotoList() {
   window.history.pushState({}, "", "/list");
-  let painted = paintSimple(await renderList());
-  painted.main.scrollTop = 0;
+  await paintList();
+  let main = document.getElementsByTagName('main')[0];
+  main.scrollTop = 0;
 }
 
 const date_into_ymd = (date) => {
@@ -1706,7 +1707,7 @@ const compute_seasonal_color = (date_obj) => {
   return color;
 }
 
-async function renderList(flatRead) {
+async function paintList(flatRead) {
   flatRead = flatRead || await buildFlatRead();
 
   // calendar view
@@ -1804,7 +1805,9 @@ async function renderList(flatRead) {
         if (not_journals.length > 0) {
           week_notes.push({date, notes: not_journals});
         }
-        let link = `<div class='calendar links'>${weekday_name}</div>`;
+        let link_el = document.createElement('div');
+        link_el.classList.add('calendar', 'links');
+        link_el.innerHTML = weekday_name;
         if (journals.length > 0) {
           let has_local_journal = journals.some(n => n.uuid.startsWith(local_repo_name));
           let note = (has_local_journal) ? journals.find(n => n.uuid.startsWith(local_repo_name)) : journals[0];
@@ -1818,31 +1821,82 @@ async function renderList(flatRead) {
           }
           
           let journal_link = `<a href="/disc/${note.uuid}">${title}</a>`
-          link = `<div class='calendar links'>${weekday_name} ${journal_link}</div>`;
+          link_el.innerHTML = `${weekday_name} ${journal_link}`;
         }
-        return `<div class='calendar day' style="background-color: ${color}">${link}</div>`;
+        let day_el = document.createElement('div');
+        day_el.classList.add('calendar', 'day');
+        day_el.style.backgroundColor = color;
+        day_el.append(link_el);
+        return day_el;;
       });
-      let notes = "";
+      let notes = [];
       if (render_notes === "true") {
-        const notelist = (notes) => notes.map(note => `<li class='calendar note'><a href="/disc/${note.uuid}">${note.title}</a></li>`).join("");
-        let all_notes = week_notes.map(({date, notes}) => `<ul class="calendar notelist">${date}` + notelist(notes) + `</ul>`).join("");
-        notes =`<div class='calendar noteset'>` + all_notes + "</div>";
+        const notelist = (notes) => notes.map(note => {
+          // `<li class='calendar note'><a href="/disc/${note.uuid}">${note.title}</a></li>`
+          let li_el = document.createElement('li');
+          li_el.classList.add('calendar', 'note');
+          let a_el = document.createElement('a');
+          a_el.href = `/disc/${note.uuid}`;
+          a_el.innerHTML = note.title;
+          li_el.appendChild(a_el);
+          return li_el;
+        });
+        let all_notes = week_notes.map(({date, notes}) => {
+          // `<ul class="calendar notelist">${date}` + notelist(notes) + `</ul>`
+          let ul_el = document.createElement('ul');
+          ul_el.classList.add('calendar', 'notelist');
+          let date_el = document.createElement('div');
+          date_el.innerHTML = date;
+          ul_el.appendChild(date_el);
+          ul_el.append(...notelist(notes));
+          return ul_el;
+        });
+        // notes = `<div class='calendar noteset'>` + all_notes + "</div>";
+        let notes_el = document.createElement('div');
+        notes_el.classList.add('calendar', 'noteset');
+        notes_el.append(...all_notes);
+        notes.push(notes_el);
       }
 
-      let year_months = Object.keys(year_months_in_week).map(x => `<div class='calendar year-month'>${x}</div>`);
-      return `<div class='calendar week'><div class='calendar week-header'>${year_months.join(" ")}</div><div class='weekdays'>` + days.join("") + `</div>${notes}</div>`;
-    }).join("");
-  
+      let year_months = Object.keys(year_months_in_week).map(x => {
+        // `<div class='calendar year-month'>${x}</div>`
+        let el = document.createElement('div');
+        el.classList.add('calendar', 'year-month');
+        el.innerHTML = x;
+        return el;
+      });
+      let week_header = document.createElement('div');
+      week_header.classList.add('calendar', 'week-header');
+      week_header.append(...year_months);
 
-  let rows = flatRead.metadata_map.sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
-  let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
-  return [
-    weeks + table,
-    `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
+      let week_el = document.createElement('div');
+      week_el.classList.add('calendar', 'week');
+      week_el.append(week_header);
+
+      let weekdays = document.createElement('div');
+      weekdays.classList.add('weekdays');
+      weekdays.append(...days);
+
+      week_el.append(weekdays);
+
+      week_el.append(...notes);
+
+      // return `<div class='calendar week'><div class='calendar week-header'>${year_months.join(" ")}</div><div class='weekdays'>` + days.join("") + `</div>${notes}</div>`;
+      return week_el;
+    });
+  // done `weeks`
+  
+  // elements seem faster than strings and innerHtml
+  let main = document.getElementsByTagName('main')[0];
+  main.replaceChildren(...weeks);
+  // let rows = flatRead.metadata_map.sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
+  // let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
+  let footer = document.getElementsByTagName('footer')[0];
+  footer.innerHTML = `
+    <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
     <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>
-    ${await ToggleButton({id: 'list_notes_toggle', file: LIST_NOTES_TOGGLE_FILE, query_param: 'show_notes', label: lookupIcon('notes'), rerender: 'renderList'})}
-    `
-  ];
+    ${await ToggleButton({id: 'list_notes_toggle', file: LIST_NOTES_TOGGLE_FILE, query_param: 'show_notes', label: lookupIcon('notes'), rerender: 'paintList'})}
+    `;
 }
 
 // HIGHLIGHT SELECTED
@@ -2763,7 +2817,7 @@ async function handleRouting() {
     paintEdit(uuid);
 
   } else if (window.location.pathname.startsWith('/list')) {
-    paintSimple(await renderList());
+    paintList();
 
   } else if (window.location.pathname.startsWith('/sync')) {
     paintSimple(await renderSync());
