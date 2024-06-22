@@ -383,10 +383,9 @@ async function getAllNotesWithSameTitleAs(uuid) {
 // - that might also have pernicious bugs.
 // N.B. make sure to not capture this in a handler or a lambda that is preserved, because that's basically stashing it.
 class FlatRead { // a single "read" operation for the flat note database.
-  constructor() {}
-  
   async build() {
     this.metadata_map = await getNoteMetadataMap('FlatRead');
+    this._local_repo = await get_local_repo_name();
     return this;
   }
 
@@ -412,11 +411,45 @@ class FlatRead { // a single "read" operation for the flat note database.
     return note.rewrite;
   }
 
-  async local_repo_name() {
-    if (this._local_repo === undefined) {
-      this._local_repo = await get_local_repo_name();
-    }
+  local_repo_name() {
     return this._local_repo;
+  }
+}
+
+async function buildFlatRead() {
+  console.log('building flat read');
+  let flatRead = new FlatRead()
+  await flatRead.build();
+  return flatRead;
+}
+
+class FlatCache {
+  constructor() {
+    this.flatRead = null;
+  }
+
+  async build() {
+    this.flatRead = await buildFlatRead();
+  }
+
+  getNotesWithTitle(title, repo) {
+    return this.flatRead.getNotesWithTitle(title, repo);
+  }
+
+  getAllNotesWithSameTitleAs(uuid) {
+    return this.flatRead.getAllNotesWithSameTitleAs(uuid);
+  }
+
+  get_note(uuid) {
+    return this.flatRead.get_note(uuid);
+  }
+
+  rewrite(uuid) {
+    return this.flatRead.rewrite(uuid);
+  }
+
+  local_repo_name() {
+    return this.flatRead.local_repo_name();
   }
 }
 
@@ -1040,10 +1073,12 @@ function unparseLineContent(l) {
 }
 
 async function rewriteCurrentNote() {
+  // DEBUGGING
   return rewrite(parseContent(await global_notes.readFile(getCurrentNoteUuid())), getCurrentNoteUuid());
 }
 
 async function checkCurrentWellFormed() {
+  // DEBUGGING
   return checkWellFormed(getCurrentNoteUuid(), await global_notes.readFile(getCurrentNoteUuid()));
 }
 
@@ -1332,14 +1367,6 @@ const MIX_FILE = 'disc mix state';
 const MENU_TOGGLE_FILE = 'disc menu toggle state';
 const LIST_NOTES_TOGGLE_FILE = 'list notes toggle state';
 const SEARCH_CASE_SENSITIVE_FILE = 'search case sensitive state';
-
-async function buildFlatRead() {
-  console.log('building flat read');
-  let flatRead = new FlatRead()
-  await flatRead.build();
-  await flatRead.local_repo_name();
-  return flatRead;
-}
 
 async function paintDisc(uuid, flag, flatRead) {
   if (flatRead === undefined) {
@@ -1779,7 +1806,7 @@ async function paintList(flatRead) {
   console.timeEnd('paintList fill in days');
 
   console.time('paintList compute day features');
-  let local_repo_name = await flatRead.local_repo_name();
+  let local_repo_name = flatRead.local_repo_name();
   let grid = Object.entries(notes_by_day).sort().reverse().map(([date, notes]) => {
     let date_obj = new Date(date);
     let color = compute_seasonal_color(date_obj);
@@ -2663,7 +2690,7 @@ async function gotoRoutine() {
 
 async function routineContent(flatRead) {
   flatRead = flatRead || await buildFlatRead();
-  const local_repo_name = await flatRead.local_repo_name();
+  const local_repo_name = flatRead.local_repo_name();
   const notes = flatRead.metadata_map;
   const routine_notes = notes.filter(note => note.title === "ROUTINE");
 
@@ -2770,7 +2797,7 @@ const cache = new FileDB("pipeline-db-cache", "cache");
 
 async function getJournalUUID(flatRead) {
   flatRead = flatRead || await buildFlatRead();
-  let notes = flatRead.getNotesWithTitle(today(), await flatRead.local_repo_name());
+  let notes = flatRead.getNotesWithTitle(today(), flatRead.local_repo_name());
   if (notes.length === 0) {
     let uuid = await newJournal(today());
     notes = [uuid];
@@ -2810,7 +2837,7 @@ function getCurrentNoteUuid() {
 
 async function handleRouting() {
   let flatRead = await buildFlatRead();
-  console.log("notes that match today's date:", flatRead.getNotesWithTitle(today(), await flatRead.local_repo_name()));
+  console.log("notes that match today's date:", flatRead.getNotesWithTitle(today(), flatRead.local_repo_name()));
   console.log("initializing from path", window.location.pathname);
 
   if (window.location.pathname.startsWith('/disc/')) {
