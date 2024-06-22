@@ -65,12 +65,16 @@ class FileDB {
   }
 
   async readFile(path) {
+    console.time('read file ' + path);
     return new Promise((resolve, reject) => {
       const transaction = this.db.transaction([this.storeName]);
       const objectStore = transaction.objectStore(this.storeName);
       const request = objectStore.get(path);
 
-      request.onsuccess = () => resolve(request.result ? request.result.content : null);
+      request.onsuccess = () => {
+        console.timeEnd('read file ' + path);
+        resolve(request.result ? request.result.content : null);
+      }
       request.onerror = () => reject(request.error);
     });
   }
@@ -450,6 +454,26 @@ class FlatCache {
 
   local_repo_name() {
     return this.flatRead.local_repo_name();
+  }
+
+  async readFile(uuid) {
+    // TODO check for cache invalidation with most recent update
+    this.flatRead.get_note(uuid).content;
+  }
+
+  async writeFile(uuid, content) {
+    // TODO check for cache invalidation with most recent update
+    // could make this not async, but i'd either have to busy-wait while it's writing or i'd have to return a promise
+    this.flatRead.get_note(uuid).content = content;
+    await global_notes.writeFile(uuid, content);
+  }
+
+  async updateFile(uuid, updater) {
+    // TODO check for cache invalidation with most recent update
+    let note = this.flatRead.get_note(uuid);
+    let updated_content = updater(note.content);
+    note.content = updated_content;
+    await global_notes.updateFile(uuid, updater);
   }
 }
 
@@ -1085,9 +1109,14 @@ async function checkCurrentWellFormed() {
 function checkWellFormed(uuid, content) {
   let page = parseContent(content);
   let rewritten = rewrite(page, uuid);
-  console.log('REFERENCE\n', content);
-  console.log('UNPARSED\n', unparseContent(rewritten));
-  return unparseContent(rewritten) === content;
+  
+  let result = (unparseContent(rewritten) === content);
+  if (! result) {
+    console.log('REFERENCE\n', content);
+    console.log('UNPARSED\n', unparseContent(rewritten));
+    console.log('not well-fromed', uuid);
+  }
+  return result;
 }
 
 // used for when a text block is deleted
@@ -1357,7 +1386,7 @@ function htmlLine(line) {
   }
 
   // TODO actually render these lines by parsing them.  for some reason they're not parsed.
-  console.log('huh', line);
+  // console.log('huh', line);
   return line;
 }
 
@@ -1480,7 +1509,7 @@ async function clickMix() {
 async function handleMsg(event) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
 
-  console.log(event);
+  // console.log(event);  // print out keyboard events 
 
   // yield to the UI thread with settimeout 0, so the msg_input clientHeight uses the post-keyboardEvent UI state.
   setTimeout(() => {
