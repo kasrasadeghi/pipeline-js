@@ -386,10 +386,8 @@ p.msgblock {
 }
 
 .weekdays { 
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
 }
 
 .calendar.links {
@@ -401,7 +399,6 @@ p.msgblock {
 }
 
 .calendar.day {
-  flex: 1;
   min-height: 60px;
   border-radius: 5px;
   margin: 2px;
