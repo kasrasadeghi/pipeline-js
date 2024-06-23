@@ -40,7 +40,7 @@ status:
 	systemctl status pipeline-notes
 
 certs:
-	bash make-certs.bash
+	bash make-cert.bash
 
 .PHONY: proxy
 proxy: proxy.cpp
