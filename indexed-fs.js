@@ -1412,13 +1412,9 @@ const MENU_TOGGLE_FILE = 'disc menu toggle state';
 const LIST_NOTES_TOGGLE_FILE = 'list notes toggle state';
 const SEARCH_CASE_SENSITIVE_FILE = 'search case sensitive state';
 
-async function paintDisc(uuid, flag, flatRead) {
-  if (flatRead === undefined) {
-    flatRead = await buildFlatRead();
-  }
-  
+async function paintDisc(uuid, flag) {
   if (flag !== 'only main') {
-    await paintDiscFooter(uuid, flatRead);
+    await paintDiscFooter(uuid);
 
     // msg_input doesn't exist when the uuid is not in our local repo
     setTimeout(() => {
@@ -1427,7 +1423,7 @@ async function paintDisc(uuid, flag, flatRead) {
   }
 
   let main = document.getElementsByTagName('main')[0];
-  main.innerHTML = await renderDiscBody(uuid, flatRead);
+  main.innerHTML = await renderDiscBody(uuid);
   
   const selected = updateSelected();
   if (selected === null) {
@@ -1437,33 +1433,11 @@ async function paintDisc(uuid, flag, flatRead) {
   }
 }
 
-async function mixPage(uuid, flatRead) {
-  let page = null;
-  let note = null;
-  let rewritten = null;
-
-  if (flatRead === undefined) {
-    page = await parseFile(uuid);
-    if (page === null) {
-      return null;
-    }
-    rewritten = rewrite(page, uuid);
-
-  } else {
-    note = flatRead.metadata_map.find(note => note.uuid === uuid);
-    if (note === undefined) {
-      return null;
-    }
-    page = parseContent(note.content);
-    if (note.rewrite) {
-      rewritten = note.rewrite;
-    } else {
-      rewritten = rewrite(page, uuid);
-    }
-  }
+async function mixPage(uuid) {
+  let rewritten = global.notes.rewrite(uuid);
 
   // notes that share our title
-  let sibling_notes = (flatRead === undefined) ? await getAllNotesWithSameTitleAs(uuid) : flatRead.getAllNotesWithSameTitleAs(uuid);
+  let sibling_notes = global.notes.getAllNotesWithSameTitleAs(uuid);
   console.log('mixing entry sections of', sibling_notes.map(note => note.uuid), "with current note", uuid);
   let sibling_pages = sibling_notes.map((sibling_note) => rewrite(parseContent(sibling_note.content), sibling_note.uuid));
 
@@ -1487,26 +1461,24 @@ async function mixPage(uuid, flatRead) {
   return rewritten;
 }
 
-async function renderDiscMixedBody(uuid, flatRead) {
-  let page = await mixPage(uuid, flatRead);
+async function renderDiscMixedBody(uuid) {
+  let page = await mixPage(uuid);
   if (page === null) {
     return `couldn't find file '${uuid}'`;
   }
 
-  const content = flatRead.get_note(uuid).content;  
+  const content = global.notes.get_note(uuid).content;  
   let rendered = page.map((s, i) => htmlSection(s, i, content)).join("\n");
   return "<div class='msglist'>" + rendered + "</div>";
 }
 
-async function paintDiscRoutine(flatRead) {
+async function paintDiscRoutine() {
   // maintain the scroll of the modal when repainting it
   let left = document.getElementsByClassName("menu-modal")[0].scrollLeft;
   let top = document.getElementsByClassName("menu-modal")[0].scrollTop;
 
-  flatRead = flatRead || await buildFlatRead();
-
   document.getElementById("modal-container").innerHTML = `<div class="menu-modal">
-      ${await routineContent(flatRead)}
+      ${await routineContent()}
     </div>`;
 
   document.getElementsByClassName("menu-modal")[0].scrollLeft = left;
@@ -1548,15 +1520,13 @@ async function handleMsg(event) {
     msg_input.innerText = '';
 
 
-    let flatRead = await buildFlatRead();
-    let page = flatRead.rewrite(current_uuid);
+    let page = global.notes.rewrite(current_uuid);
     
     let is_journal = pageIsJournal(page);
 
     // if we're in a journal and we're not on the current one, redirect to the current journal
     if (is_journal) {
-      let today_uuid = undefined;
-      [today_uuid, flatRead] = await getJournalUUID(flatRead);
+      let today_uuid = await getJournalUUID();
       if (current_uuid !== today_uuid) {
         current_uuid = today_uuid;
         window.history.pushState({}, "", `/disc/${current_uuid}`);
@@ -1596,12 +1566,12 @@ async function toggleMenu () {
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "none" : "flex");
 }
 
-async function paintDiscFooter(uuid, flatRead) {
+async function paintDiscFooter(uuid) {
   setTimeout(() => {
-    if (flatRead.get_note(uuid) === null) {
+    if (global.notes.get_note(uuid) === null) {
       return;
     }
-    document.getElementById('well_formed_display').innerHTML = checkWellFormed(uuid, flatRead.get_note(uuid).content) ? 'well-formed' : 'not well-formed';
+    document.getElementById('well_formed_display').innerHTML = checkWellFormed(uuid, global.notes.get_note(uuid).content) ? 'well-formed' : 'not well-formed';
   }, 100);
 
   const has_remote = await hasRemote();
@@ -1615,7 +1585,7 @@ async function paintDiscFooter(uuid, flatRead) {
 
   let msg_form = "";
   let edit_button = "";
-  if (uuid.startsWith(flatRead._local_repo)) {
+  if (uuid.startsWith(global.notes.local_repo_name())) {
     msg_form = `<div
       onkeydown="return handleMsg(event);"
       id="msg_input"
@@ -1651,24 +1621,24 @@ async function paintDiscFooter(uuid, flatRead) {
     </div>
     <div id='state_display'></div>
     <div id='well_formed_display'></div>`;
-  await paintDiscRoutine(flatRead);
+  await paintDiscRoutine();
 }
 
-async function renderDiscBody(uuid, flatRead) {
+async function renderDiscBody(uuid) {
   let mix_state = await readBooleanFile(MIX_FILE, "false");
   console.log('mix state', mix_state);
   let rendered_note = '';
   if (mix_state === "true") {
-    rendered_note = await renderDiscMixedBody(uuid, flatRead);
+    rendered_note = await renderDiscMixedBody(uuid);
   } else {
     rendered_note = await htmlNote(uuid);
   }
   return rendered_note;
 }
 
-async function gotoDisc(uuid, flatRead) {
+async function gotoDisc(uuid) {
   window.history.pushState({},"", "/disc/" + uuid);
-  paintDisc(uuid, /* paint both footer and main */ undefined, flatRead);
+  paintDisc(uuid, /* paint both footer and main */ undefined);
   return false;
 }
 
@@ -1779,9 +1749,7 @@ const compute_seasonal_color = (date_obj) => {
   return color;
 }
 
-async function paintList(flatRead) {
-  flatRead = flatRead || await buildFlatRead();
-
+async function paintList() {
   // calendar view
 
   // draw boxes in a 7 wide grid like a calendar
@@ -1792,7 +1760,7 @@ async function paintList(flatRead) {
 
   // gather notes to days
   console.time('paintList get days');
-  let notes_by_day = flatRead.metadata_map.reduce((acc, note) => {
+  let notes_by_day = global.notes.flatRead.metadata_map.reduce((acc, note) => {
     let date = new Date(timezoneCompatibility(note.date));
     let key = date_into_ymd(date);
     if (acc[key] === undefined) {
@@ -1851,7 +1819,7 @@ async function paintList(flatRead) {
   console.timeEnd('paintList fill in days');
 
   console.time('paintList compute day features');
-  let local_repo_name = flatRead.local_repo_name();
+  let local_repo_name = global.notes.local_repo_name();
   let grid = Object.entries(notes_by_day).sort().reverse().map(([date, notes]) => {
     let date_obj = new Date(date);
     let color = compute_seasonal_color(date_obj);
@@ -1969,7 +1937,7 @@ async function paintList(flatRead) {
   // elements seem faster than strings and innerHtml
   let main = document.getElementsByTagName('main')[0];
   main.replaceChildren(...weeks);
-  // let rows = flatRead.metadata_map.sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
+  // let rows = global.notes.flatRead.metadata_map.sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
   // let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
   let footer = document.getElementsByTagName('footer')[0];
   footer.innerHTML = `
@@ -2368,7 +2336,10 @@ async function search(text, is_case_sensitive=false) {
   if (text === '' || text === null || text === undefined) {
     return [];
   }
-  let notes = await getNoteMetadataMap('search');
+
+  console.time('search total');
+
+  let notes = global.notes.flatRead.metadata_map;
   let cache_log = console.log;
   console.log = (x) => {};
 
@@ -2380,7 +2351,7 @@ async function search(text, is_case_sensitive=false) {
   let filtered_notes = notes.filter(note => includes(note.content, (text)));  // first pass filter without parsing using a hopefully fast impl-provided string-includes.
   console.timeEnd('search pre-filter');
   console.time('search parse');
-  let pages = filtered_notes.map(note => rewrite(parseContent(note.content), note.uuid));
+  let pages = filtered_notes.map(note => global.notes.rewrite(note.uuid));
   console.timeEnd('search parse');
 
   let messages = [];
@@ -2396,6 +2367,9 @@ async function search(text, is_case_sensitive=false) {
   console.time('search sort');
   messages.sort((a, b) => dateComp(b, a));
   console.timeEnd('search sort');
+
+  console.timeEnd('search total');
+
   return messages;
 }
 
@@ -2762,10 +2736,9 @@ async function gotoRoutine() {
   window.history.pushState({},"", "/routine");
 }
 
-async function routineContent(flatRead) {
-  flatRead = flatRead || await buildFlatRead();
-  const local_repo_name = flatRead.local_repo_name();
-  const notes = flatRead.metadata_map;
+async function routineContent() {
+  const local_repo_name = global.notes.local_repo_name();
+  const notes = global.notes.flatRead.metadata_map;
   const routine_notes = notes.filter(note => note.title === "ROUTINE");
 
   let content = "no routine notes found";
@@ -2776,12 +2749,12 @@ async function routineContent(flatRead) {
 
     let page = parseContent(most_recent_routine_note.content);
     page = rewrite(page, most_recent_routine_note.uuid);
-    let maybe_current_journal = flatRead.getNotesWithTitle(today(), local_repo_name);
+    let maybe_current_journal = global.notes.getNotesWithTitle(today(), local_repo_name);
     if (maybe_current_journal.length === 0) {
       return "no journal found for today";
     }
     let current_journal = maybe_current_journal[0];
-    const tags = await getTagsFromMixedNote(current_journal, flatRead);
+    const tags = await getTagsFromMixedNote(current_journal);
 
     const error = (msg, obj) => {
       console.log(msg, obj);
@@ -2844,7 +2817,7 @@ async function routineContent(flatRead) {
 }
 
 async function renderRoutine() {
-  let content = await routineContent(await buildFlatRead());
+  let content = await routineContent();
   
   return [
     `<div>
@@ -2856,9 +2829,8 @@ async function renderRoutine() {
   ];
 }
 
-async function getTagsFromMixedNote(uuid, flatRead) {
-  flatRead = flatRead || await buildFlatRead();
-  let page = await mixPage(uuid, flatRead);
+async function getTagsFromMixedNote(uuid) {
+  let page = await mixPage(uuid);
   return page
     .flatMap(s => s.blocks?.filter(x => x instanceof Msg))  // get all messages from every section
     .filter(x => x)  // filter away sections that didn't have blocks
@@ -2869,23 +2841,20 @@ async function getTagsFromMixedNote(uuid, flatRead) {
 
 const cache = new FileDB("pipeline-db-cache", "cache");
 
-async function getJournalUUID(flatRead) {
-  flatRead = flatRead || await buildFlatRead();
-  let notes = flatRead.getNotesWithTitle(today(), flatRead.local_repo_name());
+async function getJournalUUID() {
+  let notes = global.notes.getNotesWithTitle(today(), global.notes.local_repo_name());
   if (notes.length === 0) {
     let uuid = await newJournal(today());
     notes = [uuid];
-    flatRead = await buildFlatRead();  // TODO maybe this is a case where updating the cache is okay.
+    global.notes.rebuild();
     // TODO maybe we only want to do a full update of the cache on sync, hmm.  nah, it seems like it should be on every database operation, for _consistency_'s (ACID) sake.
   }
-  return [notes[0], flatRead];
+  return notes[0];
 }
 
 async function gotoJournal() {
-  let flatRead = await buildFlatRead();
-  let uuid = undefined;
-  [uuid, flatRead] = await getJournalUUID(flatRead);
-  await gotoDisc(uuid, flatRead);
+  let uuid = await getJournalUUID();
+  await gotoDisc(uuid);
 }
 
 window.addEventListener("popstate", (event) => {
@@ -2910,13 +2879,12 @@ function getCurrentNoteUuid() {
 }
 
 async function handleRouting() {
-  let flatRead = await buildFlatRead();
-  console.log("notes that match today's date:", flatRead.getNotesWithTitle(today(), flatRead.local_repo_name()));
+  console.log("notes that match today's date:", global.notes.getNotesWithTitle(today(), global.notes.local_repo_name()));
   console.log("initializing from path", window.location.pathname);
 
   if (window.location.pathname.startsWith('/disc/')) {
     let uuid = window.location.pathname.slice("/disc/".length);
-    paintDisc(uuid, flatRead);
+    paintDisc(uuid);
 
   } else if (window.location.pathname.startsWith('/edit/')) {
     let uuid = window.location.pathname.slice("/edit/".length);
