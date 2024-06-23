@@ -259,7 +259,7 @@ Date: ${new Date()}
 Title: ${title}`;
 // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
   let uuid = (await get_local_repo_name()) + '/' + crypto.randomUUID() + '.note';
-  await global_notes.writeFile(uuid, content);
+  await global.notes.writeFile(uuid, content);
   return uuid;
 }
 
@@ -436,6 +436,10 @@ class FlatCache {
     this.flatRead = await buildFlatRead();
   }
 
+  async rebuild() {
+    this.flatRead = await buildFlatRead();
+  }
+
   getNotesWithTitle(title, repo) {
     return this.flatRead.getNotesWithTitle(title, repo);
   }
@@ -458,7 +462,7 @@ class FlatCache {
 
   async readFile(uuid) {
     // TODO check for cache invalidation with most recent update
-    this.flatRead.get_note(uuid).content;
+    return this.flatRead.get_note(uuid).content;
   }
 
   async writeFile(uuid, content) {
@@ -474,13 +478,24 @@ class FlatCache {
     let updated_content = updater(note.content);
     note.content = updated_content;
     await global_notes.updateFile(uuid, updater);
+    return updated_content;
   }
+
+  async listFiles() {
+    return this.flatRead.metadata_map.map(note => note.uuid);
+  }
+}
+
+async function buildFlatCache() {
+  let flatCache = new FlatCache();
+  await flatCache.build();
+  return flatCache;
 }
 
 // PARSE
 
 async function parseFile(filepath) {
-  let content = await global_notes.readFile(filepath);
+  let content = await global.notes.readFile(filepath);
   if (content === null) {
     return null;
   }
@@ -880,7 +895,7 @@ function tagParse(line) {
 
 async function htmlNote(uuid) {
   console.log('rendering note for', uuid);
-  let content = await global_notes.readFile(uuid);
+  let content = await global.notes.readFile(uuid);
   if (content === null) {
     return `couldn't find file '${uuid}'`;
   }
@@ -1098,12 +1113,12 @@ function unparseLineContent(l) {
 
 async function rewriteCurrentNote() {
   // DEBUGGING
-  return rewrite(parseContent(await global_notes.readFile(getCurrentNoteUuid())), getCurrentNoteUuid());
+  return rewrite(parseContent(await global.notes.readFile(getCurrentNoteUuid())), getCurrentNoteUuid());
 }
 
 async function checkCurrentWellFormed() {
   // DEBUGGING
-  return checkWellFormed(getCurrentNoteUuid(), await global_notes.readFile(getCurrentNoteUuid()));
+  return checkWellFormed(getCurrentNoteUuid(), await global.notes.readFile(getCurrentNoteUuid()));
 }
 
 function checkWellFormed(uuid, content) {
@@ -1142,7 +1157,7 @@ async function editMessage(item_origin, msg_id) {
     return;
   }
 
-  let item_origin_content = await global_notes.readFile(item_origin);
+  let item_origin_content = await global.notes.readFile(item_origin);
 
   let well_formed = checkWellFormed(item_origin, item_origin_content);
   if (! well_formed) {
@@ -1207,7 +1222,7 @@ async function editMessage(item_origin, msg_id) {
     // TODO need to be able to delete a textblock by deleting all of its content
 
     let new_content = unparseContent(page);
-    await global_notes.writeFile(item_origin, new_content);
+    await global.notes.writeFile(item_origin, new_content);
     console.log('rendering inner html from submitted individual message edit', msg_content, htmlLine(msg_content.innerHTML));
     msg_content.innerHTML = htmlLine(rewriteLine(new_msg_content));
 
@@ -1548,7 +1563,7 @@ async function handleMsg(event) {
       }
     }
 
-    await global_notes.updateFile(current_uuid, (content) => {
+    await global.notes.updateFile(current_uuid, (content) => {
       let lines = content.split("\n");
       const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
       const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
@@ -1572,6 +1587,7 @@ async function handleMsg(event) {
 
   displayState("done");
   await pushLocalSimple(combined_remote_status);
+  await global.notes.rebuild();
   return false;
 };
 
@@ -1676,13 +1692,13 @@ async function submitEdit() {
   let textarea = document.getElementsByTagName('textarea')[0];
   let content = textarea.value;  // textareas are not dos newlined, http requests are.  i think?
   // TODO consider using .replace instead of .split and .join
-  await global_notes.writeFile(uuid, content);
+  await global.notes.writeFile(uuid, content);
   gotoDisc(uuid);
 };
 
 async function renderEdit(uuid) {
   console.log('rendering /edit/ for ', uuid);
-  let content = await global_notes.readFile(uuid);
+  let content = await global.notes.readFile(uuid);
   if (content === null) {
     return `couldn't find file '${uuid}'`;
   }
@@ -2094,9 +2110,18 @@ async function renderSync() {
   `]
 }
 
+function request_len(remote) {
+  let request = remote + '/api/get/' + repo + "/" + uuids.join(",");
+  return request.length
+}
+
 async function fetchNotes(repo, uuids) {
   // can either be single note: <repo>/<uuid>
   // or multiple: <repo>/<uuid>(/<uuid>)*
+
+  if (uuids.length === 0) {
+    return;
+  }
   if (repo.endsWith('/')) {
     repo = repo.slice(0, -1);
   }
@@ -2146,13 +2171,17 @@ async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
 
 async function pullRemoteSimple(combined_remote_status) {
   let [ignored_local, ...remotes] = await getRepos();
+  console.time('pull remote simple');
   await Promise.all(remotes.map(async subscribed_remote =>
     await pullRemoteNotes(subscribed_remote, /*dry run*/false, combined_remote_status)));
+  console.timeEnd('pull remote simple');
 }
 
 async function pushLocalSimple(combined_remote_status) {
   let [local, ...ignored_remotes] = await getRepos();
+  console.time('push local simple');
   await pushLocalNotes(local, /*dry run*/false, combined_remote_status);
+  console.timeEnd('push local simple');
 }
 
 function writeOutputIfElementIsPresent(element_id, content) {
@@ -2198,7 +2227,7 @@ async function putNote(note) {
     headers: {
       "Content-Type": "text/plain",
     },
-    body: await global_notes.readFile(note), // body data type must match "Content-Type" header
+    body: await global.notes.readFile(note), // body data type must match "Content-Type" header
   });
   return response.text();
 }
@@ -2242,10 +2271,13 @@ async function putAllNotes(repo) {
 // STATUS
 
 async function sha256sum(input_string) {
+  console.time('sha256sum');
   const encoder = new TextEncoder('utf-8');
   const bytes = encoder.encode(input_string);
   const hash = await crypto.subtle.digest('SHA-256', bytes);
-  return hashToString(hash);
+  let result = hashToString(hash);
+  console.timeEnd('sha256sum');
+  return result;
 }
 
 async function hashToString(arraybuffer) {
@@ -2282,17 +2314,30 @@ async function getRemoteStatus(repo_or_repos) {
   return statuses;
 }
 
+async function compareNote(uuid) {
+  let note = await global.notes.readFile(uuid);
+  let reference = await global.notes.readFile(uuid);
+  let result = (note === reference);
+  console.log('reference', reference);
+  console.log('note', note);
+  console.log('result', result);
+  return result;
+}
+
 async function getLocalStatus(repo) {
   const notes = await getLocalNotes(repo);
   let status = {};
+  console.time('get local status ' + repo);
   for (let note of notes) {
-    status[note] = await sha256sum(await global_notes.readFile(note));
+
+    status[note] = await sha256sum(await global.notes.readFile(note));
   }
+  console.timeEnd('get local status ' + repo);
   return status;
 }
 
 async function getLocalNotes(repo) {
-  const notes = await global_notes.listFiles();
+  const notes = await global.notes.listFiles();
   return notes.filter(note => note.startsWith(repo + "/"));
 }
 
@@ -2949,6 +2994,7 @@ async function run() {
 
   global = {};
   global.handlers = {};
+  global.notes = await buildFlatCache();
 
   await handleRouting();
 }
