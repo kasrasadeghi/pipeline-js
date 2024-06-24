@@ -53,7 +53,7 @@ try:
     if args.no_docker:
         driver.get("https://localhost:8100")
     else:
-        driver.get("https://server:8100")
+        driver.get("https://server:5000")
 
     # check that page loads
     element = WebDriverWait(driver, 10).until(
@@ -82,7 +82,13 @@ try:
     time.sleep(2)
 
     # click message input box
-    # driver.find_element(By.ID, "msg_input").send_keys("selenium test message").submit()
+    driver.find_element(By.ID, "msg_input").send_keys("selenium test message")
+    
+    # press enter
+    driver.find_element(By.ID, "msg_input").send_keys(u'\ue007')
+
+    # press enter on empty to sync
+    driver.find_element(By.ID, "msg_input").send_keys(u'\ue007')
 
     # Keep the browser open for a while to allow viewing
     time.sleep(30)

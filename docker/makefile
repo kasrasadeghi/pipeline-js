@@ -3,3 +3,6 @@ default:
 
 certs:
 	python ../gen-certs.py --server-name server
+
+test:
+	python test.py --no-docker
