@@ -27,7 +27,7 @@ def compute_status(repos, headers) -> "http_response":
     def hash(note_path):
         with open(note_path, "rb") as f:
             return hashlib.sha256(f.read()).hexdigest()
-    
+
     def hash_repo(repo):
         repo_path = get_repo_path(repo)
         if not os.path.isdir(repo_path):
@@ -38,7 +38,7 @@ def compute_status(repos, headers) -> "http_response":
     for repo in repos:
         if '/' in repo or '..' in repo:
             return HTTP_NOT_FOUND(b"bad repo: " + repo.encode())
-    
+
     cors_header = allow_cors_for_localhost(headers)
     if len(repos) == 1:
         status = hash_repo(repo)
@@ -83,8 +83,15 @@ while True:
         }
 
         assets = [
-            "style.css", "indexed-fs.js", "service-worker.js", 
-            "favicon.ico", "icon512.png", "icon192.png", "maskable_icon.png", "maskable_icon_x192.png"
+            "style.css",
+            "indexed-fs.js",
+            "service-worker.js",
+
+            "icons/favicon.ico",
+            "icons/icon512.png",
+            "icons/icon192.png",
+            "icons/maskable_icon.png",
+            "icons/maskable_icon_x192.png"
         ]
 
         if path == '/sw-index.html':
@@ -168,7 +175,7 @@ while True:
         path = path.removeprefix('/')
         if not os.path.exists(path):
             http_response = HTTP_NOT_FOUND(b"could not handle path: " + path.encode())
-            respond(http_response)   
+            respond(http_response)
             continue
 
         with open(path, 'rb') as f:
