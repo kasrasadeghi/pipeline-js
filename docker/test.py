@@ -7,6 +7,17 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import time
 from selenium.common.exceptions import WebDriverException, TimeoutException
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--no-docker", default=False, action="store_true", help="Disable Docker")
+args = parser.parse_args()
+
+if args.no_docker:
+    print("Docker option disabled")
+else:
+    print("Docker option enabled")
+
 
 print("Starting test script...")
 
@@ -16,17 +27,22 @@ chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--ignore-certificate-errors")
 chrome_options.add_argument("--ignore-ssl-errors")
-chrome_options.add_argument("--ssl-cert-path=/opt/selenium/cert/cert.pem")
 
-print('does cert folder exist?', os.listdir("cert"))
+if args.no_docker:
+    chrome_options.add_argument("--ssl-cert-path=cert/cert.pem")
+else:
+    chrome_options.add_argument("--ssl-cert-path=/opt/selenium/cert/cert.pem")
 
 print("Setting up WebDriver...")
 
 # Set up Selenium WebDriver
-driver = webdriver.Remote(
-    command_executor='http://selenium:4444/wd/hub',
-    options=chrome_options
-)
+if args.no_docker:
+    driver = webdriver.Chrome(options=chrome_options)
+else:
+    driver = webdriver.Remote(
+        command_executor='http://selenium:4444/wd/hub',
+        options=chrome_options
+    )
 print("WebDriver set up successfully.")
 print(f"Chrome version: {driver.capabilities['browserVersion']}")
 print(f"ChromeDriver version: {driver.capabilities['chrome']['chromedriverVersion'].split(' ')[0]}")
@@ -34,7 +50,10 @@ print(f"ChromeDriver version: {driver.capabilities['chrome']['chromedriverVersio
 try:
     # Navigate to the Flask app
     print("Navigating to Flask app...")
-    driver.get("https://server:5000")
+    if args.no_docker:
+        driver.get("https://localhost:8100")
+    else:
+        driver.get("https://server:5000")
 
     # check that page loads
     element = WebDriverWait(driver, 10).until(
@@ -49,6 +68,21 @@ try:
     # type in "selenium_test"
     driver.find_element(By.ID, "local_repo_name").send_keys("selenium_test")
     driver.find_element(By.ID, "local_repo_name_button").click()
+
+    # click journal button
+    driver.find_element(By.ID, "journal_button").click()
+    time.sleep(1)
+    driver.find_element(By.ID, "journal_button").click()
+
+    # check that page loads
+    element = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
+
+    time.sleep(2)
+
+    # click message input box
+    # driver.find_element(By.ID, "msg_input").send_keys("selenium test message").submit()
 
     # Keep the browser open for a while to allow viewing
     time.sleep(30)
