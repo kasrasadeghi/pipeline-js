@@ -4,19 +4,19 @@
     "display": "minimal-ui",
     "icons": [
         {
-            "src": "icon512.png",
+            "src": "icons/icon512.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any"
         },
         {
-            "src": "maskable_icon.png",
+            "src": "icons/maskable_icon.png",
             "sizes": "568x568",
             "type": "image/png",
             "purpose": "maskable"
         },
         {
-            "src": "maskable_icon_x192.png",
+            "src": "icons/maskable_icon_x192.png",
             "sizes": "192x192",
             "type": "image/png"
         }
