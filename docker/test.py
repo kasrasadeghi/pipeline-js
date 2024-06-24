@@ -31,10 +31,6 @@ print("WebDriver set up successfully.")
 print(f"Chrome version: {driver.capabilities['browserVersion']}")
 print(f"ChromeDriver version: {driver.capabilities['chrome']['chromedriverVersion'].split(' ')[0]}")
 
-# Wait for the server to be ready
-print("Waiting for server to be ready...")
-time.sleep(10)
-
 try:
     # Navigate to the Flask app
     print("Navigating to Flask app...")
@@ -47,6 +43,12 @@ try:
 
     # check page source for <title>
     assert "Pipeline" in driver.title
+
+    time.sleep(2)
+
+    # type in "selenium_test"
+    driver.find_element(By.ID, "local_repo_name").send_keys("selenium_test")
+    driver.find_element(By.ID, "local_repo_name_button").click()
 
     # Keep the browser open for a while to allow viewing
     time.sleep(30)

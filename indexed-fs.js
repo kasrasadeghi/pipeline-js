@@ -2498,7 +2498,7 @@ async function handleTextField(event, id, file_name, rerender) {
 function TextField({id, file_name, label, value, rerender}) {
   return (
     `<input onkeydown="return handleTextField(event, '${id}', '${file_name}', ${rerender})" type='text' id='${id}' value="${value}"></input>
-    <button class='menu-button' onclick="return handleTextField(true, '${id}', '${file_name}', ${rerender})">${label}</button>`
+    <button class='menu-button' id='${id}_button' onclick="return handleTextField(true, '${id}', '${file_name}', ${rerender})">${label}</button>`
   );
 }
 
