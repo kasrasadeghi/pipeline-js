@@ -20,6 +20,7 @@ services:
     volumes:
       - ../:/app
       - ./cert/:/app/cert
+      - ./notes:/root/notes
     ports:
       - "8100:8100"
     depends_on:
@@ -70,6 +71,7 @@ services:
     volumes:
       - ./test.py:/app/test.py
       - ./cert/:/app/cert/
+      - ./notes:/app/notes
     depends_on:
       selenium:
         condition: service_healthy

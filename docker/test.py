@@ -1,13 +1,15 @@
 import os
+import shutil
+import time
+import argparse
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-import time
 from selenium.common.exceptions import WebDriverException, TimeoutException
-import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--no-docker", default=False, action="store_true", help="Disable Docker")
@@ -65,13 +67,16 @@ try:
 
     time.sleep(2)
 
+    repo_name = "selenium_test"
+    # remove folder if it exists
+    if os.path.exists('notes/' + repo_name):
+        shutil.rmtree('notes/' + repo_name)
+
     # type in "selenium_test"
     driver.find_element(By.ID, "local_repo_name").send_keys("selenium_test")
     driver.find_element(By.ID, "local_repo_name_button").click()
 
     # click journal button
-    driver.find_element(By.ID, "journal_button").click()
-    time.sleep(1)
     driver.find_element(By.ID, "journal_button").click()
 
     # check that page loads
@@ -89,6 +94,12 @@ try:
 
     # press enter on empty to sync
     driver.find_element(By.ID, "msg_input").send_keys(u'\ue007')
+
+    # get current uuid using javascript
+    current_uuid = driver.execute_script("return getCurrentNoteUuid()")
+
+    assert os.path.exists('notes/' + repo_name)
+    assert os.path.exists('notes/' + current_uuid)
 
     # Keep the browser open for a while to allow viewing
     time.sleep(30)
