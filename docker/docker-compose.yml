@@ -1,5 +1,19 @@
 version: '3'
 services:
+  # a cert creator
+  certs:
+    build:
+      context: .
+      dockerfile: certs.Dockerfile
+    volumes:
+      - ../gen-certs.py:/app/gen-certs.py
+      - ./cert:/app/cert
+    healthcheck:
+      test: ["CMD", "ls", "/app/cert/cert.pem"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   server:
     build:
       dockerfile: server.Dockerfile
@@ -8,7 +22,11 @@ services:
       - ./cert/:/app/cert
     ports:
       - "5000:5000"
+    depends_on:
+      certs:
+        condition: service_completed_successfully
 
+  # a simple test client that just curls the server
   client:
     build:
       context: .
@@ -16,8 +34,14 @@ services:
     volumes:
       - ./cert:/cert
     depends_on:
-      - server
+      server:
+        condition: service_started
+      certs:
+        condition: service_completed_successfully
 
+  # the provider of the selenium remote webdriver
+  # - useful for testing on things other than chrome
+  # - cool to use vnc to watch the tests in action
   selenium:
     image: selenium/standalone-chrome:latest
     shm_size: 2gb
@@ -33,14 +57,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    depends_on:
+      certs:
+        condition: service_completed_successfully
 
+  # the actual selenium tests.
+  # - TODO client cert doesn't seem to be working
   test:
     build:
       context: .
       dockerfile: test.Dockerfile
     volumes:
       - ./test.py:/app/test.py
-      - ./cert/cert.pem:/app/cert/cert.pem
+      - ./cert/:/app/cert/
     depends_on:
       selenium:
         condition: service_healthy
+      certs:
+        condition: service_completed_successfully

@@ -28,10 +28,13 @@ private_key = "cert/key.pem"
 
 os.makedirs("cert", exist_ok=True)
 
-subprocess.run([
-	"openssl", "req", "-x509", "-newkey", "rsa:4096", "-nodes", 
-	"-out", public_certificate,
-	"-keyout", private_key, "-days", "365",
-	"-subj", "/C=US/ST=Washington/L=Seattle/O=kazematics/OU=PipelineSecurity/CN=Pipeline",
-	"-addext", subjectAltName,
-])
+if os.path.exists(public_certificate) and os.path.exists(private_key):
+	print("certificates already exist")
+else:
+	subprocess.run([
+		"openssl", "req", "-x509", "-newkey", "rsa:4096", "-nodes", 
+		"-out", public_certificate,
+		"-keyout", private_key, "-days", "365",
+		"-subj", "/C=US/ST=Washington/L=Seattle/O=kazematics/OU=PipelineSecurity/CN=Pipeline",
+		"-addext", subjectAltName,
+	])

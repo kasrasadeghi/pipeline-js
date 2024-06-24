@@ -100,6 +100,9 @@ while True:
         elif path == "/manifest.json":
             path = "manifest.json"
             mimetype = b"application/manifest+json"
+        elif path == "/pipeline-cert.pem":
+            path = "cert/cert.pem"
+            mimetype = b"application/x-x509-ca-cert"
         elif path.removeprefix("/") in assets:
             path = path.removeprefix("/")
             mimetype = mimetype_table[os.path.splitext(path)[1]]

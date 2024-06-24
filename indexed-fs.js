@@ -2644,9 +2644,11 @@ async function renderSetup() {
   return [
     `<div style="margin: 10px">
        ${TextField({id: 'local_repo_name', file_name: LOCAL_REPO_NAME_FILE, rerender: 'renderSetup', value: local_repo_name, label: 'set local repo name'})}
-     </div>
-     <p>${local_repo_name_message}</p>
-     ${splash}`,
+       </div>
+       <p>${local_repo_name_message}</p>
+     ${splash}
+     <a id='cert-button' href="/pipeline-cert.pem" download style="margin: 10px">download self-signed client certificate</a>
+     `,
     add_links
   ];
 }
