@@ -433,6 +433,7 @@ class FlatCache {
   }
 
   async build() {
+    console.log('building flat cache');
     this.flatRead = await buildFlatRead();
   }
 
@@ -1563,7 +1564,7 @@ async function handleMsg(event) {
 
 async function toggleMenu () {
   let menu_state = await toggleBooleanFile(MENU_TOGGLE_FILE, "false");
-  document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "none" : "flex");
+  document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 }
 
 async function paintDiscFooter(uuid) {
@@ -1602,7 +1603,7 @@ async function paintDiscFooter(uuid) {
   }
 
   let menu_state = await readBooleanFile(MENU_TOGGLE_FILE, "false");
-  document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "none" : "flex");
+  document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 
   let footer = document.getElementsByTagName('footer')[0];
   footer.innerHTML = `${msg_form}
@@ -2619,6 +2620,9 @@ async function renderSetup() {
     local_repo_name = '';
   }
   if (local_repo_name.length > 0) {
+    if (global.notes === undefined) {
+      global.notes = await buildFlatCache();
+    }
     local_repo_name_message = `Local repo name is ${colorize_repo(local_repo_name)}`;
     add_links = `
     ${MenuButton({icon: 'menu', action: 'gotoMenu()'})}
