@@ -2892,12 +2892,10 @@ async function handleRouting() {
   console.log("initializing from path", window.location.pathname);
 
   if (window.location.pathname.startsWith('/disc/')) {
-    let uuid = window.location.pathname.slice("/disc/".length);
-    paintDisc(uuid);
+    paintDisc(getCurrentNoteUuid());
 
   } else if (window.location.pathname.startsWith('/edit/')) {
-    let uuid = window.location.pathname.slice("/edit/".length);
-    paintEdit(uuid);
+    paintEdit(getCurrentNoteUuid());
 
   } else if (window.location.pathname.startsWith('/list')) {
     paintList();
