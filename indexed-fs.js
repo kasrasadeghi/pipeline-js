@@ -1661,7 +1661,8 @@ async function submitEdit() {
   let textarea = document.getElementsByTagName('textarea')[0];
   let content = textarea.value;  // textareas are not dos newlined, http requests are.  i think?
   // TODO consider using .replace instead of .split and .join
-  await global.notes.writeFile(getCurrentNoteUuid(), content);
+  const uuid = getCurrentNoteUuid();
+  await global.notes.writeFile(uuid, content);
   gotoDisc(uuid);
 };
 
