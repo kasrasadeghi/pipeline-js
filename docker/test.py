@@ -53,7 +53,7 @@ try:
     if args.no_docker:
         driver.get("https://localhost:8100")
     else:
-        driver.get("https://server:5000")
+        driver.get("https://server:8100")
 
     # check that page loads
     element = WebDriverWait(driver, 10).until(

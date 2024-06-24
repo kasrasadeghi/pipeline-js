@@ -21,7 +21,7 @@ services:
       - ../:/app
       - ./cert/:/app/cert
     ports:
-      - "8100:5000"
+      - "8100:8100"
     depends_on:
       certs:
         condition: service_completed_successfully
