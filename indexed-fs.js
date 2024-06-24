@@ -2116,7 +2116,7 @@ async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
   let remote_status = undefined;
   if (combined_remote_status !== undefined) {
     // console.log('using combined remote status');
-    remote_status = combined_remote_status[repo];
+    remote_status = combined_remote_status[repo] || {};
   } else {
     remote_status = await getRemoteStatus(repo);
   }
@@ -2165,7 +2165,7 @@ async function pushLocalNotes(repo, dry_run, combined_remote_status) {
   let remote_status = undefined;
   if (combined_remote_status !== undefined) {
     console.log('using combined remote status');
-    remote_status = combined_remote_status[repo];
+    remote_status = combined_remote_status[repo] || {};
   } else {
     remote_status = await getRemoteStatus(repo);
   }
