@@ -28,8 +28,6 @@ class FileDB {
             // tx.store.createIndex('title', 'title');
         }
 
-
-        this.db.createObjectStore(this.storeName, { keyPath: "path" });
         // maybe TODO create index on title and date and other metadata
       };
 
