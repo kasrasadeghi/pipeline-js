@@ -40,7 +40,7 @@ status:
 	systemctl status pipeline-notes
 
 certs:
-	bash make-cert.bash
+	python gen-certs.py
 
 .PHONY: proxy
 proxy: proxy.cpp
@@ -57,3 +57,6 @@ tm:
 
 sup:
 	python supervisor.py &
+
+docker:
+	docker-compose up --build --force-recreate

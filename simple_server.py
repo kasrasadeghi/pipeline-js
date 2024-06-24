@@ -49,6 +49,8 @@ def compute_status(repos, headers) -> "http_response":
 
 
 listen_socket, https = create_server_socket(HOST, PORT)
+print(f"hosting pipeline server on host '{HOST}' and port '{PORT}'")
+print(f"notes root '{NOTES_ROOT}' in home folder '{os.path.expanduser('~')}'")
 while True:
     try:
         log('----------------------------------------')
