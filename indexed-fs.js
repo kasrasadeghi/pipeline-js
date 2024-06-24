@@ -1579,8 +1579,8 @@ async function paintDiscFooter(uuid) {
   let mix_button = '';
   if (has_remote) {
     mix_state = await readBooleanFile(MIX_FILE, "false");
-    mix_button_value = lookupIcon(mix_state === 'true' ? 'focus' :'mix');
-    mix_button = `<button id="mix-button" class='menu-button' onclick="return clickMix(event)">${mix_button_value}</button>`;
+    mix_button_value = mix_state === 'true' ? 'focus' :'mix';
+    mix_button = MenuButton({icon: mix_button_value, action: 'return clickMix(event)'});
   }
 
   let msg_form = "";
@@ -1598,7 +1598,7 @@ async function paintDiscFooter(uuid) {
       style="user-select: text; white-space: pre-wrap; word-break: break-word;"
       data-lexical-editor="true"><br></div>`
 
-    edit_button = `<button class='menu-button' onclick="gotoEdit('${uuid}')">${lookupIcon('edit')}</button>`;
+    edit_button = MenuButton({icon: 'edit', action: `gotoEdit('${uuid}')`});
   }
 
   let menu_state = await readBooleanFile(MENU_TOGGLE_FILE, "false");
@@ -1613,10 +1613,10 @@ async function paintDiscFooter(uuid) {
     </div>
     <div id="footer-button-container">
       ${edit_button}
-      <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
-      <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
-      <button class='menu-button' onclick="gotoSearch()">${lookupIcon('search')}</button>
-      <button class='menu-button' onclick="return toggleMenu()">${lookupIcon('routine')}</button>
+      ${MenuButton({icon: 'list', action: 'gotoList()'})}
+      ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
+      ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
+      ${MenuButton({icon: 'routine', action: 'return toggleMenu()'})}
       ${mix_button}
     </div>
     <div id='state_display'></div>
@@ -1677,10 +1677,11 @@ async function renderEdit(uuid) {
   return [
     // you need a newline after the start textarea tag, otherwise empty first lines are eaten and lost on submit.
     `<textarea class='editor_textarea'>\n` + content + "</textarea>",
-    `<button class='menu-button' onclick="submitEdit()">${lookupIcon('submit')}</button>
-     <button class='menu-button' onclick="gotoDisc('${uuid}')">${lookupIcon('back')}</button>
-     <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
-     `
+    `
+    ${MenuButton({icon: 'submit', action: 'submitEdit()'})}
+    ${MenuButton({icon: 'back', action: `gotoDisc('${uuid}')`})}
+    ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
+    `
   ];
 }
 
@@ -1941,8 +1942,8 @@ async function paintList() {
   // let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
   let footer = document.getElementsByTagName('footer')[0];
   footer.innerHTML = `
-    <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
-    <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>
+    ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
+    ${MenuButton({icon: 'menu', action: 'gotoMenu()'})}
     ${await ToggleButton({id: 'list_notes_toggle', file: LIST_NOTES_TOGGLE_FILE, query_param: 'show_notes', label: lookupIcon('notes'), rerender: 'paintList'})}
     `;
 }
@@ -2004,7 +2005,7 @@ async function hasRemote() {
 
 async function syncButton() {
   if (await hasRemote()) {
-    return `<button class='menu-button' onclick="gotoSync()">${lookupIcon('sync')}</button>`;
+    return MenuButton({icon: 'sync', action: 'gotoSync()'});
   } else {
     return ``;
   }
@@ -2071,9 +2072,9 @@ async function renderSync() {
   </div>
   <div style='display: flex;'>` + repo_sync_menu(local, 'local') + remotes.map(remote => repo_sync_menu(remote, 'remote')).join("") + `</div>`,
   `<div>
-    <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
-    <button class='menu-button' onclick="gotoSetup()">${lookupIcon('setup')}</button>
-    <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
+    ${MenuButton({icon: 'list', action: 'gotoList()'})}
+    ${MenuButton({icon: 'setup', action: 'gotoSetup()'})}
+    ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
   </div>
   `]
 }
@@ -2420,9 +2421,9 @@ function renderSearchPagination(all_messages) {
   };
   let pagination = document.getElementById('search-pagination');
   pagination.innerHTML = `
-    <button class='menu-button' onclick="return global.handlers.paginate(1)">${lookupIcon('next')}</button>
-    <button class='menu-button' onclick="return global.handlers.paginate(-1)">${lookupIcon('prev')}</button>
-    <button class='menu-button' onclick="return global.handlers.paginate('all')">${lookupIcon('all')}</button>
+    ${MenuButton({icon: 'next', action: 'return global.handlers.paginate(1)'})}
+    ${MenuButton({icon: 'prev', action: 'return global.handlers.paginate(-1)'})}
+    ${MenuButton({icon: 'all', action: "return global.handlers.paginate('all')"})}
   `;
 }
 
@@ -2482,6 +2483,12 @@ async function gotoSearch() {
   return false;
 }
 
+// COMPONENT MENU BUTTON
+
+function MenuButton({icon, action}) {
+  return `<button class='menu-button' id='${icon}_button' onclick="${action}">${lookupIcon(icon)}</button>`;
+}
+
 // COMPONENT TEXTFIELD
 
 // used for first time setup and setup configuration
@@ -2513,7 +2520,7 @@ async function handleTextAction(event, id, action) {
 function TextAction({id, label, value, action}) {
   return (
     `<input onkeydown="return handleTextAction(event, '${id}', ${action})" type='text' id='${id}' value="${value}"></input>
-    <button class='menu-button' onclick="return handleTextAction(true, '${id}', ${action})">${label}</button>`
+    <button class='menu-button' id='${id}_button' onclick="return handleTextAction(true, '${id}', ${action})">${label}</button>`
   );
 }
 
@@ -2621,8 +2628,8 @@ async function renderSetup() {
   if (local_repo_name.length > 0) {
     local_repo_name_message = `Local repo name is ${colorize_repo(local_repo_name)}`;
     add_links = `
-    <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>
-    <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
+    ${MenuButton({icon: 'menu', action: 'gotoMenu()'})}
+    ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
     `;
   }
 
@@ -2686,20 +2693,20 @@ async function renderMenu() {
   return [
     `${TextAction({id: 'new_note', label: lookupIcon('new note'), value: '', action: 'gotoNewNote'})}
     <br/>
-    <button class='menu-button' onclick="gotoRoutine()">${lookupIcon('routine')}</button>
+    ${MenuButton({icon: 'routine', action: 'gotoRoutine()'})}
     <br/>
     <div>
       <p> Advanced Debugging Tools: </p>
       <ul>
-      <li><button class='menu-button' onclick="return clearServiceWorkerCaches();">clear service worker cache</button></li>
+      <li><button class='menu-button' id="clear-cache-button" onclick="return clearServiceWorkerCaches();">clear service worker cache</button></li>
       </ul>
     </div>`,
     `<div>
-      <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
-      <button class='menu-button' onclick="gotoList()">${lookupIcon('list')}</button>
-      <button class='menu-button' onclick="gotoSearch()">${lookupIcon('search')}</button>
-      <button class='menu-button' onclick="gotoSync()">${lookupIcon('sync')}</button>
-      <button class='menu-button' onclick="gotoSetup()">${lookupIcon('setup')}</button>
+      ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
+      ${MenuButton({icon: 'list', action: 'gotoList()'})}
+      ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
+      ${MenuButton({icon: 'sync', action: 'gotoSync()'})}
+      ${MenuButton({icon: 'setup', action: 'gotoSetup()'})}
     </div>`
   ];
 }
@@ -2810,7 +2817,8 @@ async function routineContent() {
     page = page.filter(section => section.title == "ROUTINE").map(renderRoutineSection);
     content = page.join("\n") + `<br><br>`;
     if (is_local_routine) {
-      content += `<div style="display: flex; justify-content: end;"><button class='menu-button' onclick="gotoEdit('${most_recent_routine_note.uuid}')">${lookupIcon('edit')}</button></div>`;
+      let edit_action = `gotoEdit('${most_recent_routine_note.uuid}')}`;
+      content += `<div style="display: flex; justify-content: end;">${MenuButton({icon: 'edit', action: edit_action})}</div>`;
     }
   }
   return content;
@@ -2824,8 +2832,10 @@ async function renderRoutine() {
       <h3>routine</h3>
       ${content}
     </div>`,
-    `<button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
-    <button class='menu-button' onclick="gotoMenu()">${lookupIcon('menu')}</button>`
+    `
+    ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
+    ${MenuButton({icon: 'menu', action: 'gotoMenu()'})}
+    `
   ];
 }
 
@@ -2952,7 +2962,7 @@ async function run() {
   const reloadNecessary = () => {
     alert("Database is outdated, please reload the page.");
     // document.location.reload();
-    document.getElementsByTagName("body")[0].innerHTML = `Database is outdated, please <button class='menu-button' onclick="window.location.reload(); return false;">reload the page</button>.`;
+    document.getElementsByTagName("body")[0].innerHTML = `Database is outdated, please <button class='menu-button' id='reload-button' onclick="window.location.reload(); return false;">reload the page</button>.`;
   }
 
   await global_notes.init(reloadNecessary);
