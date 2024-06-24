@@ -2441,12 +2441,14 @@ function runSearch() {
   });
 }
 
-async function searchAction(text) {
+async function searchAction(id) {
+  id = id || "search_query";
+  let text = document.getElementById(id).value;
   const urlParams = new URLSearchParams(window.location.search);
   urlParams.set('q', text);
   urlParams.set('page', '0');
-
   window.history.pushState({}, "", "/search/?" + urlParams.toString());
+
   runSearch();
 }
 
@@ -2459,7 +2461,7 @@ async function renderSearchFooter() {
     <br/>
     <div id='search-pagination'></div>
     <div id='search-options'>
-    ${await ToggleButton({id: "case-sensitive-enabled", label: lookupIcon("case"), file: SEARCH_CASE_SENSITIVE_FILE, query_param: "case", default_value: "true", rerender: 'runSearch'})}
+    ${await ToggleButton({id: "case-sensitive-enabled", label: lookupIcon("case"), file: SEARCH_CASE_SENSITIVE_FILE, query_param: "case", default_value: "true", rerender: 'searchAction'})}
     </div>
   `;
   return menu;
@@ -2501,10 +2503,9 @@ function TextField({id, file_name, label, value, rerender}) {
   );
 }
 
-async function handleTextAction(event, id, action) {
+async function handleTextAction(event, source_id, action) {
   if (event === true || event.key === 'Enter') {
-    let text = document.getElementById(id).value;
-    await action(text);
+    await action(source_id);
     return false;
   }
 };
@@ -2662,8 +2663,9 @@ async function gotoMenu() {
   window.history.pushState({},"", "/menu");
 }
 
-async function gotoNewNote(title) {
-  let uuid = await newNote(title);
+async function gotoNewNote(id) {
+  let text = document.getElementById(id).value;
+  let uuid = await newNote(text);
   await gotoDisc(uuid);
 }
 
