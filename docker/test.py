@@ -1,3 +1,4 @@
+import os
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -5,8 +6,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import time
-from urllib3.exceptions import MaxRetryError
-from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import WebDriverException, TimeoutException
 
 print("Starting test script...")
 
@@ -14,6 +14,11 @@ print("Starting test script...")
 chrome_options = Options()
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
+chrome_options.add_argument("--ignore-certificate-errors")
+chrome_options.add_argument("--ignore-ssl-errors")
+chrome_options.add_argument("--ssl-cert-path=/opt/selenium/cert/cert.pem")
+
+print('does cert folder exist?', os.listdir("cert"))
 
 print("Setting up WebDriver...")
 
@@ -33,22 +38,23 @@ time.sleep(10)
 try:
     # Navigate to the Flask app
     print("Navigating to Flask app...")
-    driver.get("http://server:5000")
+    driver.get("https://server:5000")
 
-    # Wait for the page to load and check if "Hello, World!" is in the page content
-    print("Waiting for 'Hello, World!' text...")
+    # check that page loads
     element = WebDriverWait(driver, 10).until(
-        EC.text_to_be_present_in_element((By.TAG_NAME, "body"), "Hello, World!")
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
 
-    if "Hello, World!" in driver.page_source:
-        print("Test passed successfully!")
-    else:
-        print("Test failed: 'Hello, World!' not found in page source.")
+    # check page source for <title>
+    assert "Pipeline" in driver.title
 
     # Keep the browser open for a while to allow viewing
     time.sleep(30)
 
+except TimeoutException:
+    print("Timeout waiting for page to load")
+except WebDriverException as e:
+    print(f"WebDriver exception: {str(e)}")
 except Exception as e:
     print(f"Test failed: {str(e)}")
 

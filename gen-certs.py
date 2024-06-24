@@ -8,10 +8,21 @@
 
 import subprocess
 import os
+import argparse
 
-# TODO argparser for server ip
+# argparser for server ip
+argparser = argparse.ArgumentParser()
+argparser.add_argument("--server-ip", type=str)
+argparser.add_argument("--server-name", type=str)
+args = argparser.parse_args()
 
-SERVER_IP = "192.73.37.1"
+assert args.server_ip or args.server_name, "Please provide either --server-ip or --server-name"
+
+if args.server_ip:
+	subjectAltName = f"subjectAltName=IP:{args.server_ip}"
+else:
+	subjectAltName = f"subjectAltName=DNS:{args.server_name}"
+
 public_certificate = "cert/cert.pem"
 private_key = "cert/key.pem"
 
@@ -22,5 +33,5 @@ subprocess.run([
 	"-out", public_certificate,
 	"-keyout", private_key, "-days", "365",
 	"-subj", "/C=US/ST=Washington/L=Seattle/O=kazematics/OU=PipelineSecurity/CN=Pipeline",
-	"-addext", f"subjectAltName=IP:{SERVER_IP}"
+	"-addext", subjectAltName,
 ])

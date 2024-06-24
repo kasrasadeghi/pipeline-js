@@ -2,8 +2,10 @@ version: '3'
 services:
   server:
     build:
-      context: .
       dockerfile: server.Dockerfile
+    volumes:
+      - ../:/app
+      - ./cert/:/app/cert
     ports:
       - "5000:5000"
 
@@ -11,6 +13,8 @@ services:
     build:
       context: .
       dockerfile: client.Dockerfile
+    volumes:
+      - ./cert:/cert
     depends_on:
       - server
 
@@ -20,6 +24,8 @@ services:
     ports:
       - "4444:4444"
       - "7900:7900"
+    volumes:
+      - ./cert:/opt/selenium/cert
     environment:
       - SE_VNC_NO_PASSWORD=1
     healthcheck:
@@ -34,6 +40,7 @@ services:
       dockerfile: test.Dockerfile
     volumes:
       - ./test.py:/app/test.py
+      - ./cert/cert.pem:/app/cert/cert.pem
     depends_on:
       selenium:
         condition: service_healthy

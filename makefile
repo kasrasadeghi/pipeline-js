@@ -40,7 +40,7 @@ status:
 	systemctl status pipeline-notes
 
 certs:
-	python gen-certs.py
+	python gen-certs.py --server-ip 10.50.50.2
 
 .PHONY: proxy
 proxy: proxy.cpp
