@@ -2441,29 +2441,21 @@ function runSearch() {
   });
 }
 
-function handleSearch(event) {
-  console.log(event);
-  if (event == true || event.key === 'Enter') {
-    let text = document.getElementById('search_query').value;
-    console.log('handling search', text);
+async function searchAction(text) {
+  const urlParams = new URLSearchParams(window.location.search);
+  urlParams.set('q', text);
+  urlParams.set('page', '0');
 
-    const urlParams = new URLSearchParams(window.location.search);
-    urlParams.set('q', text);
-    urlParams.set('page', '0');
-
-    window.history.pushState({}, "", "/search/?" + urlParams.toString());
-    runSearch();
-    return false;
-  }
-};
+  window.history.pushState({}, "", "/search/?" + urlParams.toString());
+  runSearch();
+}
 
 async function renderSearchFooter() {
   const urlParams = new URLSearchParams(window.location.search);
   const text = urlParams.get('q') || '';
   let menu = `
-    <button class='menu-button' onclick="gotoJournal()">${lookupIcon('journal')}</button>
-    <input onkeydown="return handleSearch(event)" type='text' id='search_query' value="${text}"></input>
-    <button class='menu-button' onclick="return handleSearch(true)">${lookupIcon('search')}</button>
+    ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
+    ${TextAction({id: 'search_query', label: lookupIcon('search'), value: text, action: 'searchAction'})}
     <br/>
     <div id='search-pagination'></div>
     <div id='search-options'>
