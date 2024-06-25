@@ -92,6 +92,8 @@ try:
     # press enter
     driver.find_element(By.ID, "msg_input").send_keys(u'\ue007')
 
+    time.sleep(1)
+
     # press enter on empty to sync
     driver.find_element(By.ID, "msg_input").send_keys(u'\ue007')
 
