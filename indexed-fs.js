@@ -2459,9 +2459,9 @@ function runSearch() {
   document.title = `Search "${text}" - Pipeline Notes`;
   const case_sensitive = urlParams.get('case') === 'true';
 
+  // search footer should already be rendered
   searchResults = search(text, case_sensitive).then(async all_messages => {
     renderSearchMain(all_messages);
-    document.getElementsByTagName("footer")[0].innerHTML = await renderSearchFooter();
     renderSearchPagination(all_messages);
   });
 }
@@ -2482,7 +2482,7 @@ async function renderSearchFooter() {
   const text = urlParams.get('q') || '';
   let menu = `
     ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
-    ${TextAction({id: 'search_query', label: lookupIcon('search'), value: text, action: 'searchAction'})}
+    ${TextAction({id: 'search_query', label: lookupIcon('search'), value: text, action: 'searchAction', everykey: true})}
     <br/>
     <div id='search-pagination'></div>
     <div id='search-options'>
@@ -2528,16 +2528,20 @@ function TextField({id, file_name, label, value, rerender}) {
   );
 }
 
-async function handleTextAction(event, source_id, action) {
+async function handleTextAction(event, source_id, action, everykey) {
+  if (everykey) {
+    await action(source_id);
+    return true;
+  }
   if (event === true || event.key === 'Enter') {
     await action(source_id);
     return false;
   }
 };
 
-function TextAction({id, label, value, action}) {
+function TextAction({id, label, value, action, everykey}) {
   return (
-    `<input onkeydown="return handleTextAction(event, '${id}', ${action})" type='text' id='${id}' value="${value}"></input>
+    `<input onkeyup="return handleTextAction(event, '${id}', ${action}, ${!!everykey})" type='text' id='${id}' value="${value}"></input>
     <button class='menu-button' id='${id}_button' onclick="return handleTextAction(true, '${id}', ${action})">${label}</button>`
   );
 }
@@ -2929,7 +2933,7 @@ async function handleRouting() {
     paintSimple(await renderSync());
 
   } else if (window.location.pathname.startsWith('/search')) {
-    document.getElementsByTagName("footer")[0] = await renderSearchFooter();
+    document.getElementsByTagName("footer")[0].innerHTML = await renderSearchFooter();
     runSearch();
   } else if (window.location.pathname.startsWith('/setup')) {
     paintSimple(await renderSetup());
