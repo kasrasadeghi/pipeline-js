@@ -183,6 +183,7 @@ const SUBBED_REPOS_FILE = "subbed_repos";
 // GENERAL UTIL
 
 function paintSimple(render_result) {
+  document.title = "Pipeline Notes";
   let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
   [main.innerHTML, footer.innerHTML] = render_result;
@@ -905,14 +906,17 @@ function htmlNoteContent(uuid, content) {
   console.assert(content !== null, content, 'content should not be null');
   let page = parseContent(content);
   let rewritten = rewrite(page, uuid);
-  let rendered = rewritten.map((s, i) => htmlSection(s, i, content)).join("");
+  let rendered = rewritten.map((s, i) => htmlSection(s, i, content, uuid)).join("");
   return "<div class='msglist'>" + rendered + "</div>"; // TODO it might make sense to move this _within_ section rendering
 }
 
-function htmlSection(section, i, content) {
+function htmlSection(section, i, content, uuid) {
   let output = [];
   if (! ('entry' === section.title && i === 0)) {
     output.push(`--- ${section.title} ---`)
+  }
+  if (section.title === 'METADATA' && pageIsJournal(global.notes.rewrite(uuid))) {
+    return "";
   }
   if (['METADATA', 'HTML'].includes(section.title)) {
     output.push(...section.lines);
@@ -986,6 +990,12 @@ const calendar_header_format = new Intl.DateTimeFormat('en-us', { timeZone: 'UTC
 // date timestamp, like hh:mm:ss in 24-hour clock
 const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
+// date timestamp with day, like Jan 15, hh:mm:ss in 24-hour clock
+const timestamp_day_format = new Intl.DateTimeFormat('en-us', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
+// date timestamp with day and year, like Jan 15, 2024, hh:mm:ss in 24-hour clock
+const timestamp_year_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
 // datetime format for "search" mode, like "Wed, Jan 15, hh:mm:ss" in 24-hour clock
 const datetime_format = new Intl.DateTimeFormat('en-us', { month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
@@ -1015,6 +1025,17 @@ function renderDatetime(date, mode) {
     time_format = datetime_brief_format;
     if (now.getFullYear() !== new Date(date).getFullYear()) {
       time_format = datetime_brief_year_format;
+    }
+  } else {
+    new Date(date);
+    if (now.getDate() !== new Date(date).getDate() ||
+        now.getMonth() !== new Date(date).getMonth() || 
+        now.getFullYear() !== new Date(date).getFullYear()
+    ) {
+      time_format = timestamp_day_format;
+    }
+    if (now.getFullYear() !== new Date(date).getFullYear()) {
+      time_format = timestamp_year_format;
     }
   }
   
@@ -1412,6 +1433,7 @@ const LIST_NOTES_TOGGLE_FILE = 'list notes toggle state';
 const SEARCH_CASE_SENSITIVE_FILE = 'search case sensitive state';
 
 async function paintDisc(uuid, flag) {
+  document.title = `${global.notes.get_note(uuid).title} - Pipeline Notes`;
   if (flag !== 'only main') {
     await paintDiscFooter(uuid);
 
@@ -1467,7 +1489,7 @@ async function renderDiscMixedBody(uuid) {
   }
 
   const content = global.notes.get_note(uuid).content;  
-  let rendered = page.map((s, i) => htmlSection(s, i, content)).join("\n");
+  let rendered = page.map((s, i) => htmlSection(s, i, content, uuid)).join("\n");
   return "<div class='msglist'>" + rendered + "</div>";
 }
 
@@ -1644,6 +1666,7 @@ async function gotoDisc(uuid) {
 // EDIT
 
 async function paintEdit(uuid) {
+  document.title = `editing "${global.notes.get_note(uuid).title}" - Pipeline Notes`;
   let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
   [main.innerHTML, footer.innerHTML] = await renderEdit(uuid);
@@ -1751,6 +1774,7 @@ const compute_seasonal_color = (date_obj) => {
 }
 
 async function paintList() {
+  document.title = "List - Pipeline Notes";
   // calendar view
 
   // draw boxes in a 7 wide grid like a calendar
@@ -2432,6 +2456,7 @@ function runSearch() {
   document.getElementsByTagName('main')[0].innerHTML = 'searching...';
   const urlParams = new URLSearchParams(window.location.search);
   const text = urlParams.get('q');
+  document.title = `Search "${text}" - Pipeline Notes`;
   const case_sensitive = urlParams.get('case') === 'true';
 
   searchResults = search(text, case_sensitive).then(async all_messages => {
