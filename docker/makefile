@@ -9,7 +9,7 @@ venv:
 	-. venv/bin/activate && pip install -r selenium_requirements.txt
 
 test: venv
-	-. venv/bin/activate; python test.py --no-docker
+	-source venv/bin/activate && python test.py --no-docker
 
 server:
 	docker-compose up --build --force-recreate server

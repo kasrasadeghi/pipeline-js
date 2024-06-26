@@ -201,6 +201,13 @@ async function get_local_repo_name() {
 
 // DATE UTIL
 
+function getNow() {
+  if (global.mock_now !== undefined) {
+    return new Date(global.mock_now);
+  }
+  return new Date();
+}
+
 const COMPATIBILITY_TIMEZONES = {
   'PST': 'GMT-0800 (Pacific Standard Time)',
   'PDT': 'GMT-0700 (Pacific Daylight Time)',
@@ -254,7 +261,7 @@ function dateComp(a, b) {
 
 async function newNote(title) {
   let content = `--- METADATA ---
-Date: ${new Date()}
+Date: ${getNow()}
 Title: ${title}`;
 // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
   let uuid = (await get_local_repo_name()) + '/' + crypto.randomUUID() + '.note';
@@ -264,7 +271,7 @@ Title: ${title}`;
 
 async function newJournal(title) {
   let content = `--- METADATA ---
-Date: ${new Date()}
+Date: ${getNow()}
 Title: ${title}
 Tags: Journal`;
 // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
@@ -301,7 +308,7 @@ async function getMetadata(uuid) {
 // JOURNAL
 
 function today() {
-  const today = new Date();
+  const today = getNow();
   const year = today.getFullYear();
 
   const month = today.toLocaleString('en-us', { month: "long" });
@@ -352,13 +359,13 @@ async function getNoteMetadataMap(caller) {
       metadata = parseMetadata(blob.content);
     } catch (e) {
       console.log('broken metadata', blob.path, e);
-      metadata = {Title: "broken metadata", Date: `${new Date()}`};
+      metadata = {Title: "broken metadata", Date: `${getNow()}`};
     }
     if (metadata.Title === undefined) {
       metadata.Title = "broken title";
     }
     if (metadata.Date === undefined) {
-      metadata.Date = `${new Date()}`;
+      metadata.Date = `${getNow()}`;
     }
     return new Note({uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content, metadata});
   });
@@ -1013,7 +1020,7 @@ const datetime_brief_year_format = new Intl.DateTimeFormat('en-us', { year: "num
 
 
 function renderDatetime(date, mode) {
-  let now = new Date();
+  let now = getNow();
 
   let time_format = timestamp_format;
   if (mode === 'search') {
@@ -1027,7 +1034,6 @@ function renderDatetime(date, mode) {
       time_format = datetime_brief_year_format;
     }
   } else {
-    new Date(date);
     if (now.getDate() !== new Date(date).getDate() ||
         now.getMonth() !== new Date(date).getMonth() || 
         now.getFullYear() !== new Date(date).getFullYear()
@@ -1561,7 +1567,7 @@ async function handleMsg(event) {
       const old_content = content_lines.join("\n");
       const metadata = metadata_lines.join("\n");
 
-      const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${new Date}\n\n`;
+      const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${getNow()}\n\n`;
       return new_content + metadata;
     });
   }
@@ -2884,7 +2890,7 @@ async function getJournalUUID() {
   if (notes.length === 0) {
     let uuid = await newJournal(today());
     notes = [uuid];
-    global.notes.rebuild();
+    await global.notes.rebuild();
     // TODO maybe we only want to do a full update of the cache on sync, hmm.  nah, it seems like it should be on every database operation, for _consistency_'s (ACID) sake.
   }
   return notes[0];
@@ -2990,15 +2996,14 @@ async function run() {
     // document.location.reload();
     document.getElementsByTagName("body")[0].innerHTML = `Database is outdated, please <button class='menu-button' id='reload-button' onclick="window.location.reload(); return false;">reload the page</button>.`;
   }
-
+  
   await global_notes.init(reloadNecessary);
   await cache.init(reloadNecessary);
-
-  console.log('today is', today());
-
+  
   global = {};
   global.handlers = {};
   global.notes = await buildFlatCache();
+  console.log('today is', today());
 
   await handleRouting();
 }

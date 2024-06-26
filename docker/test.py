@@ -9,7 +9,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-from selenium.common.exceptions import WebDriverException, TimeoutException
+from selenium.common.exceptions import WebDriverException, TimeoutException, NoSuchElementException
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--no-docker", default=False, action="store_true", help="Disable Docker")
@@ -65,19 +65,35 @@ try:
     # check page source for <title>
     assert "Pipeline" in driver.title
 
+    # pause on uncaught exceptions
+    # driver.execute_cdp_cmd("Debugger.enable", {})
+    # driver.execute_cdp_cmd("Debugger.setPauseOnExceptions", {"state": "all"})
+
     time.sleep(2)
+
+    print('Test creating a new repo, sending a message, syncing the note')
 
     repo_name = "selenium_test"
     # remove folder if it exists
     if os.path.exists('notes/' + repo_name):
         shutil.rmtree('notes/' + repo_name)
 
+    def el_id(id):
+        try:
+            result = driver.find_element(By.ID, id)
+            return result
+        except NoSuchElementException as e:
+            print(f"Element with ID {id} not found")
+            result = None
+            breakpoint()
+            return result
+
     # type in "selenium_test"
-    driver.find_element(By.ID, "local_repo_name").send_keys("selenium_test")
-    driver.find_element(By.ID, "local_repo_name_button").click()
+    el_id("local_repo_name").send_keys("selenium_test")
+    el_id("local_repo_name_button").click()
 
     # click journal button
-    driver.find_element(By.ID, "journal_button").click()
+    el_id("journal_button").click()
 
     # check that page loads
     element = WebDriverWait(driver, 10).until(
@@ -87,21 +103,30 @@ try:
     time.sleep(2)
 
     # click message input box
-    driver.find_element(By.ID, "msg_input").send_keys("selenium test message")
+    el_id("msg_input").send_keys("selenium test message")
     
     # press enter
-    driver.find_element(By.ID, "msg_input").send_keys(u'\ue007')
+    el_id("msg_input").send_keys(u'\ue007')
 
     time.sleep(1)
 
     # press enter on empty to sync
-    driver.find_element(By.ID, "msg_input").send_keys(u'\ue007')
+    el_id("msg_input").send_keys(u'\ue007')
 
     # get current uuid using javascript
     current_uuid = driver.execute_script("return getCurrentNoteUuid()")
 
     assert os.path.exists('notes/' + repo_name)
     assert os.path.exists('notes/' + current_uuid)
+
+    time.sleep(2)
+
+    print('Test successful')
+    print('Test creating a new message on a new day')
+    driver.execute_script("global.mock_now = new Date(); global.mock_now.setDate(global.mock_now.getDate() + 1);")
+
+    el_id("msg_input").send_keys("selenium testing on a new day")
+    el_id("msg_input").send_keys(u'\ue007')
 
     # Keep the browser open for a while to allow viewing
     time.sleep(30)
