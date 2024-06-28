@@ -276,7 +276,7 @@ Title: ${title}
 Tags: Journal`;
 // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
   let uuid = (await get_local_repo_name()) + '/' + crypto.randomUUID() + '.note';
-  await global_notes.writeFile(uuid, content);
+  await global.notes.writeFile(uuid, content);
   return uuid;
 }
 
@@ -475,8 +475,12 @@ class FlatCache {
   async writeFile(uuid, content) {
     // TODO check for cache invalidation with most recent update
     // could make this not async, but i'd either have to busy-wait while it's writing or i'd have to return a promise
-    this.flatRead.get_note(uuid).content = content;
     await global_notes.writeFile(uuid, content);
+    if (this.flatRead.get_note(uuid) !== null) {
+      this.flatRead.get_note(uuid).content = content;
+    } else {
+      await this.rebuild();
+    }
   }
 
   async updateFile(uuid, updater) {
@@ -1692,6 +1696,7 @@ async function submitEdit() {
   // TODO consider using .replace instead of .split and .join
   const uuid = getCurrentNoteUuid();
   await global.notes.writeFile(uuid, content);
+  await global.notes.rebuild();
   gotoDisc(uuid);
 };
 
