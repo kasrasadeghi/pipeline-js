@@ -2368,6 +2368,33 @@ async function perfStatus() {
 
 // SEARCH
 
+// 570ms, then 30ms once cached
+function gather_messages() {
+  // TODO only rewrite the pages that have changed since the last time we gathered messages
+  if (global.notes.flatRead.all_messages === undefined) {
+    // rewriting all of the pages takes 500ms ish
+    const pages = global.notes.flatRead.metadata_map.map(x => global.notes.rewrite(x.uuid));
+
+    // each page is usually 2 sections, 'entry' and 'METADATA'
+    // a page is a list of sections
+    // a section is a list of blocks
+    const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'))
+    const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
+    global.notes.flatRead.all_messages = messages;
+  }
+  return global.notes.flatRead.all_messages;
+}
+
+function gather_sorted_messages() {
+  // sorting takes 300ms
+  // TODO sort by bins?  we should find the notes that are journals and have clear dilineations, and "optimize" the notes.
+  // - we should probably do that after we show previous and next days on the same journal, so if the notes gets optimized, it's still legible to the user.
+  if (global.notes.flatRead.sorted_messages === undefined) {
+    global.notes.flatRead.sorted_messages = gather_messages().sort((a, b) => dateComp(b, a));
+  }
+  return global.notes.flatRead.sorted_messages;
+}
+
 async function search(text, is_case_sensitive=false) {
   if (text === '' || text === null || text === undefined) {
     return [];
@@ -2375,34 +2402,19 @@ async function search(text, is_case_sensitive=false) {
 
   console.time('search total');
 
-  let notes = global.notes.flatRead.metadata_map;
-  let cache_log = console.log;
-  console.log = (x) => {};
-
   let case_insensitive = (a, b) => a.toLowerCase().includes(b.toLowerCase());
   let case_sensitive = (a, b) => a.includes(b);
   let includes = (is_case_sensitive) ? case_sensitive : case_insensitive;
 
-  console.time('search pre-filter');
-  let filtered_notes = notes.filter(note => includes(note.content, (text)));  // first pass filter without parsing using a hopefully fast impl-provided string-includes.
-  console.timeEnd('search pre-filter');
-  console.time('search parse');
-  let pages = filtered_notes.map(note => global.notes.rewrite(note.uuid));
-  console.timeEnd('search parse');
-
-  let messages = [];
-  console.log = cache_log;
-
+  let cache_log = console.log;
+  console.log = (x) => {};
+  
   console.time('search gather msgs');
-  pages.forEach(sections =>
-    sections.filter(s => s.blocks).forEach(section =>
-      section.blocks.filter(b => b instanceof Msg && includes(b.content, text)).forEach(message =>
-        messages.push(message))));
+  let messages = gather_sorted_messages();
+  messages = messages.filter(m => includes(m.content, text));
   console.timeEnd('search gather msgs');
-
-  console.time('search sort');
-  messages.sort((a, b) => dateComp(b, a));
-  console.timeEnd('search sort');
+  
+  console.log = cache_log;
 
   console.timeEnd('search total');
 
@@ -2464,11 +2476,14 @@ function renderSearchPagination(all_messages) {
 
 function runSearch() {
   console.assert(window.location.pathname.startsWith("/search/"));
-  document.getElementsByTagName('main')[0].innerHTML = 'searching...';
   const urlParams = new URLSearchParams(window.location.search);
   const text = urlParams.get('q');
   document.title = `Search "${text}" - Pipeline Notes`;
   const case_sensitive = urlParams.get('case') === 'true';
+
+  if (global.notes.flatRead.sorted_messages === undefined) {
+    gather_sorted_messages();
+  }
 
   // search footer should already be rendered
   searchResults = search(text, case_sensitive).then(async all_messages => {
