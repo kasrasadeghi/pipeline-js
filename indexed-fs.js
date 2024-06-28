@@ -2481,15 +2481,22 @@ function runSearch() {
   document.title = `Search "${text}" - Pipeline Notes`;
   const case_sensitive = urlParams.get('case') === 'true';
 
-  if (global.notes.flatRead.sorted_messages === undefined) {
+  const has_text = !(text === null || text === undefined || text === '');
+  if (has_text && global.notes.flatRead.sorted_messages === undefined) {
+    console.log('has text, gathering messages');
     gather_sorted_messages();
   }
 
   // search footer should already be rendered
-  searchResults = search(text, case_sensitive).then(async all_messages => {
+  searchResults = search(text, case_sensitive).then(all_messages => {
     renderSearchMain(all_messages);
     renderSearchPagination(all_messages);
   });
+  console.log('checking for text');
+  if (!has_text && global.notes.flatRead.sorted_messages === undefined) {
+    console.log('no text, gathering messages');
+    gather_sorted_messages();
+  }
 }
 
 async function searchAction(id) {
@@ -2519,12 +2526,20 @@ async function renderSearchFooter() {
 }
 
 async function gotoSearch() {
+  console.log('goto /search/');
   let footer = document.getElementsByTagName('footer')[0];
   const urlParams = new URLSearchParams(window.location.search);
   urlParams.set('case', await readBooleanFile(SEARCH_CASE_SENSITIVE_FILE, "true"));
   window.history.pushState({}, "", "/search/?" + urlParams.toString());
   footer.innerHTML = await renderSearchFooter();
-  runSearch();
+  if (urlParams.get('q') !== null) {
+    runSearch();
+  } else {
+    document.getElementsByTagName('main')[0].innerHTML = ``;
+    setTimeout(() => {
+      gather_sorted_messages();
+    }, 100);
+  }
   return false;
 }
 
