@@ -45,9 +45,9 @@ certs:
 .PHONY: proxy
 proxy: proxy.cpp
 	-killall pipeline-proxy
-	g++ -std=c++20 -o pipeline-proxy proxy.cpp -lssl -lcrypto -g
+	g++ -std=c++20 -o pipeline-proxy proxy2.cpp -lssl -lcrypto -g
 	#nohup ./pipeline-proxy < /dev/null 2>&1 > logs/date.log &
-	./pipeline-proxy
+	# ./pipeline-proxy
 
 pl:
 	less logs/`ls -Art logs | tail -n 1`
