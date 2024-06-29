@@ -14,6 +14,7 @@ const int PROXY_PORT = 8000;
 const int DESTINATION_PORT = 8001;
 const int BUFFER_SIZE = 16384;
 const char* DESTINATION_IP = "127.0.0.1";
+const int SOCKET_TIMEOUT = 1; // 1 second timeout
 
 void log_time() {
     auto now = std::chrono::system_clock::now();
@@ -59,6 +60,24 @@ void configure_ssl_context(SSL_CTX* ctx, const char* cert_file, const char* key_
     }
 }
 
+int set_socket_timeout(int sockfd, int seconds) {
+    struct timeval timeout;
+    timeout.tv_sec = seconds;
+    timeout.tv_usec = 0;
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        log("setsockopt failed for SO_RCVTIMEO");
+        return 1;
+    }
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
+        log("setsockopt failed for SO_SNDTIMEO");
+        return 1;
+    }
+
+    return 0;
+}
+
 int create_socket(int port, bool is_server) {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
@@ -92,6 +111,11 @@ int create_socket(int port, bool is_server) {
             perror("Unable to connect");
             exit(EXIT_FAILURE);
         }
+    }
+
+    if (set_socket_timeout(sock, SOCKET_TIMEOUT) != 0) {
+        close(sock);
+        exit(EXIT_FAILURE);
     }
 
     return sock;
@@ -146,6 +170,9 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
                     int ssl_error = SSL_get_error(read_ssl, bytes_read);
                     if (ssl_error == SSL_ERROR_ZERO_RETURN) {
                         log("Connection closed");
+                    } else if (ssl_error == SSL_ERROR_WANT_READ || ssl_error == SSL_ERROR_WANT_WRITE) {
+                        log("SSL operation would block, continuing...");
+                        continue;
                     } else {
                         log("SSL_read failed");
                         ERR_print_errors_fp(stderr);
@@ -157,9 +184,15 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
                 log("writing bytes...");
                 int bytes_written = SSL_write(write_ssl, buffer, bytes_read);
                 if (bytes_written <= 0) {
-                    log("SSL_write failed");
-                    ERR_print_errors_fp(stderr);
-                    goto cleanup;
+                    int ssl_error = SSL_get_error(write_ssl, bytes_written);
+                    if (ssl_error == SSL_ERROR_WANT_WRITE || ssl_error == SSL_ERROR_WANT_READ) {
+                        log("SSL operation would block, continuing...");
+                        continue;
+                    } else {
+                        ERR_print_errors_fp(stderr);
+                        log("SSL_write failed");
+                        goto cleanup;
+                    }
                 }
                 log(std::to_string(bytes_written) + " sent");
             }
@@ -190,10 +223,15 @@ int main() {
         sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
         int client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_len);
-        log("- done accept");
-        
         if (client_sock < 0) {
-            log("Unable to accept connection");
+            log("Unable to accept connection " + std::to_string(client_sock));
+            continue;
+        }
+        log("- done accept");
+
+        if (set_socket_timeout(client_sock, SOCKET_TIMEOUT) != 0) {
+            log("Failed to set client socket timeout");
+            close(client_sock);
             continue;
         }
 
