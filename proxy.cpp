@@ -19,9 +19,9 @@ const int SOCKET_TIMEOUT = 1; // 1 second timeout
 void log_time() {
     auto now = std::chrono::system_clock::now();
     auto now_c = std::chrono::system_clock::to_time_t(now);
-    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+    auto now_ms = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()) % 1000000;
     std::cout << std::put_time(std::localtime(&now_c), "%Y-%m-%d %H:%M:%S") 
-              << '.' << std::setfill('0') << std::setw(3) << now_ms.count() << " ";
+              << '.' << std::setfill('0') << std::setw(6) << now_ms.count() << " ";
 }
 
 void log(const std::string& message) {
@@ -145,7 +145,7 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
     fds[1].events = POLLIN;
 
     while (true) {
-        log("poll");
+        log("=== poll ===");
         int poll_result = poll(fds, 2, -1);
         if (poll_result < 0) {
             log("Poll failed");

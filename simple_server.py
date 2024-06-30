@@ -12,7 +12,7 @@ import json
 import time
 import ssl
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 import sys
 
 from kazhttp import HTTP_OK, HTTP_NOT_FOUND, HTTP_OK_JSON, allow_cors_for_localhost, receive_headers_and_content, create_server_socket, log
@@ -59,7 +59,7 @@ while True:
 
         def respond(http_response: bytes):
             client_connection.sendall(http_response)
-            log(datetime.now(datetime.UTC).isoformat() + ' shutdown and close connection')
+            log(datetime.now(), 'shutdown and close connection')
             client_connection.shutdown(socket.SHUT_RDWR)
             client_connection.close()
 
