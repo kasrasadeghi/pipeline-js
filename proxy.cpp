@@ -113,11 +113,12 @@ int create_socket(int port, bool is_server) {
         }
     }
 
-    if (set_socket_timeout(sock, SOCKET_TIMEOUT) != 0) {
-        close(sock);
-        exit(EXIT_FAILURE);
+    if (! is_server) {
+        if (set_socket_timeout(sock, SOCKET_TIMEOUT) != 0) {
+            close(sock);
+            exit(EXIT_FAILURE);
+        }
     }
-
     return sock;
 }
 
@@ -223,9 +224,23 @@ int main() {
         sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
         int client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_len);
-        if (client_sock < 0) {
-            log("Unable to accept connection " + std::to_string(client_sock));
-            continue;
+        if (client_sock == -1) {
+            int errorCode = errno;  // Save the error code
+            std::cerr << "Failed to accept client connection. Error code: " << errorCode 
+                    << ", Error message: " << strerror(errorCode) << std::endl;
+            
+            // Depending on the error, you might want to handle it differently
+            if (errorCode == EINTR) {
+                std::cout << "accept() was interrupted by a signal. Retrying...\n";
+                continue;  // Go back to the start of the loop and try again
+            } else if (errorCode == EMFILE || errorCode == ENFILE) {
+                std::cerr << "Too many open files. Consider increasing system limits.\n";
+                // You might want to sleep here before retrying or take other corrective action
+            } else {
+                // For other errors, you might want to break the loop or exit
+                std::cerr << "Unrecoverable error in accept(). Exiting.\n";
+                return 1;
+            }
         }
         log("- done accept");
 
