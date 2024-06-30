@@ -59,7 +59,7 @@ while True:
 
         def respond(http_response: bytes):
             client_connection.sendall(http_response)
-            log('shutdown and close connection', datetime.utcnow().isoformat())
+            log(datetime.now(datetime.UTC).isoformat() + ' shutdown and close connection')
             client_connection.shutdown(socket.SHUT_RDWR)
             client_connection.close()
 
