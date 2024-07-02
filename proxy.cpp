@@ -15,6 +15,7 @@ const int DESTINATION_PORT = 8001;
 const int BUFFER_SIZE = 16384;
 const char* DESTINATION_IP = "127.0.0.1";
 const int SOCKET_TIMEOUT = 1; // 1 second timeout
+const int LISTEN_BACKLOG = 10;
 
 void log_time() {
     auto now = std::chrono::system_clock::now();
@@ -101,7 +102,7 @@ int create_socket(int port, bool is_server) {
             perror("Unable to bind");
             exit(EXIT_FAILURE);
         }
-        if (listen(sock, 1) < 0) {
+        if (listen(sock, LISTEN_BACKLOG) < 0) {
             perror("Unable to listen");
             exit(EXIT_FAILURE);
         }
@@ -159,8 +160,8 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
             if (fds[i].revents & POLLIN) {
                 SSL* read_ssl = (i == 0) ? client_ssl : dest_ssl;
                 SSL* write_ssl = (i == 0) ? dest_ssl : client_ssl;
-                std::string direction = (i == 0) ? "client -----------------------------------------" 
-                                                 : "destination -----------------------------------------";
+                std::string direction = (i == 0) ? "--- client ----------------------------------------------" 
+                                                 : "--- destination -----------------------------------------";
                 log(direction);
                 log("clearing errors");
                 ERR_clear_error();
@@ -225,14 +226,13 @@ int main() {
         socklen_t client_len = sizeof(client_addr);
         int client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_len);
         if (client_sock == -1) {
-            int errorCode = errno;  // Save the error code
+            int errorCode = errno;
             std::cerr << "Failed to accept client connection. Error code: " << errorCode 
                     << ", Error message: " << strerror(errorCode) << std::endl;
             
-            // Depending on the error, you might want to handle it differently
             if (errorCode == EINTR) {
                 std::cout << "accept() was interrupted by a signal. Retrying...\n";
-                continue;  // Go back to the start of the loop and try again
+                continue;
             } else if (errorCode == EMFILE || errorCode == ENFILE) {
                 std::cerr << "Too many open files. Consider increasing system limits.\n";
                 // You might want to sleep here before retrying or take other corrective action
