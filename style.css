@@ -434,3 +434,9 @@ p.msgblock {
   justify-content: space-between;
   margin-right: 7px;
 }
+
+@media screen and (max-width: 430px) {
+  #footer_menu_container {
+    width: -webkit-fill-available;
+  }
+}

@@ -1519,8 +1519,9 @@ async function paintDiscRoutine() {
 async function clickMix() {
   // toggle mix state in the file
   let mix_state = await toggleBooleanFile(MIX_FILE, "false");
-  await paintDisc(uuid, 'only main');
-  document.getElementById('mix-button').innerHTML = lookupIcon(mix_state === "true" ? 'focus' : 'mix');
+  await paintDisc(getCurrentNoteUuid(), 'only main');
+  let button = document.getElementById('mix_button') || document.getElementById('focus_button');
+  button.innerHTML = lookupIcon(mix_state === "true" ? 'focus' : 'mix');
   return false;
 };
 
