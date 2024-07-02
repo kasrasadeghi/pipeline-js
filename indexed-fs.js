@@ -489,6 +489,7 @@ class FlatCache {
     let updated_content = updater(note.content);
     note.content = updated_content;
     await global_notes.updateFile(uuid, updater);
+    await this.rebuild();
     return updated_content;
   }
 
