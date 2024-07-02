@@ -1642,16 +1642,20 @@ async function paintDiscFooter(uuid) {
         loading routine...
       </div>
     </div>
-    <div id="footer-button-container">
-      ${edit_button}
-      ${MenuButton({icon: 'list', action: 'gotoList()'})}
-      ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
-      ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
-      ${MenuButton({icon: 'routine', action: 'return toggleMenu()'})}
-      ${mix_button}
-    </div>
-    <div id='state_display'></div>
-    <div id='well_formed_display'></div>`;
+    <div id="footer_menu_container">
+      <div id="footer-button-container">
+        ${edit_button}
+        ${MenuButton({icon: 'list', action: 'gotoList()'})}
+        ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
+        ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
+        ${MenuButton({icon: 'routine', action: 'return toggleMenu()'})}
+        ${mix_button}
+      </div>
+      <div id="footer_message_container">
+        <div id='state_display'></div>
+        <div id='well_formed_display'></div>
+      </div>
+    </div>`;
   await paintDiscRoutine();
 }
 
@@ -2532,6 +2536,7 @@ async function gotoSearch() {
   urlParams.set('case', await readBooleanFile(SEARCH_CASE_SENSITIVE_FILE, "true"));
   window.history.pushState({}, "", "/search/?" + urlParams.toString());
   footer.innerHTML = await renderSearchFooter();
+  document.getElementById('search_query')?.focus();
   if (urlParams.get('q') !== null) {
     runSearch();
   } else {
