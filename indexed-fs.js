@@ -918,6 +918,9 @@ function htmlNoteContent(uuid, content) {
   let page = parseContent(content);
   let rewritten = rewrite(page, uuid);
   let rendered = rewritten.map((s, i) => htmlSection(s, i, content, uuid)).join("");
+  if (rendered === '') {
+    return 'no messages yet';
+  }
   return "<div class='msglist'>" + rendered + "</div>"; // TODO it might make sense to move this _within_ section rendering
 }
 
@@ -1500,6 +1503,9 @@ async function renderDiscMixedBody(uuid) {
 
   const content = global.notes.get_note(uuid).content;  
   let rendered = page.map((s, i) => htmlSection(s, i, content, uuid)).join("\n");
+  if (rendered.trim() === '') {
+    return 'no messages yet';
+  }
   return "<div class='msglist'>" + rendered + "</div>";
 }
 
@@ -1648,11 +1654,11 @@ async function paintDiscFooter(uuid) {
       aria-label="Message"
       contenteditable="true"
       role="textbox"
-      tabindex="0" 
+      tabindex="0"
       style="user-select: text; white-space: pre-wrap; word-break: break-word;"
       data-lexical-editor="true"><br></div>`
 
-    edit_button = MenuButton({icon: 'edit', action: `gotoEdit('${uuid}')`});
+      edit_button = MenuButton({icon: 'edit', action: `gotoEdit('${uuid}')`});
   }
 
   let menu_state = await readBooleanFile(MENU_TOGGLE_FILE, "false");

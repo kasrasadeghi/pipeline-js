@@ -6,7 +6,7 @@
   --link_button_hover_color: red;
   --msg_color: #243d28;
   --nav_button_color: #611;
-  --base_text_color: #ddd;
+  --base_text_color: rgb(221, 221, 221);
   --input_background_color: #333;
   --body_background_color: #101825;
   --banner_color: #aaa;
@@ -439,4 +439,9 @@ p.msgblock {
   #footer_menu_container {
     width: -webkit-fill-available;
   }
+}
+
+.placeholder {
+  color: var(--placeholder_text_color);
+  user-select: none;
 }
