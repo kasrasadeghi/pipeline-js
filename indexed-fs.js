@@ -1414,7 +1414,7 @@ function htmlLine(line) {
       }
       if (x instanceof Link) {
         if (x.type === 'shortcut') {
-          return shortcircuitLink(x.url, x.display);
+          return shortcircuitLink(x.url, x.display, 'shortcut');
         }
         if (x.type === 'internal') {
           let ref = parseRef(x.display);
@@ -1524,6 +1524,12 @@ async function clickMix() {
   return false;
 };
 
+async function getSupervisorStatus() {
+  const hostname = window.location.hostname;  // "10.50.50.2"
+  const status = await fetch(`https://${hostname}:8002/api/status`, {method: 'GET'}).then(response => response.json());
+  return status;
+}
+
 async function handleMsg(event) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
 
@@ -1578,16 +1584,31 @@ async function handleMsg(event) {
   await paintDisc(current_uuid, 'only main');
   await paintDiscRoutine();
 
-  let repos = await getRepos();
-  let combined_remote_status = await getRemoteStatus(repos.join(","));
-  displayState("syncing...");
-  await pullRemoteSimple(combined_remote_status);
-  
-  // don't paint after syncing as it is quite disruptive as sync is sometimes slow (500ms)
-  // await paintDisc(uuid, 'only main'); 
+  if (hasRemote()) {
+    let repos = await getRepos();
+    let sync_success = true;
+    try {
+      let combined_remote_status = await getRemoteStatus(repos.join(","));
+      displayState("syncing...");
+      await pullRemoteSimple(combined_remote_status);
+      
+      // don't paint after syncing.  it's jarring/disruptive as sync is sometimes slow (500ms)
+      // await paintDisc(uuid, 'only main'); 
 
-  displayState("done");
-  await pushLocalSimple(combined_remote_status);
+      displayState("done");
+      await pushLocalSimple(combined_remote_status);
+    } catch (e) {
+      sync_success = false;
+    }
+    if (! sync_success) {
+      try {
+        let status = await getSupervisorStatus();
+        displayState(JSON.stringify(status));
+      } catch (e) {
+        displayState("supervisor down");
+      } 
+    }
+  }
   await global.notes.rebuild();
   return false;
 };
@@ -1602,7 +1623,8 @@ async function paintDiscFooter(uuid) {
     if (global.notes.get_note(uuid) === null) {
       return;
     }
-    document.getElementById('well_formed_display').innerHTML = checkWellFormed(uuid, global.notes.get_note(uuid).content) ? 'well-formed' : 'not well-formed';
+    const well_formed = checkWellFormed(uuid, global.notes.get_note(uuid).content) ? 'well-formed' : 'not well-formed';
+    document.getElementById('well_formed_display').innerHTML = well_formed;
   }, 100);
 
   const has_remote = await hasRemote();

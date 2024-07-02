@@ -1,5 +1,5 @@
 import subprocess
-from flask import Flask, request, redirect
+from flask import Flask, request, redirect, jsonify, make_response
 import threading
 import time
 import datetime
@@ -150,6 +150,16 @@ def toggle_autorestart():
     autorestart_enabled['pipeline_proxy'] = 'autorestart_pipeline_proxy' in request.form
     autorestart_enabled['simple_server'] = 'autorestart_simple_server' in request.form
     return redirect('/')
+
+@app.route('/api/status', methods=['GET'])
+def api_status():
+    subprocess_status = check_subprocesses()
+
+    # Add CORS header from origin 10.50.50.2:8000
+    response = make_response(jsonify({"proxy": subprocess_status['pipeline_proxy'], 'server': subprocess_status['simple_server']}))
+    response.headers.add('Access-Control-Allow-Origin', 'https://10.50.50.2:8000')
+
+    return response
 
 if __name__ == '__main__':
     print('starting subprocesses')
