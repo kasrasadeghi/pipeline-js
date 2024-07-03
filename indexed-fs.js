@@ -307,12 +307,11 @@ async function getMetadata(uuid) {
 
 // JOURNAL
 
-function today() {
-  const today = getNow();
-  const year = today.getFullYear();
+function dateToJournalTitle(date) {
+  const year = date.getFullYear();
 
-  const month = today.toLocaleString('en-us', { month: "long" });
-  const day = today.getDate();
+  const month = date.toLocaleString('en-us', { month: "long" });
+  const day = date.getDate();
 
   const day_suffix =
       [11, 12, 13].includes(day) ? 'th'
@@ -322,6 +321,11 @@ function today() {
     : 'th';
 
   return `${month} ${day}${day_suffix}, ${year}`;
+}
+
+function today() {
+  const today = getNow();
+  return dateToJournalTitle(today);
 }
 
 // FLAT DATABASE WRAPPER
