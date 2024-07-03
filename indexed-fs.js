@@ -404,6 +404,9 @@ class FlatRead { // a single "read" operation for the flat note database.
   }
 
   getNotesWithTitle(title, repo) {
+    if (repo === undefined) {
+      return this.metadata_map.filter(note => note.title === title);
+    }
     return this.metadata_map.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
   }
 
@@ -1515,11 +1518,26 @@ async function paintDisc(uuid, flag) {
   }
 }
 
-async function mixPage(uuid) {
+async function mixPage(uuid, mix_as_journal=true) {
   let rewritten = global.notes.rewrite(uuid);
 
   // notes that share our title
   let sibling_notes = global.notes.getAllNotesWithSameTitleAs(uuid);
+
+  if (mix_as_journal) {
+    let date = new Date(timezoneCompatibility(global.notes.get_note(uuid).date));
+    
+    let tomorrow = new Date(date);
+    tomorrow.setDate(date.getDate() + 1);
+    console.log('tomorrow', dateToJournalTitle(tomorrow));
+    sibling_notes.push(...global.notes.getNotesWithTitle(dateToJournalTitle(tomorrow)));
+
+    let yesterday = new Date(date);
+    yesterday.setDate(date.getDate() - 1);
+    console.log('yesterday', dateToJournalTitle(yesterday));
+    sibling_notes.push(...global.notes.getNotesWithTitle(dateToJournalTitle(yesterday)));
+  }
+
   console.log('mixing entry sections of', sibling_notes.map(note => note.uuid), "with current note", uuid);
   let sibling_pages = sibling_notes.map((sibling_note) => rewrite(parseContent(sibling_note.content), sibling_note.uuid));
 
@@ -1544,7 +1562,7 @@ async function mixPage(uuid) {
 }
 
 async function renderDiscMixedBody(uuid) {
-  let page = await mixPage(uuid);
+  let page = await mixPage(uuid, pageIsJournal(global.notes.rewrite(uuid)));
   if (page === null) {
     return `couldn't find file '${uuid}'`;
   }
@@ -1611,10 +1629,7 @@ async function handleMsg(event) {
     console.log('msg', msg);
     msg_input.innerText = '';
 
-
-    let page = global.notes.rewrite(current_uuid);
-    
-    let is_journal = pageIsJournal(page);
+    let is_journal = pageIsJournal(global.notes.rewrite(current_uuid));
 
     // if we're in a journal and we're not on the current one, redirect to the current journal
     if (is_journal) {
