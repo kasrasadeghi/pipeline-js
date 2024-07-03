@@ -564,9 +564,13 @@ class TreeNode {
     this.value = obj.value;
   }
 
-  toString() {
+  toString(nested = false) {
     let indent = this.indent == -1 ? "" : "  ".repeat(this.indent) + "- ";
-    return indent + htmlLine(this.value) + "\n" + this.children.map(x => x.toString()).join("");
+    let result = indent + htmlLine(this.value) + "\n" + this.children.map(x => x.toString(true)).join("");
+    if (! nested && result.endsWith("\n")) {
+      result = result.slice(0, -1);
+    }
+    return result;
   }
 }
 
@@ -787,7 +791,10 @@ class Link {
 
       if (this.display.startsWith("/disc/") && this.display.includes("#")) {
         this.display = this.display.slice("/disc/".length);
-        this.type = 'internal';
+        this.type = 'internal_ref';
+      } else if (this.display.startsWith("/search/")) {
+        this.display = this.display.slice("/search/".length);
+        this.type = 'internal_search';
       } else {
         this.type = 'shortcut';
       }
@@ -1134,15 +1141,18 @@ function unparseBlock(block) {
     return block.map(x => unparseLineContent(x) + "\n").join("");
   }
   // throw new Error("failed unparseBlock", block);
-  return ['ERROR'];
+  return ['ERROR BLOCK', ...block];
 }
 
 function unparseLineContent(l) {
   if (typeof l === 'string') {
     return l;
   }
+  if (l instanceof TreeNode) {
+    return l.toString();
+  }
   // throw new Error("failed unparseLine", l);
-  return 'ERROR';
+  return 'ERROR: ' + l;
 }
 
 async function rewriteCurrentNote() {
@@ -1295,7 +1305,16 @@ function preventDivs(e) {
   }
 
   // insert newline
-  document.execCommand('insertHTML', false, '<br><br>');
+  let selection = window.getSelection();
+  let range = selection.getRangeAt(0);
+  let newline = document.createElement('br');
+  range.insertNode(newline);
+  range.setStartAfter(newline);
+  range.setEndAfter(newline);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  e.preventDefault();
+
   return false;
 }
 
@@ -1386,29 +1405,44 @@ function clickInternalLink(url) {
   return false;
 }
 
-async function expandRef(obj, url) {
+function insertHtmlBeforeMessage(obj, html_content) {
   console.log(obj);
   let parent = obj.parentElement;
   while (! parent.classList.contains('msg')) {
     parent = parent.parentElement;
   }
 
-  let found_msg = await retrieveMsg(url);
   // TODO persist quotes to cache so they work on refresh
-  // TODO UI to remove quotes
+  // TODO UI to remove/toggle quotes
+  if (parent.previousElementSibling && parent.previousElementSibling.classList && parent.previousElementSibling.classList.contains('quotes')) {
+    parent.previousElementSibling.innerHTML += html_content;
+    // TODO make sure to replace the element with the same id if it exists
+  } else {
+    parent.insertAdjacentHTML('beforebegin', "<div class='quotes'>" + html_content + "</div>");
+  }
+}
+
+async function expandRef(obj, url) {
+  let found_msg = await retrieveMsg(url);
+  let result = htmlMsg(found_msg[0]);
   if (found_msg.length > 0) {
     console.log(found_msg);
-    if (parent.previousElementSibling.classList.contains('quotes')) {
-      parent.previousElementSibling.innerHTML += htmlMsg(found_msg[0]);
-      // TODO make sure to replace the element with the same id if it exists
-    } else {
-      parent.insertAdjacentHTML('beforebegin', "<div class='quotes'>" + htmlMsg(found_msg[0]) + "</div>");
-    }
+    insertHtmlBeforeMessage(obj, result);
   } else {
     console.log(`couldn't find ${url_ref.datetime_id} in ${url_ref.uuid}`);
     // TODO error messaging
   }
 };
+
+async function expandSearch(obj, search_query) {
+  let urlParams = new URLSearchParams(search_query);
+  const text = urlParams.get('q');
+  const case_sensitive = urlParams.get('case') === 'true';
+  search(text, case_sensitive).then(all_messages => {
+    let result = renderSearchMain(urlParams, all_messages);
+    insertHtmlBeforeMessage(obj, result);
+  });
+}
 
 function htmlLine(line) {
   if (line instanceof Array) {
@@ -1420,12 +1454,21 @@ function htmlLine(line) {
         if (x.type === 'shortcut') {
           return shortcircuitLink(x.url, x.display, 'shortcut');
         }
-        if (x.type === 'internal') {
+        if (x.type === 'internal_ref') {
           let ref = parseRef(x.display);
           let shorter_datetime = renderDatetime(new Date(ref.datetime_id), 'brief');
           return `<div style="display:inline">
             <button onclick="return expandRef(this, '${x.display}')">get</button>
             <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${shorter_datetime}</a>
+          </div>`;
+        }
+        if (x.type === 'internal_search') {
+          
+          // TODO add time of search to search result?
+          // let shorter_datetime = renderDatetime(new Date(ref.datetime_id), 'brief');
+          return `<div style="display:inline">
+            <button onclick="return expandSearch(this, '${x.display}')">get</button>
+            <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${x.display}</a>
           </div>`;
         }
         return `<a href="${x.url}">${x.display}</a>`;
@@ -2467,28 +2510,27 @@ function clamp(value, lower, upper) {
 
 const SEARCH_RESULTS_PER_PAGE = 100;
 
-function renderSearchMain(all_messages) {
-  let main = document.getElementsByTagName('main')[0];
-  const urlParams = new URLSearchParams(window.location.search);
+function renderSearchMain(urlParams, all_messages) {
   let page = urlParams.get('page');
   if (page === 'all') {
-    main.innerHTML = `<h3>render all ${all_messages.length} results</h3><div class='msglist'>${all_messages.map((x) => htmlMsg(x, 'search')).join("")}</div>`;
-    return;
+    return `<h3>render all ${all_messages.length} results</h3><div class='msglist'>${all_messages.map((x) => htmlMsg(x, 'search')).join("")}</div>`;
   }
   page = (page === null ? 0 : parseInt(page));
   let messages = all_messages.slice(page * SEARCH_RESULTS_PER_PAGE, (page + 1) * SEARCH_RESULTS_PER_PAGE);
-  main.innerHTML = `<h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3><div class='msglist'>${messages.map((x) => htmlMsg(x, 'search')).join("")}</div>`;
+  return `<h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3><div class='msglist'>${messages.map((x) => htmlMsg(x, 'search')).join("")}</div>`;
 }
 
 function renderSearchPagination(all_messages) {
 
   // must be global because it captures `all_messages`
   global.handlers.paginate = (delta) => {
+    let main = document.getElementsByTagName('main')[0];
+
     if (delta === 'all') {
       const urlParams = new URLSearchParams(window.location.search);
       urlParams.set('page', 'all');
       window.history.pushState({}, "", "/search/?" + urlParams.toString());
-      renderSearchMain(all_messages);
+      main.innerHTML = renderSearchMain(urlParams, all_messages);
       return;
     }
     // delta is an integer, probably +1 or -1
@@ -2498,7 +2540,7 @@ function renderSearchPagination(all_messages) {
     page = (page === null ? 0 : parseInt(page));
     page = clamp(page + delta, /*bottom*/0, /*top*/Math.floor(all_messages.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
     window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=" + page);
-    renderSearchMain(all_messages);
+    main.innerHTML = renderSearchMain(urlParams, all_messages);
   };
   let pagination = document.getElementById('search-pagination');
   pagination.innerHTML = `
@@ -2512,8 +2554,8 @@ function runSearch() {
   console.assert(window.location.pathname.startsWith("/search/"));
   const urlParams = new URLSearchParams(window.location.search);
   const text = urlParams.get('q');
-  document.title = `Search "${text}" - Pipeline Notes`;
   const case_sensitive = urlParams.get('case') === 'true';
+  document.title = `Search "${text}" - Pipeline Notes`;
 
   const has_text = !(text === null || text === undefined || text === '');
   if (has_text && global.notes.flatRead.sorted_messages === undefined) {
@@ -2523,7 +2565,8 @@ function runSearch() {
 
   // search footer should already be rendered
   searchResults = search(text, case_sensitive).then(all_messages => {
-    renderSearchMain(all_messages);
+    let main = document.getElementsByTagName('main')[0];
+    main.innerHTML = renderSearchMain(urlParams, all_messages);
     renderSearchPagination(all_messages);
   });
   console.log('checking for text');
