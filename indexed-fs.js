@@ -448,10 +448,17 @@ class FlatCache {
   async build() {
     console.log('building flat cache');
     this.flatRead = await buildFlatRead();
+    this.booleanFiles = {};
+    this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");;
   }
 
   async rebuild() {
     this.flatRead = await buildFlatRead();
+    this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");;
+  }
+  
+  show_private_messages() {
+    return this.booleanFiles[SHOW_PRIVATE_FILE];
   }
 
   getNotesWithTitle(title, repo) {
@@ -1355,6 +1362,13 @@ function htmlMsg(item, mode, origin_content) {
   let timestamp_content = renderDatetime(date, mode);
   let href_id = `/disc/${item.origin}#${item.date}`;
   let msg_timestamp_link = shortcircuitLink(href_id, timestamp_content, 'msg_timestamp');
+
+  let show_private_messages = global.notes.show_private_messages();
+  if (show_private_messages === "false") {
+    if (item.content.includes("PRIVATE")) {
+      return "";
+    }
+  }
 
   let line = htmlLine(item.msg);
   let style_option = item.origin !== getCurrentNoteUuid() ? " style='background: #5f193f'": "";
@@ -2535,7 +2549,12 @@ async function search(text, is_case_sensitive=false) {
   
   console.time('search gather msgs');
   let messages = gather_sorted_messages();
-  messages = messages.filter(m => includes(m.content, text));
+  let show_private_messages = await readBooleanFile(SHOW_PRIVATE_FILE, "false");
+  if (show_private_messages === "true") {
+    messages = messages.filter(m => includes(m.content, text));
+  } else {
+    messages = messages.filter(m => includes(m.content, text) && !m.content.includes('PRIVATE'));
+  }
   console.timeEnd('search gather msgs');
   
   console.log = cache_log;
@@ -2715,12 +2734,14 @@ function TextAction({id, label, value, action, everykey}) {
 // COMPONENT TOGGLE-BUTTON
 
 async function toggleBooleanFile(file, default_value) {
-  return await cache.updateFile(file, (state) => {
+  let result = await cache.updateFile(file, (state) => {
     if (state === null) {
       state = default_value;
     }
     return state === "true" ? "false" : "true";
   });
+  global.notes.booleanFiles[file] = result;
+  return result;
 }
 
 async function readBooleanFile(file, default_value) {
@@ -2792,18 +2813,21 @@ async function ToggleButton({id, label, file, query_param, default_value, rerend
   if (file) {
     status = await readBooleanFile(file, default_value);
   }
+  let quoted_query_param = 'undefined';
   if (query_param) {
     // NOTE it seems like a good idea to only use the indexedDB status, so the line below is commented out.
     // - we might want to read the query param if we're loading a link.
     // status = await readBooleanQueryParam(query_param, default_value);
+    quoted_query_param = `'${query_param}'`;
   }
 
   let enabled = "";
   if (status === 'true') {
     enabled = " enabled";
   }
+  
   return (
-    `<button id="${id}" onclick="return handleToggle(event, '${id}', '${file}', '${query_param}', '${default_value}', ${rerender})" class='menu-button${enabled}'>${label}</button>`
+    `<button id="${id}" onclick="return handleToggle(event, '${id}', '${file}', ${quoted_query_param}, '${default_value}', ${rerender})" class='menu-button${enabled}'>${label}</button>`
   );
 }
 
@@ -2908,7 +2932,7 @@ async function renderMenu() {
       ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
       ${MenuButton({icon: 'sync', action: 'gotoSync()'})}
       ${MenuButton({icon: 'setup', action: 'gotoSetup()'})}
-      ${await ToggleButton({id: 'show_private_toggle', file: SHOW_PRIVATE_FILE, label: lookupIcon('private'), rerender: 'paintList'})}
+      ${await ToggleButton({id: 'show_private_toggle', file: SHOW_PRIVATE_FILE, label: lookupIcon('private'), rerender: 'renderMenu'})}
     </div>`
   ];
 }
