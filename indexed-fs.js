@@ -3052,6 +3052,7 @@ async function getTagsFromMixedNote(uuid) {
 const cache = new FileDB("pipeline-db-cache", "cache");
 
 async function getJournalUUID() {
+  global.notes.rebuild();  // sync before we make a new journal to make sure another tab didn't make one.
   let notes = global.notes.getNotesWithTitle(today(), global.notes.local_repo_name());
   if (notes.length === 0) {
     let uuid = await newJournal(today());
