@@ -23,8 +23,8 @@ autorestart_enabled = {
 def start_subprocesses():
     global pipeline_proxy_process, simple_server_process
 
-    # start the proxy but redirect the output to a file 'logs/proxy'
-    pipeline_proxy_process = subprocess.Popen(['./pipeline-proxy', '8000'], stdout=open('logs/proxy', 'w'), stderr=subprocess.STDOUT)
+    # start the proxy with prlimit to enable coredump logging
+    pipeline_proxy_process = subprocess.Popen(['prlimit', '--core=unlimited', '--', './pipeline-proxy', '8000'], stdout=open('logs/proxy', 'w'), stderr=subprocess.STDOUT)
 
     # same for simple_server
     simple_server_process = subprocess.Popen(['python', 'simple_server.py', '8001'], stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
