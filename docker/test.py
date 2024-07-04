@@ -49,15 +49,40 @@ print("WebDriver set up successfully.")
 print(f"Chrome version: {driver.capabilities['browserVersion']}")
 print(f"ChromeDriver version: {driver.capabilities['chrome']['chromedriverVersion'].split(' ')[0]}")
 
-try:
-    # Navigate to the Flask app
-    print("Navigating to Flask app...")
-    if args.no_docker:
-        driver.get("https://localhost:8100")
-    else:
-        driver.get("https://server:5000")
+# --- UTILS ------------------------------------------------------------------
 
-    # check that page loads
+def get_pipeline_url():
+    if args.no_docker:
+        return "https://localhost:8100"
+    else:
+        return "https://server:5000"
+
+def browser_wrapper(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except TimeoutException:
+            print("ERROR: Timeout waiting for page to load")
+        except WebDriverException as e:
+            print(f"WebDriver exception: {str(e)}")
+        except Exception as e:
+            print(f"Test failed: {str(e)}")
+        finally:
+            # Close the browser
+            print("Closing browser...")
+            driver.quit()
+    return wrapper
+
+ENTER_KEY = u'\ue007'
+
+# --- TESTS ------------------------------------------------------------------
+
+@browser_wrapper
+def test_first_time_setup():
+
+    print("Navigating to Flask app...")
+    driver.get(get_pipeline_url())
+
     element = WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
@@ -104,14 +129,12 @@ try:
 
     # click message input box
     el_id("msg_input").send_keys("selenium test message")
-    
-    # press enter
-    el_id("msg_input").send_keys(u'\ue007')
+    el_id("msg_input").send_keys(ENTER_KEY)
 
     time.sleep(1)
 
     # press enter on empty to sync
-    el_id("msg_input").send_keys(u'\ue007')
+    el_id("msg_input").send_keys(ENTER_KEY)
 
     # get current uuid using javascript
     current_uuid = driver.execute_script("return getCurrentNoteUuid()")
@@ -126,21 +149,34 @@ try:
     driver.execute_script("global.mock_now = new Date(); global.mock_now.setDate(global.mock_now.getDate() + 1);")
 
     el_id("msg_input").send_keys("selenium testing on a new day")
-    el_id("msg_input").send_keys(u'\ue007')
+    el_id("msg_input").send_keys(ENTER_KEY)
 
     # Keep the browser open for a while to allow viewing
     time.sleep(30)
 
-except TimeoutException:
-    print("Timeout waiting for page to load")
-except WebDriverException as e:
-    print(f"WebDriver exception: {str(e)}")
-except Exception as e:
-    print(f"Test failed: {str(e)}")
+@browser_wrapper
+def test_new_day_double_journal():
+    # BUG tabs don't synchronize journal creation with other tabs on the same machine
+    # INVARIANT each machine has a unique journal for each day
+    # REPRODUCE
+    # - open 2 tabs (tab A and tab B) on day X
+    # - both of them should be on the same journal entry, assuming they are opened one after another
+    # - BUT THEN
+    # - increment the day for both tabs
+    # - go to journal in tab A
+    # - go to journal in tab B
+    # - RESULT they will be different journal notes.  (see the uuid)
+    # - HYPOTHESIS this is because the notes are created in the cache and written back to IDB, 
+    #     but the other tab doesn't rebuild/ check its cache before making a new note.
 
-finally:
-    # Close the browser
-    print("Closing browser...")
-    driver.quit()
+    # open another tab and set the day one more day in the future
+    driver.execute_script("window.open('https://server:5000');")
+    driver.switch_to.window(driver.window_handles[1])
+    driver.execute_script("global.mock_now = new Date(); global.mock_now.setDate(global.mock_now.getDate() + 2);")
 
-print("Test script completed.")
+
+def main():
+    test_first_time_setup()
+    input()
+    test_new_day_double_journal()
+    print("Test script completed.")
