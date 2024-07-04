@@ -1518,6 +1518,7 @@ const MIX_FILE = 'disc mix state';
 const MENU_TOGGLE_FILE = 'disc menu toggle state';
 const LIST_NOTES_TOGGLE_FILE = 'list notes toggle state';
 const SEARCH_CASE_SENSITIVE_FILE = 'search case sensitive state';
+const SHOW_PRIVATE_FILE = 'private mode state';
 
 async function paintDisc(uuid, flag) {
   document.title = `${global.notes.get_note(uuid)?.title || "illegal: " + uuid} - Pipeline Notes`;
@@ -2907,6 +2908,7 @@ async function renderMenu() {
       ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
       ${MenuButton({icon: 'sync', action: 'gotoSync()'})}
       ${MenuButton({icon: 'setup', action: 'gotoSetup()'})}
+      ${await ToggleButton({id: 'show_private_toggle', file: SHOW_PRIVATE_FILE, label: lookupIcon('private'), rerender: 'paintList'})}
     </div>`
   ];
 }
@@ -2932,7 +2934,8 @@ function lookupIcon(full_name) {
     'routine': 'RTNE',
     'new note': 'NEW_',
     'notes': "NOTE",
-    'case': "CASE"
+    'case': "CASE",
+    'private': "PRIV",
   }[full_name];
 }
 
