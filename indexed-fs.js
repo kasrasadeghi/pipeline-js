@@ -2765,6 +2765,8 @@ async function ToggleButton({id, label, file, query_param, default_value, rerend
     status = await readBooleanFile(file, default_value);
   }
   if (query_param) {
+    // NOTE it seems like a good idea to only use the indexedDB status, so the line below is commented out.
+    // - we might want to read the query param if we're loading a link.
     // status = await readBooleanQueryParam(query_param, default_value);
   }
 
