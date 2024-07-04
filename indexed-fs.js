@@ -2721,8 +2721,13 @@ async function handleToggle(event, id, file, query_param, default_value, rerende
       paintSimple(result);
     }
   }
-  // await action();
-  // TODO add or remove 'enabled' class to indicate that the toggle is on or off
+
+  if (indexedDB_result === "true") {
+    event.target.classList.add('enabled');
+  } else {
+    event.target.classList.remove('enabled');
+  }
+
   return false;
 }
 
