@@ -1312,15 +1312,38 @@ function preventDivs(e) {
   }
 
   // insert newline
-  let selection = window.getSelection();
-  let range = selection.getRangeAt(0);
-  let newline = document.createElement('br');
-  range.insertNode(newline);
-  range.setStartAfter(newline);
-  range.setEndAfter(newline);
+  const selection = window.getSelection();
+  const range = selection.getRangeAt(0);
+  const div = event.target;
+  
+  if (div.innerHTML === '' || div.innerHTML === '<br>') {
+    // Case 1: Empty div
+    console.log('empty div');
+    div.innerHTML = '<br><br>';
+    range.setStartAfter(div.firstChild);
+    range.collapse(true);
+  } else if (range.endOffset === div.textContent.length) {
+    // Case 2: At the end of the div
+    console.log('end of div');
+    if (! div.innerHTML.endsWith('<br>')) {
+      const br1 = document.createElement('br');
+      range.insertNode(br1);
+    }
+    const br2 = document.createElement('br');
+    range.insertNode(br2);
+    range.setStartAfter(br2);
+    range.collapse(true);
+  } else {
+    // Case 3: Everything else
+    console.log('default case', range.endOffset, div.childNodes.length);
+    const br = document.createElement('br');
+    range.insertNode(br);
+    range.setStartAfter(br);
+    range.collapse(true);
+  }
+  
   selection.removeAllRanges();
   selection.addRange(range);
-  e.preventDefault();
 
   return false;
 }
@@ -1497,7 +1520,7 @@ const LIST_NOTES_TOGGLE_FILE = 'list notes toggle state';
 const SEARCH_CASE_SENSITIVE_FILE = 'search case sensitive state';
 
 async function paintDisc(uuid, flag) {
-  document.title = `${global.notes.get_note(uuid).title} - Pipeline Notes`;
+  document.title = `${global.notes.get_note(uuid)?.title || "illegal: " + uuid} - Pipeline Notes`;
   if (flag !== 'only main') {
     await paintDiscFooter(uuid);
 
@@ -1508,6 +1531,10 @@ async function paintDisc(uuid, flag) {
   }
 
   let main = document.getElementsByTagName('main')[0];
+  if (global.notes.get_note(uuid) === null) {
+    main.innerHTML = `couldn't find file '${uuid}'`;
+    return;
+  }
   main.innerHTML = await renderDiscBody(uuid);
   
   const selected = updateSelected();
