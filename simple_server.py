@@ -20,7 +20,7 @@ from kazhttp import HTTP_OK, HTTP_NOT_FOUND, HTTP_OK_JSON, allow_cors_for_localh
 NOTES_ROOT = os.path.join(os.path.expanduser('~'), "notes")
 HOST, PORT = '', int(sys.argv[1])
 
-# provide .removeprefix if it doesn't have it
+# provide .removeprefix if it doesn't have it (e.g. python 3.8 on ubuntu 20.04)
 if not hasattr(str, 'removeprefix'):
     def removeprefix(self, prefix):
         if self.startswith(prefix):

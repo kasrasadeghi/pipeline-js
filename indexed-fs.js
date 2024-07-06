@@ -654,12 +654,12 @@ function parseTree(block) {
 // page -> *section
 // section -> {title: METADATA, lines: *str} | {title,blocks: *block} | {title,roots: *root}
 // root -> {root: 'pre_roots'|'nonfinal'|'final', children: block*}
-// block -> message | newline | *node | *line
-// newline -> []
-// message -> {msg: *line_content,date,content: str}
-// node -> {value,indent,children:*node,line: *line_content}
-// line -> {line: *line_content}
-// line_content -> str | tag | cmd | link
+// block -> message | EmptyLine | *node | *line
+// class EmptyLine {}
+// message -> {msg: Line ,date,content: str}
+// node -> {value,indent,children:*node,line: Line}
+// class Line {content: str, parts: *line_part}
+// line_part -> str | Tag | cmd | Link
 // link -> note | root-link | internal-link | simple-link
 
 function pageIsJournal(page) {
@@ -779,6 +779,11 @@ function rewriteBlock(block, note) {
     }
   }
 
+  if (block instanceof Array) {
+    console.log('rewrite block array', block);
+    return block.map((x) => typeof x === 'string' ? rewriteLine(x) : x); // might be a TreeNode
+  }
+
   // TODO the rest of block rewrite
   return block;
 }
@@ -820,9 +825,22 @@ class Link {
   }
 }
 
+class Line {
+  content;
+  constructor(content, parsed) {
+    this.content = content;
+    this.parts = parsed;
+  }
+
+  toString() {
+    return `Line(${this.content})`;
+  }
+}
+
 function rewriteLine(line) {
+  let original_line = line;
   if (! (line.includes(": ") || line.includes("http://") || line.includes("https://"))) {
-    return tagParse(line); 
+    return new Line(original_line, tagParse(line));
   }
   let result = [];
   // we're just gonna look for https:// and http:// initially,
@@ -861,7 +879,7 @@ function rewriteLine(line) {
       acc.push(result[i]);
     }
   }
-  return acc;
+  return new Line(original_line, acc);
 }
 
 // TAG
@@ -1165,6 +1183,9 @@ function unparseLineContent(l) {
   if (l instanceof TreeNode) {
     return l.toString();
   }
+  if (l instanceof Line) {
+    return l.content;
+  }
   // throw new Error("failed unparseLine", l);
   return 'ERROR: ' + l;
 }
@@ -1275,9 +1296,11 @@ async function editMessage(item_origin, msg_id) {
     if (msg_block_content.innerText.trim() === '') {
       msg.blocks = [new Deleted()];
     } else {
-      msg.blocks = parseSection(msg_block_content.innerText.split('\n'));  // innerText is unix newlines, only http request are dos newlines
+      let lines = msg_block_content.innerText.trim().split('\n');  // innerText is unix newlines, only http request are dos newlines
+      let blocks = parseSection(lines);
+      let rewritten_blocks = blocks.map(rewriteBlock);
+      msg.blocks = rewritten_blocks;  
     }
-    // TODO need to be able to delete a textblock by deleting all of its content
 
     let new_content = unparseContent(page);
     await global.notes.writeFile(item_origin, new_content);
@@ -1489,8 +1512,8 @@ async function expandSearch(obj, search_query) {
 }
 
 function htmlLine(line) {
-  if (line instanceof Array) {
-    return line.map(x => {
+  if (line instanceof Line) {
+    return line.parts.map(x => {
       if (x instanceof Tag) {
         return "<emph class='tag'>" + x.tag + "</emph>";
       }
@@ -2413,12 +2436,12 @@ async function putAllNotes(repo) {
 // STATUS
 
 async function sha256sum(input_string) {
-  console.time('sha256sum');
+  // console.time('sha256sum');
   const encoder = new TextEncoder('utf-8');
   const bytes = encoder.encode(input_string);
   const hash = await crypto.subtle.digest('SHA-256', bytes);
   let result = hashToString(hash);
-  console.timeEnd('sha256sum');
+  // console.timeEnd('sha256sum');
   return result;
 }
 
@@ -3071,7 +3094,7 @@ async function getTagsFromMixedNote(uuid) {
   return page
     .flatMap(s => s.blocks?.filter(x => x instanceof Msg))  // get all messages from every section
     .filter(x => x)  // filter away sections that didn't have blocks
-    .flatMap(x => x.msg.filter(p => p instanceof Tag));  // get all tags from every message
+    .flatMap(x => x.msg.parts.filter(p => p instanceof Tag));  // get all tags from every message
 }
 
 // MAIN
@@ -3156,6 +3179,14 @@ async function perf(func) {
   console.time('perf');
   await func();
   console.timeEnd('perf');
+}
+
+async function perf100(func) {
+  console.time('perf100');
+  for (let i = 0; i < 100; ++i) {
+    await func();
+  }
+  console.timeEnd('perf100');
 }
 
 async function registerServiceWorker() {
