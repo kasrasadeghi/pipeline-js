@@ -1712,7 +1712,7 @@ async function handleMsg(event) {
       const old_content = content_lines.join("\n");
       const metadata = metadata_lines.join("\n");
 
-      const new_content = old_content + `\n- msg: ${msg}\n  - Date: ${getNow()}\n\n`;
+      const new_content = old_content + `\n- msg: ${msg.trim()}\n  - Date: ${getNow()}\n\n`;
       return new_content + metadata;
     });
   }
