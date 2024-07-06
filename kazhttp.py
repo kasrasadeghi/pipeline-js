@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 import socket
 import os
 import ssl
@@ -127,7 +127,7 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
         log(f'{len(body)=} {content_length=}')
     return {'method': method, 'path': path, 'httpver': httpver, 'headers': headers, 'body': body}
 
-def create_server_socket(host, port) -> tuple[socket.socket, bool]:  # bool is True iff https/ ssl
+def create_server_socket(host, port) -> Tuple[socket.socket, bool]:  # bool is True iff https/ ssl
     # socket.setdefaulttimeout(5)  # 5 second timeouts by default
     raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
