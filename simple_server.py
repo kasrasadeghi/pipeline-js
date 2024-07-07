@@ -99,12 +99,14 @@ while True:
             "style.css",
             "indexed-fs.js",
             "service-worker.js",
+        ]
 
-            "icons/favicon.ico",
-            "icons/icon512.png",
-            "icons/icon192.png",
-            "icons/maskable_icon.png",
-            "icons/maskable_icon_x192.png"
+        icons = [
+            "favicon.ico",
+            "icon512.png",
+            "icon192.png",
+            "maskable_icon.png",
+            "maskable_icon_x192.png"
         ]
 
         if path == '/sw-index.html':
@@ -116,18 +118,9 @@ while True:
         elif path == "/pipeline-cert.pem":
             path = "cert/cert.pem"
             mimetype = b"application/x-x509-ca-cert"
-        elif path == "/favicon.ico":
-            path = "icons/favicon.ico"
-            mimetype = b"image/x-icon"
-        elif path == "/icon512.png":
-            path = "icons/icon512.png"
-            mimetype = b"image/png"
-        elif path == "/maskable_icon.png":
-            path = "icons/maskable_icon.png"
-            mimetype = b"image/png"
-        elif path == "/maskable_icon_x192.png":
-            path = "icons/maskable_icon_x192.png"
-            mimetype = b"image/png"
+        elif path.removeprefix("/") in icons:
+            path = "icons/" + path.removeprefix("/")
+            mimetype = mimetype_table[os.path.splitext(path)[1]]
         elif path.removeprefix("/") in assets:
             path = path.removeprefix("/")
             mimetype = mimetype_table[os.path.splitext(path)[1]]
