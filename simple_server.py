@@ -12,11 +12,18 @@ import time
 import traceback
 from datetime import datetime
 import sys
+import argparse
 
 from kazhttp import HTTP_OK, HTTP_NOT_FOUND, HTTP_OK_JSON, allow_cors_for_localhost, receive_headers_and_content, create_server_socket, log
 
-NOTES_ROOT = os.path.join(os.path.expanduser('~'), "notes")
-HOST, PORT = '', int(sys.argv[1])
+argparser = argparse.ArgumentParser(description="Run a simple pipeline replication/sync server")
+argparser.add_argument("--port", type=int, required=True, help="Port to host the server on")
+argparser.add_argument("--notes-root", type=str, help="Root directory for notes", default=os.path.join(os.path.expanduser('~'), "notes"))
+argparser.add_argument("--host", type=str, help="Host to bind to", default="")
+args = argparser.parse_args()
+
+NOTES_ROOT = args.notes_root
+HOST, PORT = args.host, args.port
 
 # provide .removeprefix if it doesn't have it (e.g. python 3.8 on ubuntu 20.04)
 if not hasattr(str, 'removeprefix'):

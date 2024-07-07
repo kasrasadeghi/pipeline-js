@@ -75,8 +75,11 @@ def create_driver():
             options=options
         )
     print("WebDriver set up successfully.")
-    print(f"Chrome version: {driver.capabilities['browserVersion']}")
-    print(f"ChromeDriver version: {driver.capabilities['chrome']['chromedriverVersion'].split(' ')[0]}")
+    print(f"Browser version: {driver.capabilities['browserVersion']}")
+    if args.browser == 'chrome':
+        print(f"ChromeDriver version: {driver.capabilities['chrome']['chromedriverVersion'].split(' ')[0]}")
+    elif args.browser == 'firefox':
+        print(f"GeckoDriver version: {driver.capabilities['moz:geckodriverVersion']}")
     return driver
 
 def browser_wrapper(close = True):
@@ -252,6 +255,7 @@ def main():
     driver = create_driver()
     test_first_time_setup(driver)
     test_new_day_double_journal(driver)
+    input("Press Enter to continue...")
     driver.quit()
     print("Test script completed.")
 
