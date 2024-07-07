@@ -8,11 +8,9 @@
 import socket
 import os
 import hashlib
-import json
 import time
-import ssl
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime
 import sys
 
 from kazhttp import HTTP_OK, HTTP_NOT_FOUND, HTTP_OK_JSON, allow_cors_for_localhost, receive_headers_and_content, create_server_socket, log
@@ -111,6 +109,18 @@ while True:
         elif path == "/pipeline-cert.pem":
             path = "cert/cert.pem"
             mimetype = b"application/x-x509-ca-cert"
+        elif path == "/favicon.ico":
+            path = "icons/favicon.ico"
+            mimetype = b"image/x-icon"
+        elif path == "/icon512.png":
+            path = "icons/icon512.png"
+            mimetype = b"image/png"
+        elif path == "/maskable_icon.png":
+            path = "icons/maskable_icon.png"
+            mimetype = b"image/png"
+        elif path == "/maskable_icon_x192.png":
+            path = "icons/maskable_icon_x192.png"
+            mimetype = b"image/png"
         elif path.removeprefix("/") in assets:
             path = path.removeprefix("/")
             mimetype = mimetype_table[os.path.splitext(path)[1]]

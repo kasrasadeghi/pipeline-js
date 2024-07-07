@@ -1,11 +1,10 @@
 const CACHE_VERSION = 'pipeline-notes-v1';
 const baseFile = 'sw-index.html';
 const assets = [
-  "icons/favicon.ico",
-  "icons/icon512.png",
-  "icons/icon192.png",
-  "icons/maskable_icon.png",
-  "icons/maskable_icon_x192.png",
+  "favicon.ico",
+  "icon512.png",
+  "maskable_icon.png",
+  "maskable_icon_x192.png",
 
   'manifest.json',
   'indexed-fs.js',
