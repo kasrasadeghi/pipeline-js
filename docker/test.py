@@ -4,15 +4,19 @@ import time
 import argparse
 
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.common.exceptions import WebDriverException, TimeoutException, NoSuchElementException
+
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
+
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--no-docker", default=False, action="store_true", help="Disable Docker")
+parser.add_argument("--browser", default="chrome", choices=["chrome", "firefox"], help="Browser to use")
 args = parser.parse_args()
 
 if args.no_docker:
@@ -23,17 +27,6 @@ else:
 
 print("Starting test script...")
 
-# Set up Chrome options
-chrome_options = Options()
-chrome_options.add_argument("--no-sandbox")
-chrome_options.add_argument("--disable-dev-shm-usage")
-chrome_options.add_argument("--ignore-certificate-errors")
-chrome_options.add_argument("--ignore-ssl-errors")
-
-if args.no_docker:
-    chrome_options.add_argument("--ssl-cert-path=cert/cert.pem")
-else:
-    chrome_options.add_argument("--ssl-cert-path=/opt/selenium/cert/cert.pem")
 
 # --- UTILS ------------------------------------------------------------------
 
@@ -46,13 +39,40 @@ def get_pipeline_url():
 def create_driver():
     print("Setting up WebDriver...")
 
+    if args.browser == 'chrome':
+        # Set up Chrome options
+        options = ChromeOptions()
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--ignore-certificate-errors")
+        options.add_argument("--ignore-ssl-errors")
+
+        if args.no_docker:
+            options.add_argument("--ssl-cert-path=cert/cert.pem")
+        else:
+            options.add_argument("--ssl-cert-path=/opt/selenium/cert/cert.pem")
+    elif args.browser == 'firefox':
+        # Set up Firefox options
+        options = FirefoxOptions()
+        options.add_argument("--ignore-certificate-errors")
+        options.add_argument("--ignore-ssl-errors")
+
     # Set up Selenium WebDriver
     if args.no_docker:
-        driver = webdriver.Chrome(options=chrome_options)
+        if args.browser == 'chrome':
+            from selenium.webdriver.chrome.service import Service as ChromeService
+            from webdriver_manager.chrome import ChromeDriverManager
+
+            driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
+        elif args.browser == 'firefox':
+            from selenium.webdriver.firefox.service import Service as FirefoxService
+            from webdriver_manager.firefox import GeckoDriverManager
+
+            driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()), options=options)
     else:
         driver = webdriver.Remote(
             command_executor='http://selenium:4444/wd/hub',
-            options=chrome_options
+            options=options
         )
     print("WebDriver set up successfully.")
     print(f"Chrome version: {driver.capabilities['browserVersion']}")
@@ -225,7 +245,7 @@ def test_new_day_double_journal(driver):
                 count += 1
         assert count == 1
 
-    time.sleep(10)
+    time.sleep(100)
 
 
 def main():

@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 default:
 	docker-compose up --build --force-recreate
 
@@ -10,6 +12,9 @@ venv:
 
 test: venv
 	-source venv/bin/activate && python test.py --no-docker
+
+firefox: venv
+	-source venv/bin/activate && python test.py --no-docker --browser firefox
 
 server:
 	docker-compose up --build --force-recreate server
