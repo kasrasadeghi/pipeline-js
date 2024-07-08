@@ -1,8 +1,10 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Callable
 import socket
 import os
 import ssl
 import json
+from datetime import datetime
+import traceback
 
 def log(*k):
     print(*k, flush=True)
@@ -145,3 +147,25 @@ def create_server_socket(host, port) -> Tuple[socket.socket, bool]:  # bool is T
     listen_socket.listen(1)
     log(f"Serving HTTP{'S' if https else ''} on port {port} ...")
     return listen_socket, https
+
+
+def run(host: str, port: int, handle_request: Callable[[dict], bytes]) -> None:
+    listen_socket, https = create_server_socket(host, port)
+    while True:
+        try:
+            log('----------------------------------------')
+            client_connection, client_address = listen_socket.accept()
+            log(datetime.now(), client_address) # (address: string, port: int)
+
+            request = receive_headers_and_content(client_connection)
+            if request is None:
+                continue
+
+            http_response = handle_request(request)
+            client_connection.sendall(http_response)
+            log(datetime.now(), 'shutdown and close connection')
+            client_connection.shutdown(socket.SHUT_RDWR)
+            client_connection.close()
+
+        except Exception as e:
+            log(traceback.format_exc())
