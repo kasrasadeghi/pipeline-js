@@ -9,6 +9,7 @@ import os
 import hashlib
 import time
 import argparse
+from datetime import datetime
 
 from kazhttp import HTTP_OK, HTTP_NOT_FOUND, HTTP_OK_JSON, allow_cors_for_localhost, log, run
 
@@ -56,6 +57,61 @@ def compute_status(repos, headers) -> "http_response":
         status = {repo: hash_repo(repo) for repo in repos}
         return HTTP_OK_JSON(status, extra_header=cors_header)
 
+
+def handle_api_request(request):
+    method = request['method']
+    headers = request['headers']
+    body = request['body']
+    path = request['path']
+
+    assert path.startswith('/api')
+    path = path.removeprefix('/api')
+
+    cors_header = allow_cors_for_localhost(headers)
+
+    if path.startswith('/list/') and method == 'GET':
+        log(datetime.now(), 'listing notes')
+        repo = path.removeprefix('/list/')
+        repo_path = get_repo_path(repo)
+        return HTTP_OK_JSON(os.listdir(repo_path), extra_header=cors_header)
+    elif path.startswith('/get/') and method == 'GET':
+        note = path.removeprefix('/get/')
+
+        # consider making this a POST request and putting the uuids in the body as a json.
+        # - within the spirit of http, we're "getting" the notes.  we _should_ use a 'GET' request.
+        repo_notes = path.removeprefix('/get/')
+        # <repo>/<note>(,<note>)*
+        repo, notes = repo_notes.split('/', 1)
+        notes = notes.split(',')
+        repo_path = get_repo_path(repo)
+        def read_file(path):
+            with open(path) as f:
+                return f.read()
+        read_notes = {repo + '/' + note: read_file(os.path.join(repo_path, note)) for note in notes}
+        return HTTP_OK_JSON(read_notes, extra_header=cors_header)
+    elif path.startswith('/put/') and method == 'PUT':
+        note = path.removeprefix('/put/')
+        log(datetime.now(), note)
+
+        # the note is of format <repo>/<uuid>.note
+        if '/' not in note:
+            return HTTP_NOT_FOUND(b"bad note: " + note.encode())
+
+        # make folder if repo doesn't exist
+        repo, uuid = note.split('/')
+        if not os.path.isdir(os.path.join(NOTES_ROOT, repo)):
+            os.mkdir(os.path.join(NOTES_ROOT, repo))
+
+        with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
+            f.write(body)
+        log(datetime.now(), "wrote notes/" + note)
+        return HTTP_OK(b"wrote notes/" + note.encode(), mimetype=b"text/plain")
+    
+    elif path.startswith('/status/') and method == 'GET':
+        repos = path.removeprefix('/status/')
+        return compute_status(repos.split(','), headers)
+    else:
+        return HTTP_NOT_FOUND(b"api not found: " + path.encode() + b" method: " + method.encode())
 
 def handle_request(request):
     method = request['method']
@@ -109,59 +165,7 @@ def handle_request(request):
     # Handle API paths
 
     if path.startswith('/api'):
-        path = path.removeprefix('/api')
-        if path.startswith('/list/') and method == 'GET':
-            log('listing notes')
-            repo = path.removeprefix('/list/')
-            repo_path = get_repo_path(repo)
-            cors_header = allow_cors_for_localhost(headers)
-            http_response = HTTP_OK_JSON(os.listdir(repo_path), extra_header=cors_header)
-            return http_response
-        elif path.startswith('/get/') and method == 'GET':
-            note = path.removeprefix('/get/')
-
-            # consider making this a POST request and putting the uuids in the body as a json.
-            # - maybe not, though.  i like not parsing the content of the body here, but i might just be being lazy.
-            # - also like, within the spirit of http, we're "getting" the notes.  we _should_ use a 'GET' request.
-            repo_notes = path.removeprefix('/get/')
-            # <repo>/<note>(,<note>)*
-            repo, notes = repo_notes.split('/', 1)
-            notes = notes.split(',')
-            repo_path = get_repo_path(repo)
-            def read_file(path):
-                with open(path) as f:
-                    return f.read()
-            read_notes = {repo + '/' + note: read_file(os.path.join(repo_path, note)) for note in notes}
-            cors_header = allow_cors_for_localhost(headers)
-            http_response = HTTP_OK_JSON(read_notes, extra_header=cors_header)
-            return http_response
-        elif path.startswith('/put/') and method == 'PUT':
-            note = path.removeprefix('/put/')
-            log(note)
-
-            # the note is of format <repo>/<uuid>.note
-            if '/' not in note:
-                http_response = HTTP_NOT_FOUND(b"bad note: " + note.encode())
-                return http_response
-
-            # make folder if repo doesn't exist
-            repo, uuid = note.split('/')
-            if not os.path.isdir(os.path.join(NOTES_ROOT, repo)):
-                os.mkdir(os.path.join(NOTES_ROOT, repo))
-
-            with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
-                f.write(body)
-            http_response = HTTP_OK(b"wrote notes/" + note.encode(), mimetype=b"text/plain")
-            log("wrote notes/" + note, time.time())
-            return http_response
-        elif path.startswith('/status/') and method == 'GET':
-            repos = path.removeprefix('/status/')
-            http_response = compute_status(repos.split(','), headers)
-            return http_response
-        else:
-            http_response = HTTP_NOT_FOUND(b"api not found: " + path.encode())
-            return http_response
-
+        return handle_api_request(request)
 
     # Handle Static paths
 
@@ -172,7 +176,7 @@ def handle_request(request):
 
     with open(path, 'rb') as f:
         content = f.read()
-        log(f"read {path} ({len(content)})")
+        log(datetime.now(), f"read {path} ({len(content)})")
 
     http_response = HTTP_OK(content, mimetype)
     # log("RESPONSE:", http_response)

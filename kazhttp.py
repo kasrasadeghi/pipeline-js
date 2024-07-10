@@ -153,7 +153,7 @@ def run(host: str, port: int, handle_request: Callable[[dict], bytes]) -> None:
     listen_socket, https = create_server_socket(host, port)
     while True:
         try:
-            log('----------------------------------------')
+            log(datetime.now(), '----------------------------------------')
             client_connection, client_address = listen_socket.accept()
             log(datetime.now(), client_address) # (address: string, port: int)
 
@@ -168,4 +168,4 @@ def run(host: str, port: int, handle_request: Callable[[dict], bytes]) -> None:
             client_connection.close()
 
         except Exception as e:
-            log(traceback.format_exc())
+            log(datetime.now(), traceback.format_exc())
