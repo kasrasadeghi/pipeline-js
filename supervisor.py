@@ -4,6 +4,8 @@ import threading
 import time
 import datetime
 
+escape = lambda x: x.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
 app = Flask(__name__)
 
 # Define the subprocesses
@@ -57,7 +59,7 @@ def check_subprocesses():
     if server_alive:
         last_alive_time['simple_server'] = datetime.datetime.now()
     
-    return {'pipeline_proxy': proxy_alive, 'simple_server': server_alive}
+    return {'pipeline_proxy': (proxy_alive, pipeline_proxy_process), 'simple_server': (server_alive, simple_server_process)}
 
 def restart_process(process_name):
     global pipeline_proxy_process, simple_server_process
@@ -76,7 +78,7 @@ def liveness_check():
     global autorestart_enabled
     while True:
         subprocess_status = check_subprocesses()
-        for process_name, is_alive in subprocess_status.items():
+        for process_name, (is_alive, process_obj) in subprocess_status.items():
             if not is_alive and autorestart_enabled[process_name]:
                 restart_process(process_name)
         time.sleep(60)  # Wait for 1 minute before next check
@@ -92,10 +94,10 @@ def index():
     subprocess_status = check_subprocesses()
     
     status_html = ""
-    for process_name, is_alive in subprocess_status.items():
+    for process_name, (is_alive, process_obj) in subprocess_status.items():
         status = 'Running' if is_alive else 'Not Running'
         last_alive = last_alive_time[process_name].strftime('%Y-%m-%d %H:%M:%S') if last_alive_time[process_name] else 'Never'
-        status_html += f"<p>{process_name.replace('_', ' ').title()}: {status} (Last alive: {last_alive})</p>"
+        status_html += f"<p>{process_name.replace('_', ' ').title()}: {status} (Last alive: {last_alive}) (Process: {escape(str(process_obj))})</p>"
 
     # parse the logs to sort the lines by timestamp
     proxy_log_lines = map(lambda x: {'line': x, 'from': 'proxy'}, pipeline_proxy_logs.splitlines())

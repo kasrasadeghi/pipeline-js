@@ -39,25 +39,31 @@ void cleanup_openssl() {
     EVP_cleanup();
 }
 
+void catastrophic_failure(const std::string& message) {
+    log_time();
+    std::cout << message << std::endl;
+    perror(message.c_str());
+    exit(EXIT_FAILURE);
+}
+
 SSL_CTX* create_ssl_context(bool is_server) {
     const SSL_METHOD* method = is_server ? TLS_server_method() : TLS_client_method();
     SSL_CTX* ctx = SSL_CTX_new(method);
     if (!ctx) {
-        std::cerr << "Unable to create SSL context" << std::endl;
-        ERR_print_errors_fp(stderr);
-        exit(EXIT_FAILURE);
+        log_time(); ERR_print_errors_fp(stdout);
+        catastrophic_failure("Unable to create SSL context");
     }
     return ctx;
 }
 
 void configure_ssl_context(SSL_CTX* ctx, const char* cert_file, const char* key_file) {
     if (SSL_CTX_use_certificate_file(ctx, cert_file, SSL_FILETYPE_PEM) <= 0) {
-        ERR_print_errors_fp(stderr);
-        exit(EXIT_FAILURE);
+        log_time(); ERR_print_errors_fp(stdout);
+        catastrophic_failure("Failed to load certificate file");
     }
     if (SSL_CTX_use_PrivateKey_file(ctx, key_file, SSL_FILETYPE_PEM) <= 0) {
-        ERR_print_errors_fp(stderr);
-        exit(EXIT_FAILURE);
+        log_time(); ERR_print_errors_fp(stdout);
+        catastrophic_failure("Failed to load private key file");
     }
 }
 
@@ -82,8 +88,10 @@ int set_socket_timeout(int sockfd, int seconds) {
 int create_socket(int port, bool is_server) {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
-        perror("Unable to create socket");
-        exit(EXIT_FAILURE);
+        log("Failed to create socket");
+        if (not is_server) {
+            return -1;
+        }
     }
 
     if (is_server) {
@@ -99,25 +107,23 @@ int create_socket(int port, bool is_server) {
     if (is_server) {
         addr.sin_addr.s_addr = INADDR_ANY;
         if (bind(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-            perror("Unable to bind");
-            exit(EXIT_FAILURE);
+            catastrophic_failure("Unable to bind");
         }
         if (listen(sock, LISTEN_BACKLOG) < 0) {
-            perror("Unable to listen");
-            exit(EXIT_FAILURE);
+            catastrophic_failure("Unable to listen");
         }
     } else {
+        // not server
         addr.sin_addr.s_addr = inet_addr(DESTINATION_IP);
         if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-            perror("Unable to connect");
-            exit(EXIT_FAILURE);
+            log("Failed to connect to destination server");
+            close(sock);
+            return -1;
         }
-    }
-
-    if (! is_server) {
         if (set_socket_timeout(sock, SOCKET_TIMEOUT) != 0) {
             close(sock);
-            exit(EXIT_FAILURE);
+            log("Failed to set socket timeout, aborting connection");
+            return -1;
         }
     }
     return sock;
@@ -126,12 +132,16 @@ int create_socket(int port, bool is_server) {
 void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
     log("Handling new client connection");
     int dest_sock = create_socket(DESTINATION_PORT, false);
+    if (dest_sock < 0) {
+        log("Failed to connect to destination server");
+        return;
+    }
     SSL* dest_ssl = SSL_new(dest_ctx);
     SSL_set_fd(dest_ssl, dest_sock);
 
     if (SSL_connect(dest_ssl) <= 0) {
+        log_time(); ERR_print_errors_fp(stdout);
         log("Failed to perform SSL handshake with destination server");
-        ERR_print_errors_fp(stderr);
         SSL_free(dest_ssl);
         close(dest_sock);
         return;
@@ -145,7 +155,10 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
     fds[1].fd = dest_sock;
     fds[1].events = POLLIN;
 
-    // int count = 0;
+    // on first client read, steal the first line and print it, it'll contain the http request
+    // maybe not the whole thing, but enough to peruse
+
+    bool first_client_read = true;
 
     while (true) {
         log("=== poll ===");
@@ -154,12 +167,6 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
             log("Poll failed");
             break;
         }
-
-        // if (count++ > 10) {
-        //     printf("committing suicide after 10 polls\n");
-        //     printf("%f\n", 1 / 0);
-        //     exit(0);
-        // }
 
         log("- ready: " + std::to_string(poll_result) + ", " +
             "clientSocket: " + std::to_string(fds[0].revents & POLLIN) + ", " +
@@ -185,12 +192,22 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
                         log("SSL operation would block, continuing...");
                         continue;
                     } else {
-                        log("SSL_read failed");
-                        ERR_print_errors_fp(stderr);
+                        log_time(); ERR_print_errors_fp(stdout);
+                        log("SSL_read failed with above error");
                     }
                     goto cleanup;
                 }
                 log(std::to_string(bytes_read) + " received");
+
+                // print out the http request
+                if (i == 0 && first_client_read) {
+                    std::string first_line(buffer, buffer + bytes_read);
+                    if (first_line.find("\r\n") != std::string::npos) {
+                        first_line.erase(first_line.find("\r\n"));
+                    }
+                    log("First line: " + first_line);
+                    first_client_read = false;
+                }
 
                 log("writing bytes...");
                 int bytes_written = SSL_write(write_ssl, buffer, bytes_read);
@@ -200,7 +217,7 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
                         log("SSL operation would block, continuing...");
                         continue;
                     } else {
-                        ERR_print_errors_fp(stderr);
+                        log_time(); ERR_print_errors_fp(stdout);
                         log("SSL_write failed");
                         goto cleanup;
                     }
@@ -271,8 +288,8 @@ int main() {
 
         log("Performing SSL handshake");
         if (SSL_accept(client_ssl) <= 0) {
+            log_time(); ERR_print_errors_fp(stdout);
             log("Failed to perform SSL handshake");
-            ERR_print_errors_fp(stderr);
             SSL_free(client_ssl);
             close(client_sock);
             continue;
