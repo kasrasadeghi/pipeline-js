@@ -97,16 +97,14 @@ def index():
         last_alive = last_alive_time[process_name].strftime('%Y-%m-%d %H:%M:%S') if last_alive_time[process_name] else 'Never'
         status_html += f"<p>{process_name.replace('_', ' ').title()}: {status} (Last alive: {last_alive})</p>"
 
+    # parse the logs to sort the lines by timestamp
+    proxy_log_lines = map(lambda x: {'line': x, 'from': 'proxy'}, pipeline_proxy_logs.splitlines())
+    server_log_lines = map(lambda x: {'line': x, 'from': 'server'}, simple_server_logs.splitlines())
+    lines = list(proxy_log_lines) + list(server_log_lines)
+    lines.sort(key=lambda x: " ".join(x['line'].split(' ', 2)[:2]))
+    lines = [f"<span style='color: {'green' if x['from'] == 'proxy' else 'blue'}'>{x['line']}</span>" for x in lines]
+
     return f"""
-    <style>
-    .log {{ 
-        min-width: 50%; 
-        max-width: 50%; 
-        overflow: scroll;
-        border: 1px solid black;
-        border-radius: 5px;
-    }}
-    </style>
     <h1>Subprocesses Status</h1>
     {status_html}
     {subprocess.run(['fuser', '8000/tcp'], capture_output=True, text=True)}
@@ -129,16 +127,8 @@ def index():
     </form>
     
     <h1>Logs</h1>
-    <div style="display: flex;">
-        <div class="log">
-        Proxy Logs:
-        <pre>{pipeline_proxy_logs}</pre>
-        </div>
-
-        <div class="log">
-        Simple Server Logs:
-        <pre>{simple_server_logs}</pre>
-        </div>
+    <div>
+        <pre>{"\n".join(lines)}</pre>
     </div>
     """
 
