@@ -145,7 +145,7 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
     fds[1].fd = dest_sock;
     fds[1].events = POLLIN;
 
-    int count = 0;
+    // int count = 0;
 
     while (true) {
         log("=== poll ===");
@@ -155,10 +155,11 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
             break;
         }
 
-        if (count++ > 10) {
-            printf("committing suicide after 10 polls\n");
-            printf("%f\n", (double)count / 0);
-        }
+        // if (count++ > 10) {
+        //     printf("committing suicide after 10 polls\n");
+        //     printf("%f\n", 1 / 0);
+        //     exit(0);
+        // }
 
         log("- ready: " + std::to_string(poll_result) + ", " +
             "clientSocket: " + std::to_string(fds[0].revents & POLLIN) + ", " +

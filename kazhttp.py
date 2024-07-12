@@ -7,7 +7,7 @@ from datetime import datetime
 import traceback
 
 def log(*k):
-    print(*k, flush=True)
+    print(datetime.now(), *k, flush=True)
 
 def HTTP_OK(body: bytes, mimetype: bytes) -> bytes:
     return (b"HTTP/1.1 200 OK\n"
@@ -153,9 +153,9 @@ def run(host: str, port: int, handle_request: Callable[[dict], bytes]) -> None:
     listen_socket, https = create_server_socket(host, port)
     while True:
         try:
-            log(datetime.now(), '----------------------------------------')
+            log('----------------------------------------')
             client_connection, client_address = listen_socket.accept()
-            log(datetime.now(), client_address) # (address: string, port: int)
+            log(client_address) # (address: string, port: int)
 
             request = receive_headers_and_content(client_connection)
             if request is None:
@@ -163,9 +163,9 @@ def run(host: str, port: int, handle_request: Callable[[dict], bytes]) -> None:
 
             http_response = handle_request(request)
             client_connection.sendall(http_response)
-            log(datetime.now(), 'shutdown and close connection')
+            log('shutdown and close connection')
             client_connection.shutdown(socket.SHUT_RDWR)
             client_connection.close()
 
         except Exception as e:
-            log(datetime.now(), traceback.format_exc())
+            log(traceback.format_exc())

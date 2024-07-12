@@ -69,7 +69,7 @@ def handle_api_request(request):
     cors_header = allow_cors_for_localhost(headers)
 
     if path.startswith('/list/') and method == 'GET':
-        log(datetime.now(), 'listing notes')
+        log('listing notes')
         repo = path.removeprefix('/list/')
         repo_path = get_repo_path(repo)
         return HTTP_OK_JSON(os.listdir(repo_path), extra_header=cors_header)
@@ -90,7 +90,7 @@ def handle_api_request(request):
         return HTTP_OK_JSON(read_notes, extra_header=cors_header)
     elif path.startswith('/put/') and method == 'PUT':
         note = path.removeprefix('/put/')
-        log(datetime.now(), note)
+        log(note)
 
         # the note is of format <repo>/<uuid>.note
         if '/' not in note:
@@ -103,7 +103,7 @@ def handle_api_request(request):
 
         with open(os.path.join(NOTES_ROOT, note), 'wb+') as f:
             f.write(body)
-        log(datetime.now(), "wrote notes/" + note)
+        log("wrote notes/" + note)
         return HTTP_OK(b"wrote notes/" + note.encode(), mimetype=b"text/plain")
     
     elif path.startswith('/status/') and method == 'GET':
@@ -175,7 +175,7 @@ def handle_request(request):
 
     with open(path, 'rb') as f:
         content = f.read()
-        log(datetime.now(), f"read {path} ({len(content)})")
+        log(f"read {path} ({len(content)})")
 
     http_response = HTTP_OK(content, mimetype)
     # log("RESPONSE:", http_response)
@@ -183,8 +183,8 @@ def handle_request(request):
 
 
 def main():
-    print(f"hosting pipeline server on host '{HOST}' and port '{PORT}'")
-    print(f"notes root '{NOTES_ROOT}' in home folder '{os.path.expanduser('~')}'")
+    log(f"hosting pipeline server on host '{HOST}' and port '{PORT}'")
+    log(f"notes root '{NOTES_ROOT}' in home folder '{os.path.expanduser('~')}'")
     run(host=HOST, port=PORT, handle_request=handle_request)
 
 
