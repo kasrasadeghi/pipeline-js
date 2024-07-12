@@ -7,7 +7,6 @@
 # Python3.7+
 import os
 import hashlib
-import time
 import argparse
 from datetime import datetime
 

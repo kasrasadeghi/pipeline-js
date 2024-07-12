@@ -10,6 +10,9 @@ app = Flask(__name__)
 pipeline_proxy_process = None
 simple_server_process = None
 
+pipeline_proxy_command = ['prlimit', '--core=unlimited', '--', './pipeline-proxy', '8000']
+simple_server_command = ['python', 'simple_server.py', '--port', '8001']
+
 # Global variables for tracking
 last_alive_time = {
     'pipeline_proxy': None,
@@ -24,10 +27,10 @@ def start_subprocesses():
     global pipeline_proxy_process, simple_server_process
 
     # start the proxy with prlimit to enable coredump logging
-    pipeline_proxy_process = subprocess.Popen(['prlimit', '--core=unlimited', '--', './pipeline-proxy', '8000'], stdout=open('logs/proxy', 'w'), stderr=subprocess.STDOUT)
+    pipeline_proxy_process = subprocess.Popen(pipeline_proxy_command, stdout=open('logs/proxy', 'w'), stderr=subprocess.STDOUT)
 
     # same for simple_server
-    simple_server_process = subprocess.Popen(['python', 'simple_server.py', '--port', '8001'], stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
+    simple_server_process = subprocess.Popen(simple_server_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
 
 def stop_subprocesses():
     global pipeline_proxy_process, simple_server_process
@@ -62,12 +65,12 @@ def restart_process(process_name):
         if pipeline_proxy_process is not None:
             pipeline_proxy_process.terminate()
         subprocess.run(['fuser', '-k', '8000/tcp'])
-        pipeline_proxy_process = subprocess.Popen(['./pipeline-proxy', '8000'], stdout=open('logs/proxy', 'w'), stderr=subprocess.STDOUT)
+        pipeline_proxy_process = subprocess.Popen(pipeline_proxy_command, stdout=open('logs/proxy', 'w'), stderr=subprocess.STDOUT)
     elif process_name == 'simple_server':
         if simple_server_process is not None:
             simple_server_process.terminate()
         subprocess.run(['fuser', '-k', '8001/tcp'])
-        simple_server_process = subprocess.Popen(['python', 'simple_server.py', '8001'], stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
+        simple_server_process = subprocess.Popen(simple_server_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
 
 def liveness_check():
     global autorestart_enabled
