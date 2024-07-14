@@ -59,11 +59,11 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
         log('MORE: requesting more')
         while True:  # TODO make this a generator and only get more when we actually need it
             more = client_connection.recv(1024)
-            print('received', len(more), 'bytes')
-            print("got MORE:\n", more)
+            log('received', len(more), 'bytes')
+            log("got MORE:\n", more)
             request_data += more
             if request_data.startswith(b"GET ") and request_data.endswith(b"\r\n\r\n"):
-                print('got all the data')
+                log('got all the data')
                 break
             if len(more) == 0:
                 break
@@ -168,4 +168,4 @@ def run(host: str, port: int, handle_request: Callable[[dict], bytes]) -> None:
             client_connection.close()
 
         except Exception as e:
-            log(traceback.format_exc())
+            log(" ".join(traceback.format_exc().splitlines()))

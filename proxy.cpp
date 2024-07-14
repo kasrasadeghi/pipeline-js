@@ -9,6 +9,9 @@
 #include <poll.h>
 #include <chrono>
 #include <iomanip>
+#include <cstdlib>
+#include <execinfo.h>
+#include <signal.h>
 
 const int PROXY_PORT = 8000;
 const int DESTINATION_PORT = 8001;
@@ -185,7 +188,7 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
 
                 int bytes_read = SSL_read(read_ssl, buffer, BUFFER_SIZE);
                 if (bytes_read <= 0) {
-                    int ssl_error = SSL_get_error(read_ssl, bytes_read);
+                    int ssl_error = ERR_peek_last_error();
                     if (ssl_error == SSL_ERROR_ZERO_RETURN) {
                         log("Connection closed");
                     } else if (ssl_error == SSL_ERROR_WANT_READ || ssl_error == SSL_ERROR_WANT_WRITE) {
@@ -212,7 +215,7 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
                 log("writing bytes...");
                 int bytes_written = SSL_write(write_ssl, buffer, bytes_read);
                 if (bytes_written <= 0) {
-                    int ssl_error = SSL_get_error(write_ssl, bytes_written);
+                    int ssl_error = ERR_peek_last_error();
                     if (ssl_error == SSL_ERROR_WANT_WRITE || ssl_error == SSL_ERROR_WANT_READ) {
                         log("SSL operation would block, continuing...");
                         continue;
@@ -226,6 +229,7 @@ void handle_client(int client_sock, SSL* client_ssl, SSL_CTX* dest_ctx) {
             }
         }
     }
+    log("Done handling client connection");
 
 cleanup:
     log("Closing connection");
@@ -234,7 +238,25 @@ cleanup:
     close(dest_sock);
 }
 
+void print_stacktrace() {
+    void* array[10];
+    size_t size;
+
+    // get void*'s for all entries on the stack
+    size = backtrace(array, 10);
+
+    // print out all the frames to stderr
+    fprintf(stderr, "Stack trace:\n");
+    backtrace_symbols_fd(array, size, STDOUT_FILENO);
+}
+
+void exit_handler() {
+    print_stacktrace();
+}
+
 int main() {
+    std::atexit(exit_handler);
+
     init_openssl();
     SSL_CTX* server_ctx = create_ssl_context(true);
     SSL_CTX* client_ctx = create_ssl_context(false);
