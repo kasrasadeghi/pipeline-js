@@ -541,7 +541,7 @@ function parseContent(content) {
       sections.push({title: 'entry', lines: []});
     } else {
       // console.log('append ', L, 'to section', sections);
-      sections.slice(-1)[0].lines.push(L);
+      sections.back().lines.push(L);
     }
   }
 
@@ -560,10 +560,10 @@ function parseSection(lines) {
       blocks.push(new EmptyLine())
     } else {
       // TODO what?  if there are no blocks or if the last block is a newline, add another one?
-      if (blocks.length === 0 || blocks.slice(-1)[0] instanceof EmptyLine) {
+      if (blocks.length === 0 || blocks.back() instanceof EmptyLine) {
         blocks.push([]);
       }
-      blocks.slice(-1)[0].push(L)
+      blocks.back().push(L)
     }
   }
   // console.log('block pre tree', blocks);
@@ -614,7 +614,7 @@ function parseTree(block) {
   let found_children = false;
 
   for (let [indent, L] of indent_lines) {
-    while (stack.length !== 0 && stack.slice(-1)[0].indent >= indent) {
+    while (stack.length !== 0 && stack.back().indent >= indent) {
       stack.pop();
     }
 
@@ -633,10 +633,10 @@ function parseTree(block) {
     found_children = true;
 
     let node = new TreeNode({indent, value: L});
-    if (stack.slice(-1)[0].indent + 1 !== indent) {
+    if (stack.back().indent + 1 !== indent) {
       return block; // failure, children must be one indent deeper than their parent
     }
-    stack.slice(-1)[0].children.push(node);
+    stack.back().children.push(node);
     stack.push(node); // node is the new top of the stack, also added to prior top of stack
   }
 
@@ -686,7 +686,7 @@ function rewriteSection(section, note) {
 
   // track trailing newlines to aid unparsing
   section.trailing_newline = 0;
-  while (new_blocks.slice(-1)[0] instanceof EmptyLine) {
+  while (new_blocks.back() instanceof EmptyLine) {
     new_blocks.pop();
     section.trailing_newline += 1;
   }
