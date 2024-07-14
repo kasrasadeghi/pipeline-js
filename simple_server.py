@@ -132,6 +132,7 @@ def handle_request(request):
         "style.css",
         "indexed-fs.js",
         "service-worker.js",
+        "parse.js",
     ]
 
     icons = [
