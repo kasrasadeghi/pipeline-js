@@ -144,10 +144,10 @@ def handle_request(request):
     ]
 
     if path == '/sw-index.html':
-        path = 'index.html'
+        path = 'assets/index.html'
         mimetype = b"text/html"
     elif path == "/manifest.json":
-        path = "manifest.json"
+        path = "assets/manifest.json"
         mimetype = b"application/manifest+json"
     elif path == "/pipeline-cert.pem":
         path = "cert/cert.pem"
@@ -156,10 +156,10 @@ def handle_request(request):
         path = "icons/" + path.removeprefix("/")
         mimetype = mimetype_table[os.path.splitext(path)[1]]
     elif path.removeprefix("/") in assets:
-        path = path.removeprefix("/")
+        path = "assets/" + path.removeprefix("/")
         mimetype = mimetype_table[os.path.splitext(path)[1]]
     elif not path.startswith('/api'):
-        path = 'index.html'
+        path = 'assets/index.html'
         mimetype = b"text/html"
 
     # Handle API paths
