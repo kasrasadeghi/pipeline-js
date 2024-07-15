@@ -1,169 +1,5 @@
 import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
-
-// INDEXED DB WRAPPER
-
-class FileDB {
-  constructor(dbName = "pipeline-db", storeName = "notes") {
-    this.db = null;
-    this.dbName = dbName;
-    this.storeName = storeName;
-  }
-
-  async init(versionChange) {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, 1);
-
-      request.onupgradeneeded = async (event) => {
-        this.db = event.target.result;
-        const old_version = event.oldVersion;
-        const new_version = event.newVersion;
-        console.log('updating database', this.dbName, 'from', old_version, 'to', new_version);
-
-        switch (old_version) {
-          case 0:
-            // Create first object store:
-            this.db.createObjectStore(this.storeName, { keyPath: 'path' });
-
-          case 1:
-            // Get the original object store, and create an index on it:
-            // const tx = await db.transaction(this.storeName, 'readwrite');
-            // tx.store.createIndex('title', 'title');
-        }
-
-        // maybe TODO create index on title and date and other metadata
-      };
-
-      request.onsuccess = event => {
-        this.db = event.target.result;
-        this.db.onversionchange = () => {
-          this.db.close();
-          if (versionChange !== undefined) {
-            versionChange();
-          } else {
-            alert("Database is outdated, please reload the page.");
-          }
-        };
-        resolve();
-      };
-
-      request.onerror = event => {
-        console.error("Database error:", event.target.error);
-        reject(event.target.error);
-      };
-    });
-  }
-
-  async writeFile(path, content) {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([this.storeName], "readwrite");
-      const objectStore = transaction.objectStore(this.storeName);
-      const request = objectStore.put({ path, content });
-
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async readFile(path) {
-    console.time('read file ' + path);
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([this.storeName]);
-      const objectStore = transaction.objectStore(this.storeName);
-      const request = objectStore.get(path);
-
-      request.onsuccess = () => {
-        console.timeEnd('read file ' + path);
-        resolve(request.result ? request.result.content : null);
-      }
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async updateFile(path, updater) { // update a file within a transaction
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([this.storeName], "readwrite");
-      const objectStore = transaction.objectStore(this.storeName);
-      const request = objectStore.get(path);
-
-      request.onsuccess = () => {
-        const read_result = request.result ? request.result.content : null;
-        const updated_content = updater(read_result);
-        const putRequest = objectStore.put({path, content: updated_content});
-
-        putRequest.onsuccess = () => resolve(updated_content);
-        putRequest.onerror = () => reject(putRequest.error);
-      };
-
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async exists(path) {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([this.storeName]);
-      const objectStore = transaction.objectStore(this.storeName);
-      const request = objectStore.get(path);
-
-      request.onsuccess = () => resolve(!!request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async listFiles() {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([this.storeName]);
-      const objectStore = transaction.objectStore(this.storeName);
-      const request = objectStore.getAllKeys();
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async readAllFiles() {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([this.storeName]);
-      const objectStore = transaction.objectStore(this.storeName);
-      const request = objectStore.getAll();
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async deleteFile(path) {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([this.storeName], "readwrite");
-      const objectStore = transaction.objectStore(this.storeName);
-      const request = objectStore.delete(path);
-
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async renameFile(priorPath, newPath) {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([this.storeName], "readwrite");
-      const objectStore = transaction.objectStore(this.storeName);
-      const request = objectStore.get(priorPath);
-
-      request.onsuccess = () => {
-        if (! request.result) {
-          reject(`no content in ${priorPath}`);
-        }
-        const writeReq = objectStore.put({path: newPath, content: request.result.content});
-        writeReq.onsuccess = () => {
-          const deleteReq = objectStore.delete(priorPath);
-          deleteReq.onsuccess = () => resolve();
-          deleteReq.onerror = () => reject(deleteReq.error);
-        };
-        writeReq.onerror = () => reject(writeReq.error);
-      };
-      request.onerror = () => reject(request.error);
-    });
-  }
-}
+import FileDB from '/filedb.js';
 
 // JAVASCRIPT UTIL
 
@@ -367,17 +203,6 @@ async function getNoteMetadataMap(caller) {
   });
   console.timeEnd('parse metadata');
   return result;
-}
-
-async function getNotesWithTitle(title, repo) {
-  const files_with_names = await getNoteMetadataMap('note with title, probably from gotoJournal');
-  return files_with_names.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
-}
-
-async function getAllNotesWithSameTitleAs(uuid) {
-  const files_with_names = await getNoteMetadataMap('raw all notes with same title as uuid');
-  let title = files_with_names.find(note => note.uuid == uuid).title;
-  return files_with_names.filter(note => note.title === title);
 }
 
 // === Efficient cache for a single read/ scan of the whole database. ===
@@ -1719,7 +1544,7 @@ async function renderDiscBody(uuid) {
   return rendered_note;
 }
 
-async function gotoDisc(uuid) {
+export async function gotoDisc(uuid) {
   window.history.pushState({},"", "/disc/" + uuid);
   paintDisc(uuid, /* paint both footer and main */ undefined);
   return false;
@@ -2812,7 +2637,7 @@ async function clearServiceWorkerCaches() {
   return false;
 }
 
-async function renderMenu() {
+export async function renderMenu() {
   return [
     `${TextAction({id: 'new_note', label: lookupIcon('new note'), value: '', action: 'gotoNewNote'})}
     <br/>

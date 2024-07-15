@@ -8,7 +8,6 @@
 import os
 import hashlib
 import argparse
-from datetime import datetime
 
 from kazhttp import HTTP_OK, HTTP_NOT_FOUND, HTTP_OK_JSON, allow_cors_for_localhost, log, run
 
@@ -133,6 +132,7 @@ def handle_request(request):
         "indexed-fs.js",
         "service-worker.js",
         "parse.js",
+        "filedb.js",
     ]
 
     icons = [
