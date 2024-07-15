@@ -2528,7 +2528,7 @@ function runSearch() {
   }
 
   // search footer should already be rendered
-  searchResults = search(text, case_sensitive).then(all_messages => {
+  search(text, case_sensitive).then(all_messages => {
     let main = document.getElementsByTagName('main')[0];
     main.innerHTML = renderSearchMain(urlParams, all_messages);
     renderSearchPagination(all_messages);
