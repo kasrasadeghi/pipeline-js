@@ -30,6 +30,7 @@ unsystemd:
 	sudo systemctl disable pipeline-notes
 	sudo systemctl stop pipeline-notes
 
+.PHONY: logs
 logs:
 	journalctl -u pipeline-notes -f
 

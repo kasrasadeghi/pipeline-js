@@ -1,4 +1,4 @@
-import { parseContent, TreeNode } from './parse.js';
+import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
 
 // INDEXED DB WRAPPER
 
@@ -178,7 +178,7 @@ if (!Array.prototype.back) {
 
 const global_notes = new FileDB();
 
-let global = null;  // the only global variable.
+export let global = null;  // the only global variable.
 const LOCAL_REPO_NAME_FILE = "local_repo_name";
 const SUBBED_REPOS_FILE = "subbed_repos";
 
@@ -633,11 +633,13 @@ class Msg {
   }
 }
 
-class EmptyLine {
-  constructor() {}
-  toJSON() {
-    return 'EmptyLine{}';
+function htmlTreeNode(thisNode, nested = false) {
+  let indent = thisNode.indent == -1 ? "" : "  ".repeat(thisNode.indent) + "- ";
+  let result = indent + htmlLine(thisNode.value) + "\n" + thisNode.children.map(x => htmlTreeNode(x, true)).join("");
+  if (! nested && result.endsWith("\n")) {
+    result = result.slice(0, -1);
   }
+  return result;
 }
 
 function rewriteBlock(block, note) {
@@ -886,14 +888,23 @@ function htmlMsgBlock(block, content) {
       return "<blockquote>" + block.slice(1).map(x => "<p>" + htmlLine(x) + "</p>").join("") + "</blockquote>";
     }
     if (block.length === 1 && block[0] instanceof TreeNode) {
-      return "<pre>" + block[0].toString() + "\n</pre>";
+      return "<pre>" + htmlTreeNode(block[0]) + "\n</pre>";
     }
-    return "<p class='msgblock'>" + block.map(htmlLine).join("<br>") + "</p>";
+    return "<p class='msgblock'>" + block.map(htmlBlockPart).join("<br>") + "</p>";
   }
   if (block instanceof TreeNode) {
-    return `<pre>` + block.toString() + `</pre>`;
+    return `<pre>` + htmlTreeNode(block) + `</pre>`;
   }
-  return JSON.stringify(block, undefined, 2);
+  console.assert(false, block, 'unexpected block type');
+}
+
+function htmlBlockPart(part) {
+  if (part instanceof Line) {
+    return htmlLine(part);
+  } else if (part instanceof TreeNode) {
+    return `<pre>` + htmlTreeNode(part) + `</pre>`;
+  }
+  console.assert(false, block, 'unexpected block part type');
 }
 
 function htmlBlock(block, content) {
@@ -1032,7 +1043,7 @@ function unparseMessageBlocks(message) {
   return "";
 }
 
-function unparseMsg(msg) {
+export function unparseMsg(msg) {
   if (msg.blocks.length === 1 && msg.blocks[0] instanceof Deleted) {
     let trail = msg.gobbled_newline ? "\n".repeat(msg.gobbled_newline) : "";
     return ["- " + msg.content, '\n  - Date: ' + msg.date, "\n", trail].join("");
@@ -1064,7 +1075,7 @@ function unparseLineContent(l) {
     return l;
   }
   if (l instanceof TreeNode) {
-    return l.toString();
+    return htmlTreeNode(l);
   }
   if (l instanceof Line) {
     return l.content;
@@ -1073,12 +1084,12 @@ function unparseLineContent(l) {
   return 'ERROR: ' + l;
 }
 
-async function rewriteCurrentNote() {
+export async function rewriteCurrentNote() {
   // DEBUGGING
   return rewrite(parseContent(await global.notes.readFile(getCurrentNoteUuid())), getCurrentNoteUuid());
 }
 
-async function checkCurrentWellFormed() {
+export async function checkCurrentWellFormed() {
   // DEBUGGING
   return checkWellFormed(getCurrentNoteUuid(), await global.notes.readFile(getCurrentNoteUuid()));
 }
@@ -1101,7 +1112,14 @@ class Deleted {
   constructor() {}
 }
 
-async function editMessage(item_origin, msg_id) {
+export async function getMessageFromElement(element) {
+  let msg_id = element.id;
+  let page = await global.notes.rewrite(getCurrentNoteUuid());
+  let msg = page.filter(section => section.title === 'entry').flatMap(x => x.blocks).find(block => block.date === msg_id);
+  return msg;
+}
+
+export async function editMessage(item_origin, msg_id) {
   // 1. only allow editing if msg is from local repo and if the page is well-formed
   //    - a page is well formed if unparse(parse(page)) === page
   // 2. only allow editing a single message at a time
@@ -1212,7 +1230,7 @@ function htmlEditableMsgBlockContent(msg) {
   return unparseMessageBlocks(msg).replace(/\n/g, "<br>");
 }
 
-function htmlMsgBlockContent(msg, origin_content) {
+export function htmlMsgBlockContent(msg, origin_content) {
   let block_content = msg.blocks.map(block => htmlMsgBlock(block, origin_content)).join("");
   block_content = trimTrailingRenderedBreak(block_content);
   return block_content;
@@ -1261,7 +1279,7 @@ function preventDivs(e) {
   return false;
 }
 
-function htmlMsg(item, mode, origin_content) {
+export function htmlMsg(item, mode, origin_content) {
 
   let date = Date.parse(timezoneCompatibility(item.date));
   
@@ -1350,7 +1368,7 @@ async function retrieveMsg(ref) {
   return found_msg; // returns a list
 }
 
-function clickInternalLink(url) {
+export function clickInternalLink(url) {
   window.history.pushState({}, '', url); handleRouting();
   return false;
 }
@@ -1536,7 +1554,7 @@ async function paintDiscRoutine() {
   document.getElementsByClassName("menu-modal")[0].scrollTop = top;
 }
 
-async function clickMix() {
+export async function clickMix() {
   // toggle mix state in the file
   let mix_state = await toggleBooleanFile(MIX_FILE, "false");
   await paintDisc(getCurrentNoteUuid(), 'only main');
@@ -1551,7 +1569,7 @@ async function getSupervisorStatus() {
   return status;
 }
 
-async function handleMsg(event) {
+export async function handleMsg(event) {
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
 
   // console.log(event);  // print out keyboard events 
@@ -1650,7 +1668,7 @@ async function paintDiscFooter(uuid) {
   let mix_button = '';
   if (has_remote) {
     mix_state = await readBooleanFile(MIX_FILE, "false");
-    mix_button_value = mix_state === 'true' ? 'focus' :'mix';
+    let mix_button_value = mix_state === 'true' ? 'focus' :'mix';
     mix_button = MenuButton({icon: mix_button_value, action: 'return clickMix(event)'});
   }
 
@@ -1729,12 +1747,12 @@ async function paintEdit(uuid) {
   el.scrollTop = el.scrollHeight;
 }
 
-async function gotoEdit(uuid) {
+export async function gotoEdit(uuid) {
   window.history.pushState({},"", "/edit/" + uuid);
   await paintEdit(uuid);
 }
 
-async function submitEdit() {
+export async function submitEdit() {
   let textarea = document.getElementsByTagName('textarea')[0];
   let content = textarea.value;  // textareas are not dos newlined, http requests are.  i think?
   // TODO consider using .replace instead of .split and .join
@@ -1765,7 +1783,7 @@ async function renderEdit(uuid) {
 
 // LIST
 
-async function gotoList() {
+export async function gotoList() {
   window.history.pushState({}, "", "/list");
   await paintList();
   let main = document.getElementsByTagName('main')[0];
@@ -2996,7 +3014,7 @@ async function getJournalUUID() {
   return notes[0];
 }
 
-async function gotoJournal() {
+export async function gotoJournal() {
   let uuid = await getJournalUUID();
   await gotoDisc(uuid);
 }

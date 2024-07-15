@@ -24,7 +24,14 @@ export function parseContent(content) {
   return sections;
 }
 
-function parseSection(lines) {
+export class EmptyLine {
+  constructor() {}
+  toJSON() {
+    return 'EmptyLine{}';
+  }
+}
+
+export function parseSection(lines) {
   let blocks = [];
   for (let L of lines) {
     if (L === '') {
@@ -47,15 +54,6 @@ export class TreeNode {
     this.children = [];
     this.indent = obj.indent;
     this.value = obj.value;
-  }
-
-  toString(nested = false) {
-    let indent = this.indent == -1 ? "" : "  ".repeat(this.indent) + "- ";
-    let result = indent + htmlLine(this.value) + "\n" + this.children.map(x => x.toString(true)).join("");
-    if (! nested && result.endsWith("\n")) {
-      result = result.slice(0, -1);
-    }
-    return result;
   }
 }
 

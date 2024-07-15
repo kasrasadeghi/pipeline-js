@@ -13,7 +13,11 @@
   <main></main>
   <footer></footer>
 </body>
-<script>
-  run()
+<script type="module">
+  import { run } from '/indexed-fs.js';
+  run();
+
+  import * as IndexedFS from '/indexed-fs.js';
+  Object.assign(window, IndexedFS);
 </script>
 </html>
