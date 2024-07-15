@@ -297,16 +297,6 @@ function parseMetadata(note_content) {
   return metadata;
 }
 
-async function getMetadata(uuid) {
-  const note = await global_notes.readFile(uuid);
-  try {
-    return parseMetadata(note);
-  } catch (e) {
-    console.log('could not find metadata in', uuid, e);
-    throw Error("could not find metadata");
-  }
-}
-
 // JOURNAL
 
 function dateToJournalTitle(date) {
@@ -1236,7 +1226,7 @@ export function htmlMsgBlockContent(msg, origin_content) {
   return block_content;
 }
 
-function preventDivs(e) {
+export function preventDivs(e) {
   const is_weird = (e.key === 'Enter');
   if (! is_weird) {
     return;
@@ -1390,7 +1380,7 @@ function insertHtmlBeforeMessage(obj, html_content) {
   }
 }
 
-async function expandRef(obj, url) {
+export async function expandRef(obj, url) {
   let found_msg = await retrieveMsg(url);
   let result = htmlMsg(found_msg[0]);
   if (found_msg.length > 0) {
@@ -1402,7 +1392,7 @@ async function expandRef(obj, url) {
   }
 };
 
-async function expandSearch(obj, search_query) {
+export async function expandSearch(obj, search_query) {
   let urlParams = new URLSearchParams(search_query);
   const text = urlParams.get('q');
   const case_sensitive = urlParams.get('case') === 'true';
@@ -1649,7 +1639,7 @@ export async function handleMsg(event) {
   return false;
 };
 
-async function toggleMenu () {
+export async function toggleMenu () {
   let menu_state = await toggleBooleanFile(MENU_TOGGLE_FILE, "false");
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 }
@@ -2076,9 +2066,8 @@ window.addEventListener('load', () => {
 
 const SYNC_FILE = 'sync_status';
 const SYNC_REMOTE_FILE = 'sync_remote';
-const SYNC_ELEMENT_ID = 'sync_output'
 
-async function gotoSync() {
+export async function gotoSync() {
   window.history.pushState({}, "", "/sync");
   paintSimple(await renderSync());
 }
@@ -2176,12 +2165,7 @@ async function renderSync() {
   `]
 }
 
-function request_len(remote) {
-  let request = remote + '/api/get/' + repo + "/" + uuids.join(",");
-  return request.length
-}
-
-async function fetchNotes(repo, uuids) {
+export async function fetchNotes(repo, uuids) {
   // can either be single note: <repo>/<uuid>
   // or multiple: <repo>/<uuid>(/<uuid>)*
 
@@ -2197,7 +2181,7 @@ async function fetchNotes(repo, uuids) {
   }
 }
 
-async function getAllNotes(repo) {
+export async function getAllNotes(repo) {
   console.log('getting notes');
 
   let list = await fetch((await getRemote()) + '/api/list/' + repo).then(x => x.json());
@@ -2327,7 +2311,7 @@ async function putNotes(repo, uuids) {
   return failures;
 }
 
-async function putAllNotes(repo) {
+export async function putAllNotes(repo) {
   let files = await global_notes.listFiles();
   repo_files = files.filter(file => file.startsWith(repo + "/"));
   uuids = repo_files.map(x => x.slice((repo + '/').length));
@@ -2378,16 +2362,6 @@ async function getRemoteStatus(repo_or_repos) {
   console.log('getting remote status for', repo_or_repos); // may be comma separated list
   let statuses = await fetch((await getRemote()) + '/api/status/' + repo_or_repos).then(x => x.json());
   return statuses;
-}
-
-async function compareNote(uuid) {
-  let note = await global.notes.readFile(uuid);
-  let reference = await global.notes.readFile(uuid);
-  let result = (note === reference);
-  console.log('reference', reference);
-  console.log('note', note);
-  console.log('result', result);
-  return result;
 }
 
 async function getLocalStatus(repo) {
@@ -2566,7 +2540,7 @@ function runSearch() {
   }
 }
 
-async function searchAction(id) {
+export async function searchAction(id) {
   id = id || "search_query";
   let text = document.getElementById(id).value;
   const urlParams = new URLSearchParams(window.location.search);
@@ -2592,7 +2566,7 @@ async function renderSearchFooter() {
   return menu;
 }
 
-async function gotoSearch() {
+export async function gotoSearch() {
   console.log('goto /search/');
   let footer = document.getElementsByTagName('footer')[0];
   const urlParams = new URLSearchParams(window.location.search);
@@ -2620,7 +2594,7 @@ function MenuButton({icon, action}) {
 // COMPONENT TEXTFIELD
 
 // used for first time setup and setup configuration
-async function handleTextField(event, id, file_name, rerender) {
+export async function handleTextField(event, id, file_name, rerender) {
   if (event === true || event.key === 'Enter') {
     let text = document.getElementById(id).value;
     await cache.writeFile(file_name, text);
@@ -2637,7 +2611,7 @@ function TextField({id, file_name, label, value, rerender}) {
   );
 }
 
-async function handleTextAction(event, source_id, action, everykey) {
+export async function handleTextAction(event, source_id, action, everykey) {
   if (everykey) {
     await action(source_id);
     return true;
@@ -2677,7 +2651,7 @@ async function readBooleanFile(file, default_value) {
   });
 }
 
-async function handleToggle(event, id, file, query_param, default_value, rerender) {
+export async function handleToggle(event, id, file, query_param, default_value, rerender) {
   let indexedDB_result = undefined;
   if (file) {
     indexedDB_result = await toggleBooleanFile(file, default_value);
@@ -2813,12 +2787,12 @@ async function gotoSetup() {
 
 // MENU
 
-async function gotoMenu() {
+export async function gotoMenu() {
   paintSimple(await renderMenu());
   window.history.pushState({},"", "/menu");
 }
 
-async function gotoNewNote(id) {
+export async function gotoNewNote(id) {
   let text = document.getElementById(id).value;
   let uuid = await newNote(text);
   await gotoDisc(uuid);
@@ -2889,7 +2863,7 @@ function lookupIcon(full_name) {
 
 // ROUTINE
 
-async function gotoRoutine() {
+export async function gotoRoutine() {
   paintSimple(await renderRoutine());
   window.history.pushState({},"", "/routine");
 }
