@@ -12,7 +12,7 @@ app = Flask(__name__)
 pipeline_proxy_process = None
 simple_server_process = None
 
-pipeline_proxy_command = ['prlimit', '--core=unlimited', '--', './pipeline-proxy', '8000']
+pipeline_proxy_command = ['./pipeline-proxy', '8000']
 simple_server_command = ['python', 'simple_server.py', '--port', '8001']
 
 # Global variables for tracking

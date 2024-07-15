@@ -257,6 +257,18 @@ void exit_handler() {
 int main() {
     std::atexit(exit_handler);
 
+    // ignore sigpipe
+    struct sigaction sa;
+    sa.sa_handler = SIG_IGN;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    if (sigaction(SIGPIPE, &sa, NULL) == -1) {
+        // Handle error
+        perror("sigaction");
+        return -1;
+    }
+
     init_openssl();
     SSL_CTX* server_ctx = create_ssl_context(true);
     SSL_CTX* client_ctx = create_ssl_context(false);
