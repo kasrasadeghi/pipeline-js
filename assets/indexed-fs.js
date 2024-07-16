@@ -1179,7 +1179,7 @@ async function paintList() {
 
   // gather notes to days
   console.time('paintList get days');
-  let notes_by_day = global.notes.flatRead.metadata_map.reduce((acc, note) => {
+  let notes_by_day = global.notes.metadata_map.reduce((acc, note) => {
     let date = new Date(timezoneCompatibility(note.date));
     let key = date_into_ymd(date);
     if (acc[key] === undefined) {
@@ -1356,7 +1356,7 @@ async function paintList() {
   // elements seem faster than strings and innerHtml
   let main = document.getElementsByTagName('main')[0];
   main.replaceChildren(...weeks);
-  // let rows = global.notes.flatRead.metadata_map.sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
+  // let rows = global.notes.metadata_map.sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
   // let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
   let footer = document.getElementsByTagName('footer')[0];
   footer.innerHTML = `
@@ -1738,28 +1738,28 @@ async function perfStatus() {
 // 570ms, then 30ms once cached
 function gather_messages() {
   // TODO only rewrite the pages that have changed since the last time we gathered messages
-  if (global.notes.flatRead.all_messages === undefined) {
+  if (global.notes.all_messages === undefined) {
     // rewriting all of the pages takes 500ms ish
-    const pages = global.notes.flatRead.metadata_map.map(x => global.notes.rewrite(x.uuid));
+    const pages = global.notes.metadata_map.map(x => global.notes.rewrite(x.uuid));
 
     // each page is usually 2 sections, 'entry' and 'METADATA'
     // a page is a list of sections
     // a section is a list of blocks
     const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'))
     const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
-    global.notes.flatRead.all_messages = messages;
+    global.notes.all_messages = messages;
   }
-  return global.notes.flatRead.all_messages;
+  return global.notes.all_messages;
 }
 
 function gather_sorted_messages() {
   // sorting takes 300ms
   // TODO sort by bins?  we should find the notes that are journals and have clear dilineations, and "optimize" the notes.
   // - we should probably do that after we show previous and next days on the same journal, so if the notes gets optimized, it's still legible to the user.
-  if (global.notes.flatRead.sorted_messages === undefined) {
-    global.notes.flatRead.sorted_messages = gather_messages().sort((a, b) => dateComp(b, a));
+  if (global.notes.sorted_messages === undefined) {
+    global.notes.sorted_messages = gather_messages().sort((a, b) => dateComp(b, a));
   }
-  return global.notes.flatRead.sorted_messages;
+  return global.notes.sorted_messages;
 }
 
 async function search(text, is_case_sensitive=false) {
@@ -2154,7 +2154,7 @@ export async function gotoRoutine() {
 
 async function routineContent() {
   const local_repo_name = global.notes.local_repo_name();
-  const notes = global.notes.flatRead.metadata_map;
+  const notes = global.notes.metadata_map;
   const routine_notes = notes.filter(note => note.title === "ROUTINE");
 
   let content = "no routine notes found";

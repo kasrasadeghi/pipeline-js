@@ -86,19 +86,29 @@ async function getNoteMetadataMap(caller) {
   return result;
 }
 
-// === Efficient cache for a single read/ scan of the whole database. ===
-// make sure to make a new one and plumb it through properly in each request.
-// - it will probably be difficult to stash one of these globally and interrupt its usage when page transitions happen.
-// - we'll probably have to handle that with a state machine that interrupts renders and clears the cache if it has been invalidated.
+// === Efficient cache that preserves a read/scan of the whole database ===
+// - we'll probably have to handle page transitions with a state machine that interrupts renders and clears the cache if it has been invalidated.
 // N.B. it is _not_ correct to stash this and only modify the elements that are modified from write operations and syncs, because other pages may have modified this.
 // - we'll have to make a cache within indexedDB that is invalidated when the database in a cooperative way _between tabs_ for that to work.
 // - that might also have pernicious bugs.
-// N.B. make sure to not capture this in a handler or a lambda that is preserved, because that's basically stashing it.
-class FlatRead { // a single "read" operation for the flat note database.
-  async build() {
+
+class FlatCache {
+  constructor() {
+    this.metadata_map = null;
+    this._local_repo = null;
+  }
+
+  async rebuild() {
+    console.log('building flat cache');
     this.metadata_map = await getNoteMetadataMap('FlatRead');
     this._local_repo = await get_local_repo_name();
-    return this;
+
+    this.booleanFiles = {};
+    this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");;
+  }
+  
+  show_private_messages() {
+    return this.booleanFiles[SHOW_PRIVATE_FILE];
   }
 
   getNotesWithTitle(title, repo) {
@@ -109,7 +119,7 @@ class FlatRead { // a single "read" operation for the flat note database.
   }
 
   getAllNotesWithSameTitleAs(uuid) {
-    let title = this.metadata_map.find(note => note.uuid == uuid).title;
+    let title = this.get_note(uuid).title;
     return this.metadata_map.filter(note => note.title === title);
   }
 
@@ -129,59 +139,10 @@ class FlatRead { // a single "read" operation for the flat note database.
   local_repo_name() {
     return this._local_repo;
   }
-}
-
-async function buildFlatRead() {
-  console.log('building flat read');
-  let flatRead = new FlatRead()
-  await flatRead.build();
-  return flatRead;
-}
-
-class FlatCache {
-  constructor() {
-    this.flatRead = null;
-  }
-
-  async build() {
-    console.log('building flat cache');
-    this.flatRead = await buildFlatRead();
-    this.booleanFiles = {};
-    this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");;
-  }
-
-  async rebuild() {
-    this.flatRead = await buildFlatRead();
-    this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");;
-  }
-  
-  show_private_messages() {
-    return this.booleanFiles[SHOW_PRIVATE_FILE];
-  }
-
-  getNotesWithTitle(title, repo) {
-    return this.flatRead.getNotesWithTitle(title, repo);
-  }
-
-  getAllNotesWithSameTitleAs(uuid) {
-    return this.flatRead.getAllNotesWithSameTitleAs(uuid);
-  }
-
-  get_note(uuid) {
-    return this.flatRead.get_note(uuid);
-  }
-
-  rewrite(uuid) {
-    return this.flatRead.rewrite(uuid);
-  }
-
-  local_repo_name() {
-    return this.flatRead.local_repo_name();
-  }
 
   async readFile(uuid) {
     // TODO check for cache invalidation with most recent update
-    return this.flatRead.get_note(uuid).content;
+    return this.get_note(uuid).content;
   }
 
   async writeFile(uuid, content) {
@@ -233,6 +194,6 @@ Tags: Journal`;
 
 export async function buildFlatCache() {
   let flatCache = new FlatCache();
-  await flatCache.build();
+  await flatCache.rebuild();
   return flatCache;
 }
