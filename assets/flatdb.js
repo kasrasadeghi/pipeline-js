@@ -55,27 +55,6 @@ function parseMetadata(note_content) {
   return metadata;
 }
 
-export async function newNote(title, date) {
-  let content = `--- METADATA ---
-Date: ${date}
-Title: ${title}`;
-// https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
-  let uuid = (await get_local_repo_name()) + '/' + crypto.randomUUID() + '.note';
-  await global.notes.writeFile(uuid, content);
-  return uuid;
-}
-
-export async function newJournal(title, date) {
-  let content = `--- METADATA ---
-Date: ${date}
-Title: ${title}
-Tags: Journal`;
-// https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
-  let uuid = (await get_local_repo_name()) + '/' + crypto.randomUUID() + '.note';
-  await global.notes.writeFile(uuid, content);
-  return uuid;
-}
-
 async function getNoteMetadataMap(caller) {
   if (caller === undefined) {
     console.log('raw note metadata used');
@@ -228,6 +207,27 @@ class FlatCache {
 
   async listFiles() {
     return this.flatRead.metadata_map.map(note => note.uuid);
+  }
+
+  async newNote(title, date) {
+    let content = `--- METADATA ---
+Date: ${date}
+Title: ${title}`;
+    // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
+    let uuid = (await this.local_repo_name()) + '/' + crypto.randomUUID() + '.note';
+    await this.writeFile(uuid, content);
+    return uuid;
+  }
+
+  async newJournal(title, date) {
+    let content = `--- METADATA ---
+Date: ${date}
+Title: ${title}
+Tags: Journal`;
+    // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
+    let uuid = (await this.local_repo_name()) + '/' + crypto.randomUUID() + '.note';
+    await this.writeFile(uuid, content);
+    return uuid;
   }
 }
 

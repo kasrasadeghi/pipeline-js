@@ -1,5 +1,5 @@
 import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
-import { buildFlatCache, newNote, newJournal, initFlatDB, SHOW_PRIVATE_FILE } from '/flatdb.js';
+import { buildFlatCache, initFlatDB, SHOW_PRIVATE_FILE } from '/flatdb.js';
 import { initState, cache } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
 import { rewrite, Msg, Line, Tag, Link } from '/rewrite.js';
@@ -886,10 +886,9 @@ export async function clickMix() {
   return false;
 };
 
-async function getSupervisorStatus() {
+export function getSupervisorStatusPromise() {
   const hostname = window.location.hostname;  // "10.50.50.2"
-  const status = await fetch(`https://${hostname}:8002/api/status`, {method: 'GET'}).then(response => response.json());
-  return status;
+  return fetch(`https://${hostname}:8002/api/status`, {method: 'GET'}).then(response => response.json());
 }
 
 export async function handleMsg(event) {
@@ -904,12 +903,12 @@ export async function handleMsg(event) {
     document.documentElement.style.setProperty("--footer_menu_size", footer_menu_size + "px");
   }, 0);
 
-  const should_submit = (event.key === 'Enter');
+  const should_submit = (event?.key === 'Enter');
   if (! should_submit) {
     return;
   }
 
-  event.preventDefault();
+  event?.preventDefault();
 
   let msg_input = document.getElementById('msg_input');
   let msg = msg_input.innerText;
@@ -957,15 +956,13 @@ export async function handleMsg(event) {
       displayState("done");
       await pushLocalSimple(combined_remote_status);
     } catch (e) {
+      console.log('sync failed', e);
       sync_success = false;
     }
     if (! sync_success) {
-      try {
-        let status = await getSupervisorStatus();
-        displayState(JSON.stringify(status));
-      } catch (e) {
-        displayState("supervisor down");
-      } 
+      getSupervisorStatusPromise()
+        .then((status) => { displayState(JSON.stringify(status)); })
+        .catch((e) => { displayState("supervisor down", e); console.log(e); });
     }
   }
   await global.notes.rebuild();
@@ -1511,7 +1508,7 @@ export async function fetchNotes(repo, uuids) {
   }
   let result = await fetch((await getRemote()) +'/api/get/' + repo + "/" + uuids.join(",")).then(t => t.json());
   for (let note in result) {
-    await global_notes.writeFile(note, result[note]);
+    await global.notes.writeFile(note, result[note]);
   }
 }
 
@@ -2081,7 +2078,7 @@ export async function gotoMenu() {
 
 export async function gotoNewNote(id) {
   let text = document.getElementById(id).value;
-  let uuid = await newNote(text, getNow());
+  let uuid = await global.notes.newNote(text, getNow());
   await gotoDisc(uuid);
 }
 
@@ -2262,10 +2259,11 @@ async function getTagsFromMixedNote(uuid) {
 // MAIN
 
 async function getJournalUUID() {
-  global.notes.rebuild();  // sync before we make a new journal to make sure another tab didn't make one.
+  console.log(global);
+  await global.notes.rebuild();  // sync before we make a new journal to make sure another tab didn't make one.
   let notes = global.notes.getNotesWithTitle(today(), global.notes.local_repo_name());
   if (notes.length === 0) {
-    let uuid = await newJournal(today(), getNow());
+    let uuid = await global.notes.newJournal(today(), getNow());
     notes = [uuid];
     await global.notes.rebuild();
     // TODO maybe we only want to do a full update of the cache on sync, hmm.  nah, it seems like it should be on every database operation, for _consistency_'s (ACID) sake.
@@ -2389,6 +2387,7 @@ export async function run() {
   global.handlers = {};
   global.notes = await buildFlatCache();
   console.log('today is', today());
+  console.log('global is', global);
 
   await handleRouting();
 }

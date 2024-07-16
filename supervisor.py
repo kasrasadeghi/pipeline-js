@@ -151,7 +151,7 @@ def api_status():
     subprocess_status = check_subprocesses()
 
     # Add CORS header from origin 10.50.50.2:8000
-    response = make_response(jsonify({"proxy": subprocess_status['pipeline_proxy'], 'server': subprocess_status['simple_server']}))
+    response = make_response(jsonify({"proxy": subprocess_status['pipeline_proxy'][0], 'server': subprocess_status['simple_server'][0]}))
     response.headers.add('Access-Control-Allow-Origin', 'https://10.50.50.2:8000')
 
     return response
