@@ -1,6 +1,6 @@
 import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
 import { buildFlatCache, initFlatDB, SHOW_PRIVATE_FILE } from '/flatdb.js';
-import { initState, cache } from '/state.js';
+import { initState, cache, getNow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
 import { rewrite, Msg, Line, Tag, Link } from '/rewrite.js';
 
@@ -29,13 +29,6 @@ function paintSimple(render_result) {
 }
 
 // DATE UTIL
-
-function getNow() {
-  if (global.mock_now !== undefined) {
-    return new Date(global.mock_now);
-  }
-  return new Date();
-}
 
 const COMPATIBILITY_TIMEZONES = {
   'PST': 'GMT-0800 (Pacific Standard Time)',

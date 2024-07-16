@@ -1,5 +1,5 @@
 import FileDB from '/filedb.js';
-import { cache } from '/state.js';
+import { cache, getNow } from '/state.js';
 import { readBooleanFile } from '/boolean-state.js';
 import { parseContent } from '/parse.js';
 import { rewrite } from '/rewrite.js';
@@ -30,6 +30,7 @@ class Note {
   metadata;
   title;
   date;
+  rewrite;
 
   constructor({uuid, content, title, date, metadata}) {
     this.uuid = uuid;
@@ -37,6 +38,7 @@ class Note {
     this.title = title;
     this.date = date;
     this.metadata = metadata;
+    this.rewrite = undefined;
   }
 };
 
@@ -149,8 +151,8 @@ class FlatCache {
     // TODO check for cache invalidation with most recent update
     // could make this not async, but i'd either have to busy-wait while it's writing or i'd have to return a promise
     await global_notes.writeFile(uuid, content);
-    if (this.flatRead.get_note(uuid) !== null) {
-      this.flatRead.get_note(uuid).content = content;
+    if (this.get_note(uuid) !== null) {
+      this.get_note(uuid).content = content;
     } else {
       await this.rebuild();
     }
@@ -158,7 +160,7 @@ class FlatCache {
 
   async updateFile(uuid, updater) {
     // TODO check for cache invalidation with most recent update
-    let note = this.flatRead.get_note(uuid);
+    let note = this.get_note(uuid);
     let updated_content = updater(note.content);
     note.content = updated_content;
     await global_notes.updateFile(uuid, updater);
@@ -167,7 +169,7 @@ class FlatCache {
   }
 
   async listFiles() {
-    return this.flatRead.metadata_map.map(note => note.uuid);
+    return this.metadata_map.map(note => note.uuid);
   }
 
   async newNote(title, date) {
