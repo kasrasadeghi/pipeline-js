@@ -7,8 +7,14 @@ const assets = [
   "maskable_icon_x192.png",
 
   'manifest.json',
-  'indexed-fs.js',
   'style.css',
+  'boolean-state.js',
+  'filedb.js',
+  'flatdb.js',
+  'indexed-fs.js',
+  'parse.js',
+  'rewrite.js',
+  'state.js',
 ];
 
 function LOG(...data) {
