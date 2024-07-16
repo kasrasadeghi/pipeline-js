@@ -2,7 +2,7 @@ import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
 import { buildFlatCache, initFlatDB, SHOW_PRIVATE_FILE } from '/flatdb.js';
 import { initState, cache, getNow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
-import { rewrite, rewriteLine, Msg, Line, Tag, Link } from '/rewrite.js';
+import { rewrite, rewriteLine, rewriteBlock, Msg, Line, Tag, Link } from '/rewrite.js';
 
 // JAVASCRIPT UTIL
 
@@ -513,9 +513,19 @@ export async function editMessage(item_origin, msg_id) {
     if (msg_block_content.innerText.trim() === '') {
       msg.blocks = [new Deleted()];
     } else {
+      console.log('message block content', msg_block_content.innerHTML);
       let lines = msg_block_content.innerText.trim().split('\n');  // innerText is unix newlines, only http request are dos newlines
       let blocks = parseSection(lines);
       let rewritten_blocks = blocks.map(rewriteBlock);
+      // if there are two emptylines next to each other, delete one
+      for (let i = 0; i < rewritten_blocks.length - 1; i++) {
+        if (rewritten_blocks[i] instanceof EmptyLine && rewritten_blocks[i + 1] instanceof EmptyLine) {
+          rewritten_blocks.splice(i, 1);
+        }
+      }
+
+      // TODO fix this by just pasting correctly.  i'm not sure why the paste is so broken.
+
       msg.blocks = rewritten_blocks;  
     }
 

@@ -81,7 +81,7 @@ export class Msg {
   }
 }
 
-function rewriteBlock(block, note) {
+export function rewriteBlock(block, note) {
   if (block.length === 1 && block[0] instanceof TreeNode) {
     let item = block[0];
     if (item instanceof TreeNode && 'value' in item && item.value.startsWith("msg: ") && item.indent === 0 && item.children.length === 1) {
