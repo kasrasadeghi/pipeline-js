@@ -81,7 +81,9 @@ export default class FileDB {
     const read_result = result ? result.content : null;
     const updated_content = updater(read_result);
     
-    return this.promisify(objectStore.put({path, content: updated_content}));
+    await this.promisify(objectStore.put({path, content: updated_content}));
+
+    return updated_content;
   }
 
   async exists(path) {

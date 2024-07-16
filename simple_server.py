@@ -133,6 +133,10 @@ def handle_request(request):
         "service-worker.js",
         "parse.js",
         "filedb.js",
+        "flatdb.js",
+        "state.js",
+        "boolean-state.js",
+        "rewrite.js",
     ]
 
     icons = [

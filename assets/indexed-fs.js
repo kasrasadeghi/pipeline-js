@@ -1,5 +1,8 @@
 import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
-import FileDB from '/filedb.js';
+import { buildFlatCache, newNote, newJournal, initFlatDB, SHOW_PRIVATE_FILE } from '/flatdb.js';
+import { initState, cache } from '/state.js';
+import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
+import { rewrite, Msg, Line, Tag, Link } from '/rewrite.js';
 
 // JAVASCRIPT UTIL
 
@@ -12,10 +15,7 @@ if (!Array.prototype.back) {
 
 // GLOBALS
 
-const global_notes = new FileDB();
-
 export let global = null;  // the only global variable.
-const LOCAL_REPO_NAME_FILE = "local_repo_name";
 const SUBBED_REPOS_FILE = "subbed_repos";
 
 // GENERAL UTIL
@@ -26,15 +26,6 @@ function paintSimple(render_result) {
   let footer = document.getElementsByTagName('footer')[0];
   [main.innerHTML, footer.innerHTML] = render_result;
   return {main, footer};
-}
-
-async function get_local_repo_name() {
-  let repo = await cache.readFile(LOCAL_REPO_NAME_FILE)
-  if (repo === null || repo.trim() === '') {
-    await gotoSetup();
-    throw new Error('no local repo defined, redirecting to setup');
-  }
-  return cache.readFile(LOCAL_REPO_NAME_FILE);
 }
 
 // DATE UTIL
@@ -73,7 +64,7 @@ function timezoneCompatibility(datestring) {
   }
   let chunks = datestring.split(" ").filter(x => x !== '');
   if (chunks.length !== 6) {
-    console.warn("datestring should have 6 chunks: weekday, month, monthday, time, timezone, year", chunks, datestring);
+    // TODO console.warn("datestring should have 6 chunks: weekday, month, monthday, time, timezone, year", chunks, datestring);
     return datestring;
   }
   let time = chunks[3];
@@ -93,44 +84,6 @@ function dateComp(a, b) {
     b = b.date;
   }
   return new Date(timezoneCompatibility(a)) - new Date(timezoneCompatibility(b));
-}
-
-// FLAT NOTE UTIL
-
-async function newNote(title) {
-  let content = `--- METADATA ---
-Date: ${getNow()}
-Title: ${title}`;
-// https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
-  let uuid = (await get_local_repo_name()) + '/' + crypto.randomUUID() + '.note';
-  await global.notes.writeFile(uuid, content);
-  return uuid;
-}
-
-async function newJournal(title) {
-  let content = `--- METADATA ---
-Date: ${getNow()}
-Title: ${title}
-Tags: Journal`;
-// https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
-  let uuid = (await get_local_repo_name()) + '/' + crypto.randomUUID() + '.note';
-  await global.notes.writeFile(uuid, content);
-  return uuid;
-}
-
-function parseMetadata(note_content) {
-  const lines = note_content.slice(note_content.indexOf("--- METADATA ---") + 1).split('\n');
-  let metadata = {};
-  lines.forEach(line => {
-    let split_index = line.indexOf(": ");
-    if (split_index === -1) {
-      return;
-    }
-    let first = line.slice(0, split_index);
-    let rest = line.slice(split_index + 2); // ": ".length
-    metadata[first.trim()] = rest;
-  });
-  return metadata;
 }
 
 // JOURNAL
@@ -154,185 +107,6 @@ function dateToJournalTitle(date) {
 function today() {
   const today = getNow();
   return dateToJournalTitle(today);
-}
-
-// FLAT DATABASE WRAPPER
-
-class Note {
-  uuid;
-  content;
-  metadata;
-  title;
-  date;
-
-  constructor({uuid, content, title, date, metadata}) {
-    this.uuid = uuid;
-    this.content = content;
-    this.title = title;
-    this.date = date;
-    this.metadata = metadata;
-  }
-};
-
-async function getNoteMetadataMap(caller) {
-  if (caller === undefined) {
-    console.log('raw note metadata used');
-    throw new Error('raw note metadata used');
-  } else {
-    console.log('getNoteMetadataMap from', caller);
-  }
-  console.time('read files');
-  const blobs = await global_notes.readAllFiles();
-  console.timeEnd('read files');
-  console.time('parse metadata');
-  let result = blobs.map(blob => {
-    let metadata = null;
-    try {
-      metadata = parseMetadata(blob.content);
-    } catch (e) {
-      console.log('broken metadata', blob.path, e);
-      metadata = {Title: "broken metadata", Date: `${getNow()}`};
-    }
-    if (metadata.Title === undefined) {
-      metadata.Title = "broken title";
-    }
-    if (metadata.Date === undefined) {
-      metadata.Date = `${getNow()}`;
-    }
-    return new Note({uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content, metadata});
-  });
-  console.timeEnd('parse metadata');
-  return result;
-}
-
-// === Efficient cache for a single read/ scan of the whole database. ===
-// make sure to make a new one and plumb it through properly in each request.
-// - it will probably be difficult to stash one of these globally and interrupt its usage when page transitions happen.
-// - we'll probably have to handle that with a state machine that interrupts renders and clears the cache if it has been invalidated.
-// N.B. it is _not_ correct to stash this and only modify the elements that are modified from write operations and syncs, because other pages may have modified this.
-// - we'll have to make a cache within indexedDB that is invalidated when the database in a cooperative way _between tabs_ for that to work.
-// - that might also have pernicious bugs.
-// N.B. make sure to not capture this in a handler or a lambda that is preserved, because that's basically stashing it.
-class FlatRead { // a single "read" operation for the flat note database.
-  async build() {
-    this.metadata_map = await getNoteMetadataMap('FlatRead');
-    this._local_repo = await get_local_repo_name();
-    return this;
-  }
-
-  getNotesWithTitle(title, repo) {
-    if (repo === undefined) {
-      return this.metadata_map.filter(note => note.title === title);
-    }
-    return this.metadata_map.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
-  }
-
-  getAllNotesWithSameTitleAs(uuid) {
-    let title = this.metadata_map.find(note => note.uuid == uuid).title;
-    return this.metadata_map.filter(note => note.title === title);
-  }
-
-  get_note(uuid) {
-    return this.metadata_map.find(note => note.uuid === uuid) || null;
-  }
-
-  rewrite(uuid) {
-    let note = this.get_note(uuid);
-    if (note.rewrite === undefined) {
-      let page = parseContent(note.content);
-      note.rewrite = rewrite(page, uuid);
-    }
-    return note.rewrite;
-  }
-
-  local_repo_name() {
-    return this._local_repo;
-  }
-}
-
-async function buildFlatRead() {
-  console.log('building flat read');
-  let flatRead = new FlatRead()
-  await flatRead.build();
-  return flatRead;
-}
-
-class FlatCache {
-  constructor() {
-    this.flatRead = null;
-  }
-
-  async build() {
-    console.log('building flat cache');
-    this.flatRead = await buildFlatRead();
-    this.booleanFiles = {};
-    this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");;
-  }
-
-  async rebuild() {
-    this.flatRead = await buildFlatRead();
-    this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");;
-  }
-  
-  show_private_messages() {
-    return this.booleanFiles[SHOW_PRIVATE_FILE];
-  }
-
-  getNotesWithTitle(title, repo) {
-    return this.flatRead.getNotesWithTitle(title, repo);
-  }
-
-  getAllNotesWithSameTitleAs(uuid) {
-    return this.flatRead.getAllNotesWithSameTitleAs(uuid);
-  }
-
-  get_note(uuid) {
-    return this.flatRead.get_note(uuid);
-  }
-
-  rewrite(uuid) {
-    return this.flatRead.rewrite(uuid);
-  }
-
-  local_repo_name() {
-    return this.flatRead.local_repo_name();
-  }
-
-  async readFile(uuid) {
-    // TODO check for cache invalidation with most recent update
-    return this.flatRead.get_note(uuid).content;
-  }
-
-  async writeFile(uuid, content) {
-    // TODO check for cache invalidation with most recent update
-    // could make this not async, but i'd either have to busy-wait while it's writing or i'd have to return a promise
-    await global_notes.writeFile(uuid, content);
-    if (this.flatRead.get_note(uuid) !== null) {
-      this.flatRead.get_note(uuid).content = content;
-    } else {
-      await this.rebuild();
-    }
-  }
-
-  async updateFile(uuid, updater) {
-    // TODO check for cache invalidation with most recent update
-    let note = this.flatRead.get_note(uuid);
-    let updated_content = updater(note.content);
-    note.content = updated_content;
-    await global_notes.updateFile(uuid, updater);
-    await this.rebuild();
-    return updated_content;
-  }
-
-  async listFiles() {
-    return this.flatRead.metadata_map.map(note => note.uuid);
-  }
-}
-
-async function buildFlatCache() {
-  let flatCache = new FlatCache();
-  await flatCache.build();
-  return flatCache;
 }
 
 // PARSE
@@ -365,281 +139,6 @@ function pageIsJournal(page) {
     .find(s => s.title === 'METADATA').lines
     .find(l => l.startsWith("Tags: "))?.slice("Tags: ".length)
     .split(",").map(x => x.trim()).includes("Journal") !== undefined;
-}
-
-function rewrite(page, note) {
-  return page.map(x => rewriteSection(x, note));
-}
-
-function rewriteSection(section, note) {
-  if (['METADATA', 'HTML'].includes(section.title)) {
-    return section;
-  }
-
-  let new_blocks = [];
-  for (let block of section.blocks) {
-    if (block.length === 0) continue;
-    new_blocks.push(rewriteBlock(block, note));
-  }
-
-  // track trailing newlines to aid unparsing
-  section.trailing_newline = 0;
-  while (new_blocks.back() instanceof EmptyLine) {
-    new_blocks.pop();
-    section.trailing_newline += 1;
-  }
-
-  let old_blocks = new_blocks;
-  new_blocks = [];
-  
-  for (let i = 0; i < old_blocks.length;) {
-    const is_msg = (b) => b instanceof Msg;
-
-    if (old_blocks[i] instanceof Msg) {
-      new_blocks.push(old_blocks[i]);
-      i++; 
-
-      // gather blocks
-      while (i < old_blocks.length && !is_msg(old_blocks[i])) {
-        new_blocks.back().blocks.push(old_blocks[i]);
-        i++;
-      }
-
-      // gobble trailing newlines
-      new_blocks.back().gobbled_newline = 0;
-      while(new_blocks.back().blocks.back() instanceof EmptyLine) {
-        new_blocks.back().blocks.pop();
-        new_blocks.back().gobbled_newline += 1;
-      }
-
-      if (new_blocks.back().blocks.length !== 0) {
-        // remove one prefix EmptyLine when we have blocks
-        if (new_blocks.back().blocks[0] instanceof EmptyLine) {
-          new_blocks.back().blocks.splice(0, 1); // remove a single element at index 0
-          new_blocks.back().block_prefix_newline = 1;
-        }
-      }
-    } else {
-      new_blocks.push(old_blocks[i]);
-      i++;
-    }
-  }
-  section.blocks = new_blocks;
-
-  return section;
-}
-
-class Msg {
-  msg;  // rewritten and parsed into tags and links
-  content;  // raw string content from the line
-  date;
-  origin;  // the note that this message came from
-  blocks;
-  gobbled_newline;  // how many newlines came from after this message (and its blocks)
-  msg;
-  constructor(properties) {
-    console.assert(['content', 'date', 'msg', 'origin'].every(x => Object.keys(properties).includes(x)), properties, 'huh');
-    Object.assign(this, properties);
-    this.blocks = [];
-  }
-
-  toJSON() {
-    return Object.assign({}, this);
-  }
-}
-
-function htmlTreeNode(thisNode, nested = false) {
-  let indent = thisNode.indent == -1 ? "" : "  ".repeat(thisNode.indent) + "- ";
-  let result = indent + htmlLine(thisNode.value) + "\n" + thisNode.children.map(x => htmlTreeNode(x, true)).join("");
-  if (! nested && result.endsWith("\n")) {
-    result = result.slice(0, -1);
-  }
-  return result;
-}
-
-function rewriteBlock(block, note) {
-  if (block.length === 1) {
-    try {
-      // console.log('rewrite block', block);
-      let item = block[0];
-      if (item instanceof TreeNode && 'value' in item && item.value.startsWith("msg: ") && item.indent === 0 && item.children.length === 1) {
-        let child = item.children[0];
-        if (child.value.startsWith("Date: ") && child.indent === 1 && child.children.length === 0) {
-          return new Msg({
-            msg: rewriteLine(item.value.slice("msg: ".length)),
-            content: item.value,
-            date: child.value.slice("Date: ".length),
-            origin: note,
-          });
-        }
-      }
-    } catch (e) {
-      // console.log("failed to rewrite block:", block, e);
-      return block;
-    }
-  }
-
-  if (block instanceof Array) {
-    console.log('rewrite block array', block);
-    return block.map((x) => typeof x === 'string' ? rewriteLine(x) : x); // might be a TreeNode
-  }
-
-  // TODO the rest of block rewrite
-  return block;
-}
-
-class Link {
-  url;
-  display;
-  type;
-  constructor(url) {
-    this.display = url;
-    this.url = url;
-    this.type = 'unknown';
-    
-    if (this.url.startsWith("http://") || this.url.startsWith("https://")) {
-      this.display = this.display.slice(this.display.indexOf('://') + '://'.length);
-    }
-    const reddit_share_tail = "?utm_source=share&utm_medium=mweb3x&utm_name=mweb3xcss&utm_term=1&utm_content=share_button";
-    if (this.display.endsWith(reddit_share_tail)) {
-      this.display = this.display.slice(0, -reddit_share_tail.length);
-    }
-    if (this.display.startsWith(window.location.host)) {
-      this.display = this.display.slice(window.location.host.length);
-      this.display = decodeURI(this.display);
-
-      if (this.display.startsWith("/disc/") && this.display.includes("#")) {
-        this.display = this.display.slice("/disc/".length);
-        this.type = 'internal_ref';
-      } else if (this.display.startsWith("/search/")) {
-        this.display = this.display.slice("/search/".length);
-        this.type = 'internal_search';
-      } else {
-        this.type = 'shortcut';
-      }
-    }
-  }
-
-  toString() {
-    return `Link(${this.url})`;
-  }
-}
-
-class Line {
-  content;
-  constructor(content, parsed) {
-    this.content = content;
-    this.parts = parsed;
-  }
-
-  toString() {
-    return `Line(${this.content})`;
-  }
-}
-
-function rewriteLine(line) {
-  let original_line = line;
-  if (! (line.includes(": ") || line.includes("http://") || line.includes("https://"))) {
-    return new Line(original_line, tagParse(line));
-  }
-  let result = [];
-  // we're just gonna look for https:// and http:// initially,
-  // but maybe internal links should be old-style single links per line?
-  // old style was only one link per line, and the line had to end in ": " and what could conditionally be a link
-
-  // parse URL if line starts with http(s)://, URLs end in space or end-of-line.
-  while (line !== '') {
-    if (line.startsWith('https://') || line.startsWith('http://')) {
-      let end_of_url = line.search(' ');
-      if (line.slice(0, end_of_url).length > 9) { // after the "https://" is actually a link
-        if (end_of_url === -1) {  // ideally this wouldn't need a special case but i can't think of how to handle it on this flight
-          result.push(new Link(line));
-          line = '';
-        } else {
-          result.push(new Link(line.slice(0, end_of_url)));
-          line = line.slice(end_of_url);
-        }
-        continue;
-      }
-    }
-
-    if (result.slice(-1).length > 0 && typeof result.slice(-1)[0] === 'string') {
-      // for some reason `instanceof String` doesn't work??
-      result[result.length - 1] += line[0];
-    } else {
-      result.push(line[0]);
-    }
-    line = line.slice(1);
-  }
-  let acc = [];
-  for (let i = 0; i < result.length; i++) {
-    if (typeof result[i] === 'string') {
-      acc.push(...tagParse(result[i]));
-    } else {
-      acc.push(result[i]);
-    }
-  }
-  return new Line(original_line, acc);
-}
-
-// TAG
-
-class Tag {
-  tag;
-  constructor(tag) {
-    this.tag = tag;
-  }
-  toString() {
-    return `Tag(${this.tag})`;
-  }
-}
-
-function tagParse(line) {
-  let acc = [];
-  if (line.startsWith("\\")) {
-    // eat the command until a space
-    // unless no space, then eat everything (indexOf returns -1, and slice(-1) goes to the end).
-    let first_space = line.indexOf(' ');
-    let cmd = line.slice(0, first_space);
-    line = line.slice(first_space);
-    acc.push(cmd);
-  }
-  const isUpperCase = (string) => /^[A-Z]*$/.test(string);
-
-  let i = 0;
-  while(i < line.length) {
-    if (isUpperCase(line[i])) {
-      // [A-Z]{2,}([-_][A-Z]{2,})*
-
-      let uppercase_prefix = line[i++];
-      // eat uppercase prefix, including intermediate dashes
-      // - an intermediate dash is when the current character is a dash and the next letter is uppercase
-      const head_dash = () => (line[i] === '-' || line[i] === '_');
-      const intermediate_dash = () => head_dash() && (i + 1 <= line.length && isUpperCase(line[i+1]));
-      while (i < line.length && (isUpperCase(line[i]) || intermediate_dash())) {
-        uppercase_prefix += line[i++];
-      }
-
-      if (uppercase_prefix.length < 2) {
-        // if the uppercase prefix is less than 2 characters, it's not a tag.
-        // collect the non-uppercase prefix and continue.
-        let non_uppercase_prefix = uppercase_prefix;
-        while (i < line.length && (!isUpperCase(line[i+1]))) {
-          non_uppercase_prefix += line[i++];
-        }
-        acc.push(non_uppercase_prefix);
-      } else {
-        acc.push(new Tag(uppercase_prefix));
-      }
-    } else {
-      let nontag = line[i++];
-      while (i < line.length && (! isUpperCase(line[i]))) {
-        nontag += line[i++];
-      }
-      acc.push(nontag);
-    }
-  }
-  return acc;
 }
 
 // RENDER
@@ -739,9 +238,18 @@ function htmlBlock(block, content) {
     return "<p>" + block.map(htmlLine).join("") + "\n</p>";
   }
   if (block instanceof TreeNode) {
-    return `<pre>` + block.toString() + `</pre>`;
+    return `<pre>` + htmlTreeNode(block) + `</pre>`;
   }
-  return JSON.stringify(block, undefined, 2);
+  console.assert(false, block, 'unexpected block type');
+}
+
+export function htmlTreeNode(thisNode, nested = false) {
+  let indent = thisNode.indent == -1 ? "" : "  ".repeat(thisNode.indent) + "- ";
+  let result = indent + htmlLine(thisNode.value) + "\n" + thisNode.children.map(x => htmlTreeNode(x, true)).join("");
+  if (! nested && result.endsWith("\n")) {
+    result = result.slice(0, -1);
+  }
+  return result;
 }
 
 // calendar format, just the weekday
@@ -1271,7 +779,6 @@ const MIX_FILE = 'disc mix state';
 const MENU_TOGGLE_FILE = 'disc menu toggle state';
 const LIST_NOTES_TOGGLE_FILE = 'list notes toggle state';
 const SEARCH_CASE_SENSITIVE_FILE = 'search case sensitive state';
-const SHOW_PRIVATE_FILE = 'private mode state';
 
 async function paintDisc(uuid, flag) {
   document.title = `${global.notes.get_note(uuid)?.title || "illegal: " + uuid} - Pipeline Notes`;
@@ -1372,6 +879,7 @@ async function paintDiscRoutine() {
 export async function clickMix() {
   // toggle mix state in the file
   let mix_state = await toggleBooleanFile(MIX_FILE, "false");
+  global.notes.booleanFiles[MIX_FILE] = mix_state;
   await paintDisc(getCurrentNoteUuid(), 'only main');
   let button = document.getElementById('mix_button') || document.getElementById('focus_button');
   button.innerHTML = lookupIcon(mix_state === "true" ? 'focus' : 'mix');
@@ -1466,6 +974,7 @@ export async function handleMsg(event) {
 
 export async function toggleMenu () {
   let menu_state = await toggleBooleanFile(MENU_TOGGLE_FILE, "false");
+  global.notes.booleanFiles[MENU_TOGGLE_FILE] = menu_state;
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 }
 
@@ -1923,7 +1432,7 @@ async function syncButton() {
 }
 
 async function getRepos() {
-  let local_repo_name = await get_local_repo_name();
+  let local_repo_name = await global.notes.local_repo_name();
   let subbed_repo_content = await cache.readFile(SUBBED_REPOS_FILE);
   if (subbed_repo_content === null) {
     await cache.writeFile(SUBBED_REPOS_FILE, '');
@@ -2456,30 +1965,11 @@ function TextAction({id, label, value, action, everykey}) {
 
 // COMPONENT TOGGLE-BUTTON
 
-async function toggleBooleanFile(file, default_value) {
-  let result = await cache.updateFile(file, (state) => {
-    if (state === null) {
-      state = default_value;
-    }
-    return state === "true" ? "false" : "true";
-  });
-  global.notes.booleanFiles[file] = result;
-  return result;
-}
-
-async function readBooleanFile(file, default_value) {
-  return await cache.updateFile(file, (state) => {
-    if (state === null) {
-      state = default_value;
-    }
-    return state;
-  });
-}
-
 export async function handleToggle(event, id, file, query_param, default_value, rerender) {
   let indexedDB_result = undefined;
   if (file) {
     indexedDB_result = await toggleBooleanFile(file, default_value);
+    global.notes.booleanFiles[file] = indexedDB_result;
   }
 
   if (query_param && indexedDB_result) {
@@ -2501,34 +1991,6 @@ export async function handleToggle(event, id, file, query_param, default_value, 
   }
 
   return false;
-}
-
-function readBooleanQueryParam(query_param, default_value) {
-  const urlParams = new URLSearchParams(window.location.search);
-  const param = urlParams.get(query_param);
-  if (param === null) {
-    return default_value;
-  }
-  return param === 'true';
-}
-
-function toggleBooleanQueryParam(query_param, default_value) {
-  const urlParams = new URLSearchParams(window.location.search);
-  const param = urlParams.get(query_param);
-  if (param === null) {
-    urlParams.set(query_param, default_value);
-  } else {
-    urlParams.set(query_param, param === 'true' ? 'false' : 'true');
-  }
-  window.history.pushState({}, "", window.location.pathname + "?" + urlParams.toString());
-  return urlParams.get(query_param);
-}
-
-function setBooleanQueryParam(query_param, value) {
-  const urlParams = new URLSearchParams(window.location.search);
-  urlParams.set(query_param, value);
-  window.history.pushState({}, "", window.location.pathname + "?" + urlParams.toString());
-  return urlParams.get(query_param);
 }
 
 async function ToggleButton({id, label, file, query_param, default_value, rerender}) {
@@ -2619,7 +2081,7 @@ export async function gotoMenu() {
 
 export async function gotoNewNote(id) {
   let text = document.getElementById(id).value;
-  let uuid = await newNote(text);
+  let uuid = await newNote(text, getNow());
   await gotoDisc(uuid);
 }
 
@@ -2799,13 +2261,11 @@ async function getTagsFromMixedNote(uuid) {
 
 // MAIN
 
-const cache = new FileDB("pipeline-db-cache", "cache");
-
 async function getJournalUUID() {
   global.notes.rebuild();  // sync before we make a new journal to make sure another tab didn't make one.
   let notes = global.notes.getNotesWithTitle(today(), global.notes.local_repo_name());
   if (notes.length === 0) {
-    let uuid = await newJournal(today());
+    let uuid = await newJournal(today(), getNow());
     notes = [uuid];
     await global.notes.rebuild();
     // TODO maybe we only want to do a full update of the cache on sync, hmm.  nah, it seems like it should be on every database operation, for _consistency_'s (ACID) sake.
@@ -2826,7 +2286,7 @@ window.addEventListener("popstate", (event) => {
 });
 
 // may return null iff not /edit/ or /disc/
-function getCurrentNoteUuid() {
+export function getCurrentNoteUuid() {
   // console.log("getting note uuid from path", window.location.pathname);
 
   if (window.location.pathname.startsWith('/disc/')) {
@@ -2922,8 +2382,8 @@ export async function run() {
     document.getElementsByTagName("body")[0].innerHTML = `Database is outdated, please <button class='menu-button' id='reload-button' onclick="window.location.reload(); return false;">reload the page</button>.`;
   }
   
-  await global_notes.init(reloadNecessary);
-  await cache.init(reloadNecessary);
+  await initFlatDB(reloadNecessary);
+  await initState(reloadNecessary);
   
   global = {};
   global.handlers = {};
