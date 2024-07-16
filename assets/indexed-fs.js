@@ -2,7 +2,7 @@ import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
 import { buildFlatCache, initFlatDB, SHOW_PRIVATE_FILE } from '/flatdb.js';
 import { initState, cache, getNow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
-import { rewrite, Msg, Line, Tag, Link } from '/rewrite.js';
+import { rewrite, rewriteLine, Msg, Line, Tag, Link } from '/rewrite.js';
 
 // JAVASCRIPT UTIL
 
@@ -1846,7 +1846,7 @@ function runSearch() {
   document.title = `Search "${text}" - Pipeline Notes`;
 
   const has_text = !(text === null || text === undefined || text === '');
-  if (has_text && global.notes.flatRead.sorted_messages === undefined) {
+  if (has_text && global.notes.sorted_messages === undefined) {
     console.log('has text, gathering messages');
     gather_sorted_messages();
   }
@@ -1858,7 +1858,7 @@ function runSearch() {
     renderSearchPagination(all_messages);
   });
   console.log('checking for text');
-  if (!has_text && global.notes.flatRead.sorted_messages === undefined) {
+  if (!has_text && global.notes.sorted_messages === undefined) {
     console.log('no text, gathering messages');
     gather_sorted_messages();
   }

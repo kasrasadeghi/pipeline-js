@@ -156,7 +156,7 @@ export class Line {
   }
 }
 
-function rewriteLine(line) {
+export function rewriteLine(line) {
   let original_line = line;
   if (! (line.includes(": ") || line.includes("http://") || line.includes("https://"))) {
     return new Line(original_line, tagParse(line));
