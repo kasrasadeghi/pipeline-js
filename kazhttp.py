@@ -163,9 +163,14 @@ def run(host: str, port: int, handle_request: Callable[[dict], bytes]) -> None:
 
             http_response = handle_request(request)
             client_connection.sendall(http_response)
-            log('shutdown and close connection')
-            client_connection.shutdown(socket.SHUT_RDWR)
-            client_connection.close()
 
         except Exception as e:
             log(" ".join(traceback.format_exc().splitlines()))
+
+        finally:
+            try:
+                client_connection.shutdown(socket.SHUT_RDWR)
+            except Exception as e:
+                pass
+            log('shutdown and close connection')
+            client_connection.close()

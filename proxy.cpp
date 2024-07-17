@@ -321,8 +321,9 @@ int main() {
         SSL_set_fd(client_ssl, client_sock);
 
         log("Performing SSL handshake");
-        if (SSL_accept(client_ssl) <= 0) {
+        if (int ssl_accept_result = SSL_accept(client_ssl); ssl_accept_result <= 0) {
             log_time(); ERR_print_errors_fp(stdout);
+            log("SSL_accept failed with above error, returned: " + std::to_string(ssl_accept_result));
             log("Failed to perform SSL handshake");
             SSL_free(client_ssl);
             close(client_sock);
