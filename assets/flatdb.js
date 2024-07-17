@@ -94,19 +94,44 @@ async function getNoteMetadataMap(caller) {
 // - we'll have to make a cache within indexedDB that is invalidated when the database in a cooperative way _between tabs_ for that to work.
 // - that might also have pernicious bugs.
 
+const DB_VERSION_FILE = 'database version file';
 class FlatCache {
   constructor() {
     this.metadata_map = null;
     this._local_repo = null;
+    this.version = null;
   }
 
   async rebuild() {
+    let dbVersion = await cache.readFile(DB_VERSION_FILE);
+    if (dbVersion && this.version === dbVersion) {
+      console.log('no version difference, not rebuilding');
+      return;
+    }
+    console.log('version difference, rebuilding', dbVersion, this.version);
+
     console.log('building flat cache');
     this.metadata_map = await getNoteMetadataMap('FlatRead');
     this._local_repo = await get_local_repo_name();
 
     this.booleanFiles = {};
-    this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");;
+    this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");
+
+    if (dbVersion === null) {
+      await this.updateDBVersion();
+    }
+    if (this.version !== dbVersion) {
+      this.version = dbVersion;
+    }
+    // INVARIANT now the cache is up to date and the versions should be the same
+  }
+
+  // should be called on every modification to the database
+  async updateDBVersion() {
+    console.log('updating db version');
+    const newVersion = crypto.randomUUID();
+    this.version = newVersion;
+    await cache.writeFile(DB_VERSION_FILE, newVersion);
   }
   
   show_private_messages() {
@@ -143,32 +168,33 @@ class FlatCache {
   }
 
   async readFile(uuid) {
-    // TODO check for cache invalidation with most recent update
+    await this.rebuild();
     return this.get_note(uuid).content;
   }
 
   async writeFile(uuid, content) {
     // TODO check for cache invalidation with most recent update
     // could make this not async, but i'd either have to busy-wait while it's writing or i'd have to return a promise
+    await this.rebuild();
     await global_notes.writeFile(uuid, content);
     if (this.get_note(uuid) !== null) {
       this.get_note(uuid).content = content;
-    } else {
-      await this.rebuild();
     }
+    await this.updateDBVersion();
   }
 
   async updateFile(uuid, updater) {
-    // TODO check for cache invalidation with most recent update
+    await this.rebuild();
     let note = this.get_note(uuid);
     let updated_content = updater(note.content);
     note.content = updated_content;
     await global_notes.updateFile(uuid, updater);
-    await this.rebuild();
+    await this.updateDBVersion();
     return updated_content;
   }
 
   async listFiles() {
+    await this.rebuild();
     return this.metadata_map.map(note => note.uuid);
   }
 
