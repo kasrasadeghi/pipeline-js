@@ -7,16 +7,17 @@ export async function toggleBooleanFile(file, default_value) {
     }
     return state === "true" ? "false" : "true";
   });
-  return result;
+  return result.content;
 }
 
 export async function readBooleanFile(file, default_value) {
-  return await cache.updateFile(file, (state) => {
+  let result = await cache.updateFile(file, (state) => {
     if (state === null) {
       state = default_value;
     }
     return state;
   });
+  return result.content;
 }
 
 export function readBooleanQueryParam(query_param, default_value) {

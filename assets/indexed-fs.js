@@ -4,6 +4,8 @@ import { initState, cache, getNow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
 import { rewrite, rewriteLine, rewriteBlock, Msg, Line, Tag, Link } from '/rewrite.js';
 
+export { debugGlobalNotes } from '/flatdb.js';
+
 // JAVASCRIPT UTIL
 
 // add .back() to arrays
@@ -853,6 +855,7 @@ async function mixPage(uuid, mix_as_journal=true) {
 }
 
 async function renderDiscMixedBody(uuid) {
+  await global.notes.ensure_valid_cache();
   let page = await mixPage(uuid, pageIsJournal(global.notes.rewrite(uuid)));
   if (page === null) {
     return `couldn't find file '${uuid}'`;
@@ -968,7 +971,6 @@ export async function handleMsg(event) {
         .catch((e) => { displayState("supervisor down", e); console.log(e); });
     }
   }
-  await global.notes.rebuild();
   return false;
 };
 
@@ -1082,7 +1084,6 @@ export async function submitEdit() {
   // TODO consider using .replace instead of .split and .join
   const uuid = getCurrentNoteUuid();
   await global.notes.writeFile(uuid, content);
-  await global.notes.rebuild();
   gotoDisc(uuid);
 };
 
@@ -1407,9 +1408,10 @@ export async function gotoSync() {
 }
 
 async function getRemote() {
-  return await cache.updateFile(SYNC_REMOTE_FILE, state =>
+  let result = await cache.updateFile(SYNC_REMOTE_FILE, state =>
     state === null ? "" : state
   );
+  return result.content;
 }
 
 async function hasRemote() {
@@ -2087,7 +2089,7 @@ export async function gotoNewNote(id) {
 
 const tag_color = (x) => `<span style="color: var(--link_button_main_color)">${x}</span>`
 
-async function clearServiceWorkerCaches() {
+export async function clearServiceWorkerCaches() {
   if ('serviceWorker' in navigator) {
     caches.keys().then(function(cacheNames) {
       cacheNames.forEach(function(cacheName) {
@@ -2263,12 +2265,11 @@ async function getTagsFromMixedNote(uuid) {
 
 async function getJournalUUID() {
   console.log(global);
-  await global.notes.rebuild();  // sync before we make a new journal to make sure another tab didn't make one.
+  await global.notes.ensure_valid_cache(); // cache coherence
   let notes = global.notes.getNotesWithTitle(today(), global.notes.local_repo_name());
   if (notes.length === 0) {
     let uuid = await global.notes.newJournal(today(), getNow());
     notes = [uuid];
-    await global.notes.rebuild();
     // TODO maybe we only want to do a full update of the cache on sync, hmm.  nah, it seems like it should be on every database operation, for _consistency_'s (ACID) sake.
   }
   return notes[0];

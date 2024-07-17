@@ -9,6 +9,10 @@ export const SHOW_PRIVATE_FILE = 'private mode state';
 // private global
 let global_notes = null;
 
+export function debugGlobalNotes() {
+  return global_notes;
+}
+
 export async function initFlatDB(reload) {
   global_notes = new FileDB();
   await global_notes.init(reload);
@@ -65,7 +69,9 @@ async function getNoteMetadataMap(caller) {
     console.log('getNoteMetadataMap from', caller);
   }
   console.time('read files');
-  const blobs = await global_notes.readAllFiles();
+  const readAllResult = await global_notes.readAllFiles();
+  let current_version = readAllResult.current_version;
+  let blobs = readAllResult.result;
   console.timeEnd('read files');
   console.time('parse metadata');
   let result = blobs.map(blob => {
@@ -85,7 +91,7 @@ async function getNoteMetadataMap(caller) {
     return new Note({uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content, metadata});
   });
   console.timeEnd('parse metadata');
-  return result;
+  return {current_version, result};
 }
 
 // === Efficient cache that preserves a read/scan of the whole database ===
@@ -94,44 +100,79 @@ async function getNoteMetadataMap(caller) {
 // - we'll have to make a cache within indexedDB that is invalidated when the database in a cooperative way _between tabs_ for that to work.
 // - that might also have pernicious bugs.
 
-const DB_VERSION_FILE = 'database version file';
 class FlatCache {
   constructor() {
     this.metadata_map = null;
     this._local_repo = null;
     this.version = null;
+    this._is_valid = null;
   }
 
-  async rebuild() {
-    let dbVersion = await cache.readFile(DB_VERSION_FILE);
-    if (dbVersion && this.version === dbVersion) {
-      console.log('no version difference, not rebuilding');
-      return;
-    }
-    console.log('version difference, rebuilding', dbVersion, this.version);
-
+  async refresh_cache() {
     console.log('building flat cache');
-    this.metadata_map = await getNoteMetadataMap('FlatRead');
     this._local_repo = await get_local_repo_name();
+
+    let metadataMapResult = await getNoteMetadataMap('FlatRead');
+    this.metadata_map = metadataMapResult.result;
+    this.version = metadataMapResult.current_version;
+    this._is_valid = true;
 
     this.booleanFiles = {};
     this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");
-
-    if (dbVersion === null) {
-      await this.updateDBVersion();
-    }
-    if (this.version !== dbVersion) {
-      this.version = dbVersion;
-    }
-    // INVARIANT now the cache is up to date and the versions should be the same
   }
 
-  // should be called on every modification to the database
-  async updateDBVersion() {
-    console.log('updating db version');
-    const newVersion = crypto.randomUUID();
-    this.version = newVersion;
-    await cache.writeFile(DB_VERSION_FILE, newVersion);
+  // NOTE use this before read operations to ensure coherence
+  async ensure_valid_cache() {
+    if (!this._is_valid || this.version !== (await global_notes.getVersion())) {
+      await this.refresh_cache();
+    }
+  }
+
+  async writeFile(uuid, content) {
+    let expected_version = this.version;
+    let result = await global_notes.writeFile(uuid, content, expected_version);
+    if (result.content === null) {
+      // expected version was stale, someone else updated before us, mark cache as invalid
+      this._is_valid = false;
+      return;
+    }
+    if (result.new_version === expected_version + 1) {
+      // our update was the only change
+      await global_notes.writeFile(uuid, content);
+      if (this.get_note(uuid) !== null) {
+        this.get_note(uuid).content = content;
+      }
+    } else {
+      // someone else updated before us, mark cache as invalid
+      this._is_valid = false;
+    }
+    // TODO how is there two failure modes?
+  }
+
+  async updateFile(uuid, updater) {
+    let expected_version = this.version;
+    let result = await global_notes.updateFile(uuid, updater, expected_version);
+    if (result.content === null) {
+      // expected version was stale, someone else updated before us, mark cache as invalid
+      this._is_valid = false;
+      return;
+    }
+    if (result.new_version === expected_version + 1) {
+      // our update was the only change
+      await global_notes.writeFile(uuid, content);
+      if (this.get_note(uuid) !== null) {
+        this.get_note(uuid).content = content;
+      }
+    } else {
+      // someone else updated before us, mark cache as invalid
+      this._is_valid = false;
+    }
+    // TODO how is there two failure modes?
+  }
+
+  async readFile(uuid) {
+    await this.ensure_valid_cache();
+    return this.get_note(uuid).content;
   }
   
   show_private_messages() {
@@ -167,34 +208,8 @@ class FlatCache {
     return this._local_repo;
   }
 
-  async readFile(uuid) {
-    await this.rebuild();
-    return this.get_note(uuid).content;
-  }
-
-  async writeFile(uuid, content) {
-    // TODO check for cache invalidation with most recent update
-    // could make this not async, but i'd either have to busy-wait while it's writing or i'd have to return a promise
-    await this.rebuild();
-    await global_notes.writeFile(uuid, content);
-    if (this.get_note(uuid) !== null) {
-      this.get_note(uuid).content = content;
-    }
-    await this.updateDBVersion();
-  }
-
-  async updateFile(uuid, updater) {
-    await this.rebuild();
-    let note = this.get_note(uuid);
-    let updated_content = updater(note.content);
-    note.content = updated_content;
-    await global_notes.updateFile(uuid, updater);
-    await this.updateDBVersion();
-    return updated_content;
-  }
-
   async listFiles() {
-    await this.rebuild();
+    await this.ensure_valid_cache();
     return this.metadata_map.map(note => note.uuid);
   }
 
@@ -222,6 +237,6 @@ Tags: Journal`;
 
 export async function buildFlatCache() {
   let flatCache = new FlatCache();
-  await flatCache.rebuild();
+  await flatCache.refresh_cache();
   return flatCache;
 }

@@ -1,13 +1,19 @@
+const currentFileDBVersion = 2;
+const versionStoreName = '.version';
+
 export default class FileDB {
   constructor(dbName = "pipeline-db", storeName = "notes") {
     this.db = null;
     this.dbName = dbName;
+    if (storeName.startsWith(".")) {
+      throw new Error("storeName cannot start with '.', as those are reserved for internal structures");
+    }
     this.storeName = storeName;
   }
 
   async init(versionChange) {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, 1);
+      const request = indexedDB.open(this.dbName, currentFileDBVersion);
 
       request.onupgradeneeded = async (event) => {
         this.db = event.target.result;
@@ -17,16 +23,17 @@ export default class FileDB {
 
         switch (old_version) {
           case 0:
-            // Create first object store:
             this.db.createObjectStore(this.storeName, { keyPath: 'path' });
 
           case 1:
-            // Get the original object store, and create an index on it:
-            // const tx = await db.transaction(this.storeName, 'readwrite');
-            // tx.store.createIndex('title', 'title');
+            this.db.createObjectStore(versionStoreName, { keyPath: 'key' });
+            const versionStore = this.db.transaction([versionStoreName], "readwrite").objectStore(versionStoreName);
+            await this.promisify(versionStore.put({ key: 'version', value: 0 }));
         }
 
         // maybe TODO create index on title and date and other metadata
+        // const tx = await db.transaction(this.storeName, 'readwrite');
+        // tx.store.createIndex('title', 'title');
       };
 
       request.onsuccess = event => {
@@ -49,6 +56,8 @@ export default class FileDB {
     });
   }
 
+  // internal utility methods
+
   promisify(request) {
     return new Promise((resolve, reject) => {
       request.onsuccess = () => resolve(request.result);
@@ -56,11 +65,68 @@ export default class FileDB {
     });
   }
 
-  async writeFile(path, content) {
-    const transaction = this.db.transaction([this.storeName], "readwrite");
-    const objectStore = transaction.objectStore(this.storeName);
-    return this.promisify(objectStore.put({ path, content }));
+  async bumpVersion(transaction) {
+    const versionStore = transaction.objectStore(versionStoreName);
+    let version = await this.promisify(versionStore.get('version'));
+    let prior_version = version.value;
+    version.value++;
+    await this.promisify(versionStore.put(version));
+    return {prior_version, new_version: version.value};
   }
+
+  async getVersion(transaction) {
+    if (transaction === undefined) {
+      transaction = this.db.transaction([versionStoreName]);
+    }
+
+    const versionStore = transaction.objectStore(versionStoreName);
+    const version = await this.promisify(versionStore.get('version'));
+    return version.value;
+  }
+
+  // interface used in the cache
+
+  async writeFile(path, content, expected_version) {
+    const transaction = this.db.transaction([this.storeName, versionStoreName], "readwrite");
+    const objectStore = transaction.objectStore(this.storeName);
+    let versions = await this.bumpVersion(transaction);
+    await this.promisify(objectStore.put({ path, content }));
+
+    if (expected_version !== undefined && versions.prior_version !== expected_version) {
+      return {new_version: versions.new_version, content: null};
+    } else {
+      return {new_version: versions.new_version, content};
+    }
+  }
+
+  async readAllFiles() {
+    const transaction = this.db.transaction([this.storeName, versionStoreName]);
+    let current_version = await this.getVersion(transaction);
+    const objectStore = transaction.objectStore(this.storeName);
+    return {current_version, result: await this.promisify(objectStore.getAll())};
+  }
+
+  async updateFile(path, updater, expected_version) {
+    const transaction = this.db.transaction([this.storeName, versionStoreName], "readwrite");
+    const objectStore = transaction.objectStore(this.storeName);
+    let prior_version = await this.getVersion(transaction);
+    let new_version = await this.bumpVersion(transaction);
+    
+    const result = await this.promisify(objectStore.get(path));
+    
+    const read_result = result ? result.content : null;
+    const updated_content = updater(read_result);
+    
+    await this.promisify(objectStore.put({path, content: updated_content}));
+
+    if (expected_version !== undefined && prior_version !== expected_version) {
+      return {new_version, content: null};
+    } else {
+      return {new_version, content: updated_content};
+    }
+  }
+
+  // direct interface (no versions)
 
   async readFile(path) {
     console.time('read file ' + path);
@@ -69,21 +135,6 @@ export default class FileDB {
     const result = await this.promisify(objectStore.get(path));
     console.timeEnd('read file ' + path);
     return result ? result.content : null;
-  }
-
-  async updateFile(path, updater) {
-    const transaction = this.db.transaction([this.storeName], "readwrite");
-    const objectStore = transaction.objectStore(this.storeName);
-    
-    const getRequest = objectStore.get(path);
-    const result = await this.promisify(getRequest);
-    
-    const read_result = result ? result.content : null;
-    const updated_content = updater(read_result);
-    
-    await this.promisify(objectStore.put({path, content: updated_content}));
-
-    return updated_content;
   }
 
   async exists(path) {
@@ -97,12 +148,6 @@ export default class FileDB {
     const transaction = this.db.transaction([this.storeName]);
     const objectStore = transaction.objectStore(this.storeName);
     return this.promisify(objectStore.getAllKeys());
-  }
-
-  async readAllFiles() {
-    const transaction = this.db.transaction([this.storeName]);
-    const objectStore = transaction.objectStore(this.storeName);
-    return this.promisify(objectStore.getAll());
   }
 
   async deleteFile(path) {
