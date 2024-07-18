@@ -1,5 +1,5 @@
 import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
-import { buildFlatCache, initFlatDB, SHOW_PRIVATE_FILE } from '/flatdb.js';
+import { buildFlatCache, initFlatDB, SHOW_PRIVATE_FILE, LOCAL_REPO_NAME_FILE } from '/flatdb.js';
 import { initState, cache, getNow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
 import { rewrite, rewriteLine, rewriteBlock, Msg, Line, Tag, Link } from '/rewrite.js';
@@ -898,6 +898,9 @@ export function getSupervisorStatusPromise() {
 }
 
 export async function handleMsg(event) {
+  await global.notes.ensure_valid_cache(); // should do this in `rewrite()` below.  and `get_note()` honestly
+  // TODO but i can't because rewrite and get_note are not async.  hmmm
+  
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
 
   // console.log(event);  // print out keyboard events 
@@ -2022,7 +2025,7 @@ async function ToggleButton({id, label, file, query_param, default_value, rerend
 
 const colorize_repo = (repo) => `<span style="color: #ffcc55; font-family: monospace">${repo}</span>`;
 
-async function renderSetup() {
+export async function renderSetup() {
 
   // TODO allow renaming local repo?
   let add_links = '<div style="margin: 10px">Please set a local repo name to continue.</div>';
@@ -2069,7 +2072,7 @@ async function renderSetup() {
   ];
 }
 
-async function gotoSetup() {
+export async function gotoSetup() {
   paintSimple(await renderSetup());
   window.history.pushState({},"", "/setup");
 }

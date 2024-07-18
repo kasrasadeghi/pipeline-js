@@ -18,7 +18,7 @@ export async function initFlatDB(reload) {
   await global_notes.init(reload);
 }
 
-const LOCAL_REPO_NAME_FILE = "local_repo_name";
+export const LOCAL_REPO_NAME_FILE = "local_repo_name";
 async function get_local_repo_name() {
   let repo = await cache.readFile(LOCAL_REPO_NAME_FILE)
   if (repo === null || repo.trim() === '') {

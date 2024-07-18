@@ -138,6 +138,8 @@ def test_first_time_setup(driver):
     if os.path.exists('notes/' + repo_name):
         shutil.rmtree('notes/' + repo_name)
 
+    # breakpoint()
+
     print('type in "selenium_test"')
     el_id(driver, "local_repo_name").send_keys("selenium_test")
     el_id(driver, "local_repo_name_button").click()

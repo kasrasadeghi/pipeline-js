@@ -27,8 +27,6 @@ export default class FileDB {
 
           case 1:
             this.db.createObjectStore(versionStoreName, { keyPath: 'key' });
-            const versionStore = this.db.transaction([versionStoreName], "readwrite").objectStore(versionStoreName);
-            await this.promisify(versionStore.put({ key: 'version', value: 0 }));
         }
 
         // maybe TODO create index on title and date and other metadata
@@ -68,6 +66,11 @@ export default class FileDB {
   async bumpVersion(transaction) {
     const versionStore = transaction.objectStore(versionStoreName);
     let version = await this.promisify(versionStore.get('version'));
+
+    if (!version) {
+      version = { key: 'version', value: 0 };
+    }
+
     let prior_version = version.value;
     version.value++;
     await this.promisify(versionStore.put(version));
@@ -80,7 +83,12 @@ export default class FileDB {
     }
 
     const versionStore = transaction.objectStore(versionStoreName);
-    const version = await this.promisify(versionStore.get('version'));
+    let version = await this.promisify(versionStore.get('version'));
+
+    if (!version) {
+      version = { key: 'version', value: 0 };
+    }
+
     return version.value;
   }
 
