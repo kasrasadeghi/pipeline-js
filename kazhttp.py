@@ -144,7 +144,7 @@ def create_server_socket(host, port) -> Tuple[socket.socket, bool]:  # bool is T
 
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listen_socket.bind((host, port))
-    listen_socket.listen(1)
+    listen_socket.listen(20)
     log(f"Serving HTTP{'S' if https else ''} on port {port} ...")
     return listen_socket, https
 

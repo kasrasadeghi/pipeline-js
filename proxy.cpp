@@ -18,7 +18,7 @@ const int DESTINATION_PORT = 8001;
 const int BUFFER_SIZE = 16384;
 const char* DESTINATION_IP = "127.0.0.1";
 const int SOCKET_TIMEOUT = 1; // 1 second timeout
-const int LISTEN_BACKLOG = 10;
+const int LISTEN_BACKLOG = 20;
 
 void log_time() {
     auto now = std::chrono::system_clock::now();
