@@ -898,9 +898,6 @@ export function getSupervisorStatusPromise() {
 }
 
 export async function handleMsg(event) {
-  await global.notes.ensure_valid_cache(); // should do this in `rewrite()` below.  and `get_note()` honestly
-  // TODO but i can't because rewrite and get_note are not async.  hmmm
-  
   const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
 
   // console.log(event);  // print out keyboard events 
@@ -912,12 +909,15 @@ export async function handleMsg(event) {
     document.documentElement.style.setProperty("--footer_menu_size", footer_menu_size + "px");
   }, 0);
 
-  const should_submit = (event?.key === 'Enter');
+  const should_submit = (event.key === 'Enter');
   if (! should_submit) {
     return;
   }
 
-  event?.preventDefault();
+  event.preventDefault();
+
+  await global.notes.ensure_valid_cache(); // should do this in `rewrite()` below.  and `get_note()` honestly
+  // TODO but i can't because rewrite and get_note are not async.  hmmm
 
   let msg_input = document.getElementById('msg_input');
   let msg = msg_input.innerText;
