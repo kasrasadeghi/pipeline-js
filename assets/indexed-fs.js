@@ -142,7 +142,7 @@ async function htmlNote(uuid) {
   console.log('rendering note for', uuid);
   let content = await global.notes.readFile(uuid);
   if (content === null) {
-    return `couldn't find file '${uuid}'`;
+    return `ERROR 3: couldn't find file '${uuid}'`;
   }
   return htmlNoteContent(uuid, content);
 }
@@ -725,7 +725,7 @@ export async function expandRef(obj, url) {
     console.log(found_msg);
     insertHtmlBeforeMessage(obj, result);
   } else {
-    console.log(`couldn't find ${url_ref.datetime_id} in ${url_ref.uuid}`);
+    console.log(`ERROR 4: couldn't find ${url_ref.datetime_id} in ${url_ref.uuid}`);
     // TODO error messaging
   }
 };
@@ -798,7 +798,8 @@ async function paintDisc(uuid, flag) {
 
   let main = document.getElementsByTagName('main')[0];
   if (global.notes.get_note(uuid) === null) {
-    main.innerHTML = `couldn't find file '${uuid}'`;
+    main.innerHTML = `ERROR 5: couldn't find file '${uuid}'`;
+    console.error('ERROR 5: couldn\'t find file', uuid);
     return;
   }
   main.innerHTML = await renderDiscBody(uuid);
@@ -858,7 +859,7 @@ async function renderDiscMixedBody(uuid) {
   await global.notes.ensure_valid_cache();
   let page = await mixPage(uuid, pageIsJournal(global.notes.rewrite(uuid)));
   if (page === null) {
-    return `couldn't find file '${uuid}'`;
+    return `ERROR 1: couldn't find file '${uuid}'`;
   }
 
   const content = global.notes.get_note(uuid).content;  
@@ -1095,7 +1096,7 @@ async function renderEdit(uuid) {
   console.log('rendering /edit/ for ', uuid);
   let content = await global.notes.readFile(uuid);
   if (content === null) {
-    return `couldn't find file '${uuid}'`;
+    return `ERROR 2: couldn't find file '${uuid}'`;
   }
   // TODO if coming from routine, we might want to go back to where we came from, rather than going to the routine disc.
   // - TEMP (lol) adding a JRNL button to go to the journal, which is usually where we need to go back to.
@@ -2281,6 +2282,7 @@ async function getJournalUUID() {
 
 export async function gotoJournal() {
   let uuid = await getJournalUUID();
+  await global.notes.ensure_valid_cache(); // cache coherence
   await gotoDisc(uuid);
 }
 
