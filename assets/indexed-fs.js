@@ -916,15 +916,15 @@ export async function handleMsg(event) {
 
   event.preventDefault();
 
-  await global.notes.ensure_valid_cache(); // should do this in `rewrite()` below.  and `get_note()` honestly
-  // TODO but i can't because rewrite and get_note are not async.  hmmm
-
   let msg_input = document.getElementById('msg_input');
   let msg = msg_input.innerText;
   let current_uuid = getCurrentNoteUuid();
   if (msg.trim().length > 0) {
     console.log('msg', msg);
     msg_input.innerText = '';
+  
+    await global.notes.ensure_valid_cache(); // should do this in `rewrite()` below.  and `get_note()` honestly
+    // TODO but i can't because rewrite and get_note are not async.  hmmm
 
     let is_journal = pageIsJournal(global.notes.rewrite(current_uuid));
 
@@ -948,6 +948,7 @@ export async function handleMsg(event) {
       return new_content + metadata;
     });
   }
+  await global.notes.ensure_valid_cache();
   await paintDisc(current_uuid, 'only main');
   await paintDiscRoutine();
 
