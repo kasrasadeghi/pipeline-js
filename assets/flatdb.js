@@ -105,7 +105,6 @@ class FlatCache {
     this.metadata_map = null;
     this._local_repo = null;
     this.version = null;
-    this._is_valid = null;
   }
 
   async refresh_cache() {
@@ -115,7 +114,6 @@ class FlatCache {
     let metadataMapResult = await getNoteMetadataMap('FlatRead');
     this.metadata_map = metadataMapResult.result;
     this.version = metadataMapResult.current_version;
-    this._is_valid = true;
 
     this.booleanFiles = {};
     this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");
@@ -123,7 +121,7 @@ class FlatCache {
 
   // NOTE use this before read operations to ensure coherence
   async ensure_valid_cache() {
-    if (!this._is_valid || this.version !== (await global_notes.getVersion())) {
+    if (this.version !== (await global_notes.getVersion())) {
       await this.refresh_cache();
     }
   }
@@ -132,8 +130,8 @@ class FlatCache {
     let expected_version = this.version;
     let result = await global_notes.writeFile(uuid, content, expected_version);
     if (result.content === null) {
-      // expected version was stale, someone else updated before us, mark cache as invalid
-      this._is_valid = false;
+      // expected version was stale, someone else updated before us, revalidate cache
+      await this.ensure_valid_cache();
       return;
     }
     if (result.new_version === expected_version + 1) {
@@ -143,8 +141,8 @@ class FlatCache {
         this.get_note(uuid).content = content;
       }
     } else {
-      // someone else updated before us, mark cache as invalid
-      this._is_valid = false;
+      // someone else updated before us, revalidate cache
+      await this.ensure_valid_cache();
     }
     // TODO how is there two failure modes?
   }
@@ -153,8 +151,8 @@ class FlatCache {
     let expected_version = this.version;
     let result = await global_notes.updateFile(uuid, updater, expected_version);
     if (result.content === null) {
-      // expected version was stale, someone else updated before us, mark cache as invalid
-      this._is_valid = false;
+      // expected version was stale, someone else updated before us, someone else updated before us, revalidate cache
+      await this.ensure_valid_cache();
       return;
     }
     if (result.new_version === expected_version + 1) {
@@ -164,8 +162,8 @@ class FlatCache {
         this.get_note(uuid).content = content;
       }
     } else {
-      // someone else updated before us, mark cache as invalid
-      this._is_valid = false;
+      // someone else updated before us, revalidate cache
+      await this.ensure_valid_cache();
     }
     // TODO how is there two failure modes?
   }
