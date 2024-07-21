@@ -9,7 +9,7 @@ import os
 import hashlib
 import argparse
 
-from kazhttp import HTTP_OK, HTTP_NOT_FOUND, HTTP_OK_JSON, allow_cors_for_localhost, log, run
+from kazhttp import HTTP_OK, HTTP_NOT_FOUND, HTTP_OK_JSON, allow_cors_for_localhost, log, run, KazHttpResponse
 
 argparser = argparse.ArgumentParser(description="Run a simple pipeline replication/sync server")
 argparser.add_argument("--port", type=int, required=True, help="Port to host the server on")
@@ -31,7 +31,7 @@ if not hasattr(str, 'removeprefix'):
 def get_repo_path(repo):
     return os.path.join(NOTES_ROOT, repo)
 
-def compute_status(repos, headers) -> "http_response":
+def compute_status(repos, headers) -> KazHttpResponse:
     def hash(note_path):
         with open(note_path, "rb") as f:
             return hashlib.sha256(f.read()).hexdigest()
@@ -56,7 +56,7 @@ def compute_status(repos, headers) -> "http_response":
         return HTTP_OK_JSON(status, extra_header=cors_header)
 
 
-def handle_api_request(request):
+def handle_api_request(request) -> KazHttpResponse:
     method = request['method']
     headers = request['headers']
     body = request['body']
@@ -116,6 +116,14 @@ def handle_request(request):
     path = request['path']
     headers = request['headers']
     body = request['body']
+    connection = request['connection']
+
+    # Handle API paths
+
+    if path.startswith('/api'):
+        response = handle_api_request(request)
+        response.keep_alive = (connection == 'keep-alive')
+        return response
 
     # Handle paths for frontend pages
 
@@ -166,16 +174,12 @@ def handle_request(request):
         path = 'assets/index.html'
         mimetype = b"text/html"
 
-    # Handle API paths
-
-    if path.startswith('/api'):
-        return handle_api_request(request)
-
     # Handle Static paths
 
     path = path.removeprefix('/')
     if not os.path.exists(path):
         http_response = HTTP_NOT_FOUND(b"could not handle path: " + path.encode())
+        http_response.keep_alive = (connection == 'keep-alive')
         return http_response
 
     with open(path, 'rb') as f:
@@ -183,7 +187,7 @@ def handle_request(request):
         log(f"read {path} ({len(content)})")
 
     http_response = HTTP_OK(content, mimetype)
-    # log("RESPONSE:", http_response)
+    http_response.keep_alive = (connection == 'keep-alive')
     return http_response
 
 

@@ -9,26 +9,36 @@ import traceback
 def log(*k):
     print(datetime.now(), *k, flush=True)
 
-def HTTP_OK(body: bytes, mimetype: bytes) -> bytes:
-    return (b"HTTP/1.1 200 OK\n"
-          + b"Content-Type: " + mimetype + b"; charset=utf-8\n"
+class KazHttpResponse:
+    def __init__(self, status: bytes, body: bytes, mimetype: bytes = b"text/plain", keep_alive: bool = False, extra_headers: bytes = b""):
+        self.status = status
+        self.mimetype = mimetype
+        self.body = body
+        self.keep_alive = keep_alive
+        self.extra_headers = b""
+
+    def write_to(self, connection: socket.socket):
+        connection.sendall(
+            b"HTTP/1.1 " b"\n"
+          + (b"Connection: keep-alive\n" if self.keep_alive else b"Connection: close\n")
+          + b"Content-Type: " + self.mimetype + b"; charset=utf-8\n"
+          + self.extra_headers
+          + b"Content-Length: " + str(len(self.body)).encode() + b"\n"
           + b"\n"
-          + body)
+          + self.body
+        )
 
-def HTTP_OK_JSON(obj: Any, extra_header=b"") -> bytes:
-    return (b"HTTP/1.1 200 OK\n"
-        + b"Content-Type: application/json; charset=utf-8\n"
-        + extra_header
-        + b"\n"
-        + json.dumps(obj).encode('utf-8') + b"\n")
+def HTTP_OK(body: bytes, mimetype: bytes, keep_alive: bool = False) -> bytes:
+    return KazHttpResponse(b"200 OK", body, keep_alive=keep_alive, mimetype=mimetype)
 
-def HTTP_NOT_FOUND(msg):
-    return b"HTTP/1.1 400 NOT_FOUND\n\n HTTP 400:" + msg
+def HTTP_OK_JSON(obj: Any, extra_header=b"", keep_alive: bool = False) -> bytes:
+    return KazHttpResponse(b"200 OK", json.dumps(obj).encode('utf-8'), mimetype=b"application/json", keep_alive=keep_alive, extra_headers=extra_header)
 
+def HTTP_NOT_FOUND(msg, keep_alive: bool = False) -> bytes:
+    return KazHttpResponse(b"400 NOT_FOUND", "HTTP 400:" + msg + b"\n", keep_alive=keep_alive, mimetype=b"text/plain")
 
 def allow_cors_for_localhost(headers: Dict[str, str]):
     if 'Origin' in headers:
-        from urllib.parse import urlparse
         log(headers['Origin'])
         if 'localhost' == headers['Origin'].split("//", 1)[1].split(":", 1)[0]:
             return b"Access-Control-Allow-Origin: " + headers['Origin'].encode() + b"\n"
@@ -109,14 +119,19 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
         return None
 
     headers = [line.split(': ', 1) for line in headers.decode().splitlines()]
-    headers = {key: value for key, value in headers}
+    headers = {key.lower(): value for key, value in headers}
 
-    for header in ["User-Agent", "sec-ch-ua-platform", "Referer"]:
+    for header in ["user-agent", "sec-ch-ua-platform", "referer", "connection"]:
         if header in headers:
             log("-", header, ":", headers[header])
     
-    if 'Content-Length' in headers:
-        content_length = int(headers['Content-Length'])
+    connection = None
+    if "connection" in headers and headers["connection"] == "keep-alive":
+        client_connection.settimeout(5)
+        connection = "keep-alive"
+
+    if 'content-length' in headers:
+        content_length = int(headers['content-length'])
         retry_count = 5
         while content_length - len(body) > 0:
             log(f'{len(body)=} {content_length=}')
@@ -127,7 +142,7 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
             if retry_count == 0:
                 raise Exception("ERROR: retried 5 times, got 0 bytes every time, giving up.  body doesn't match content-length header.")
         log(f'{len(body)=} {content_length=}')
-    return {'method': method, 'path': path, 'httpver': httpver, 'headers': headers, 'body': body}
+    return {'method': method, 'path': path, 'httpver': httpver, 'headers': headers, 'body': body, "connection": connection}
 
 def create_server_socket(host, port) -> Tuple[socket.socket, bool]:  # bool is True iff https/ ssl
     # socket.setdefaulttimeout(5)  # 5 second timeouts by default
@@ -149,9 +164,10 @@ def create_server_socket(host, port) -> Tuple[socket.socket, bool]:  # bool is T
     return listen_socket, https
 
 
-def run(host: str, port: int, handle_request: Callable[[dict], bytes]) -> None:
+def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse]) -> None:
     listen_socket, https = create_server_socket(host, port)
     while True:
+        request = None
         try:
             log('----------------------------------------')
             client_connection, client_address = listen_socket.accept()
@@ -162,12 +178,17 @@ def run(host: str, port: int, handle_request: Callable[[dict], bytes]) -> None:
                 continue
 
             http_response = handle_request(request)
-            client_connection.sendall(http_response)
+            http_response.write_to(client_connection)
 
         except Exception as e:
             log(" ".join(traceback.format_exc().splitlines()))
 
         finally:
+
+            if request and request.get("connection") == "keep-alive":
+                log('keep-alive')
+                continue
+
             try:
                 client_connection.shutdown(socket.SHUT_RDWR)
             except Exception as e:
