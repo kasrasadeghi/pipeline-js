@@ -1749,13 +1749,14 @@ async function perfStatus() {
 function gather_messages() {
   // TODO only rewrite the pages that have changed since the last time we gathered messages
   if (global.notes.all_messages === undefined) {
+    console.log('gathering messages');
     // rewriting all of the pages takes 500ms ish
     const pages = global.notes.metadata_map.map(x => global.notes.rewrite(x.uuid));
 
     // each page is usually 2 sections, 'entry' and 'METADATA'
     // a page is a list of sections
     // a section is a list of blocks
-    const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'))
+    const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
     const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
     global.notes.all_messages = messages;
   }
@@ -1767,6 +1768,7 @@ function gather_sorted_messages() {
   // TODO sort by bins?  we should find the notes that are journals and have clear dilineations, and "optimize" the notes.
   // - we should probably do that after we show previous and next days on the same journal, so if the notes gets optimized, it's still legible to the user.
   if (global.notes.sorted_messages === undefined) {
+    console.log('sorting gathered messages');
     global.notes.sorted_messages = gather_messages().sort((a, b) => dateComp(b, a));
   }
   return global.notes.sorted_messages;
@@ -1919,9 +1921,7 @@ export async function gotoSearch() {
     runSearch();
   } else {
     document.getElementsByTagName('main')[0].innerHTML = ``;
-    setTimeout(() => {
-      gather_sorted_messages();
-    }, 100);
+    gather_sorted_messages();
   }
   return false;
 }
