@@ -14,3 +14,8 @@ export function setNow(now) {
 export function getNow() {
   return custom_now || new Date();
 }
+
+export function tomorrow(date) {
+  date.setDate(date.getDate() + 1);
+  return date;
+}

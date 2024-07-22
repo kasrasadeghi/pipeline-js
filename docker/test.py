@@ -10,7 +10,6 @@ from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -60,15 +59,9 @@ def create_driver():
     # Set up Selenium WebDriver
     if args.no_docker:
         if args.browser == 'chrome':
-            from selenium.webdriver.chrome.service import Service as ChromeService
-            from webdriver_manager.chrome import ChromeDriverManager
-
-            driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
+            driver = webdriver.Chrome(options=options)
         elif args.browser == 'firefox':
-            from selenium.webdriver.firefox.service import Service as FirefoxService
-            from webdriver_manager.firefox import GeckoDriverManager
-
-            driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()), options=options)
+            driver = webdriver.Firefox(options=options)
     else:
         driver = webdriver.Remote(
             command_executor='http://selenium:4444/wd/hub',
@@ -92,9 +85,11 @@ def browser_wrapper(close = True):
             except WebDriverException as e:
                 print(f"WebDriver exception: {str(e)}")
             except AssertionError as e:
-                print(f"Test failed: {str(e)}")
+                print(f"Test assertion failed: {str(e)}")
+                import pdb
+                pdb.post_mortem()
             except Exception as e:
-                print(f"Test failed: {str(e)}")
+                print(f"Test exception failed: {str(e)}")
         return wrapper
     return decorator
 
@@ -106,8 +101,9 @@ def el_id(driver, id):
         return result
     except NoSuchElementException as e:
         print(f"Element with ID {id} not found")
-        result = None
-        breakpoint()
+        result = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, id))
+        )
         return result
 
 # --- TESTS ------------------------------------------------------------------
@@ -129,8 +125,6 @@ def test_first_time_setup(driver):
     # driver.execute_cdp_cmd("Debugger.enable", {})
     # driver.execute_cdp_cmd("Debugger.setPauseOnExceptions", {"state": "all"})
 
-    time.sleep(1)
-
     print('Test creating a new repo, sending a message, syncing the note')
 
     repo_name = "selenium_test"
@@ -150,13 +144,9 @@ def test_first_time_setup(driver):
         EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
 
-    time.sleep(1)
-
     # click message input box
     el_id(driver, "msg_input").send_keys("selenium test message")
     el_id(driver, "msg_input").send_keys(ENTER_KEY)
-
-    time.sleep(1)
 
     # press enter on empty to sync
     el_id(driver, "msg_input").send_keys(ENTER_KEY)
@@ -167,17 +157,12 @@ def test_first_time_setup(driver):
     assert os.path.exists('notes/' + repo_name)
     assert os.path.exists('notes/' + current_uuid)
 
-    time.sleep(1)
-
     print('Test successful')
     print('Test creating a new message on a new day')
-    driver.execute_script("global.mock_now = new Date(); global.mock_now.setDate(global.mock_now.getDate() + 1);")
+    driver.execute_script("setNow(tomorrow(getNow()));")
 
     el_id(driver, "msg_input").send_keys("selenium testing on a new day")
     el_id(driver, "msg_input").send_keys(ENTER_KEY)
-
-    # Keep the browser open for a while to allow viewing
-    time.sleep(2)
 
 
 # BUG tabs don't synchronize journal creation with other tabs on the same machine
@@ -206,16 +191,13 @@ def test_new_day_double_journal(driver):
 
     # tab A to X+2
     driver.switch_to.window(driver.window_handles[0])
-    driver.execute_script("global.mock_now = new Date(); global.mock_now.setDate(global.mock_now.getDate() + 2);")
+    driver.execute_script("setNow(tomorrow(tomorrow(new Date())));")
     driver.execute_script("document.getElementById('journal_button').click();")
-
-    time.sleep(2)
 
     # tab B to X+2
     driver.switch_to.window(driver.window_handles[1])
-    driver.execute_script("global.mock_now = new Date(); global.mock_now.setDate(global.mock_now.getDate() + 2);")
+    driver.execute_script("setNow(tomorrow(tomorrow(new Date())));")
     driver.execute_script("document.getElementById('journal_button').click();")
-    time.sleep(1)
 
     # the two uuids shouldn't be different, but they are
     driver.switch_to.window(driver.window_handles[0])
@@ -224,13 +206,12 @@ def test_new_day_double_journal(driver):
     tab_b_uuid = driver.execute_script("return getCurrentNoteUuid()")
 
     print(tab_a_uuid, tab_b_uuid)
-    # assert tab_a_url == tab_b_url
+    assert tab_a_uuid == tab_b_uuid
 
     # press enter to upload
     driver.switch_to.window(driver.window_handles[0])
     el_id(driver, "msg_input").send_keys("tab A, day X+2")
     el_id(driver, "msg_input").send_keys(ENTER_KEY)
-    time.sleep(1)
 
     driver.switch_to.window(driver.window_handles[1])
     el_id(driver, "msg_input").send_keys("tab B, day X+2")
@@ -239,17 +220,13 @@ def test_new_day_double_journal(driver):
     # after they sync, they will converge to the same uuid, but there will be an extra one made for day X+2
     # they'll go to the one that is lexicographically first (3... < a... with hex ordering)
 
-    # we can check the files and see that there are two that have "Title: July 6th, 2024" in them
+    # we can check the files and see that there is one that has the future date in it
+    titles = set()
     for l in os.listdir('notes/selenium_test'):
-        count = 0
         with open(f'notes/selenium_test/{l}') as f:
-            if "Title: July 6th, 2024" in f.read():
-                print(l)
-                count += 1
-        assert count == 1
-
-    time.sleep(100)
-
+            title = f.read().rsplit("Title: ")[1].split('\n')[0]
+            titles.add(title)
+    assert len(titles) == len(os.listdir('notes/selenium_test'))
 
 def main():
     driver = create_driver()

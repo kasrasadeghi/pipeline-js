@@ -1,10 +1,11 @@
 import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
 import { buildFlatCache, initFlatDB, SHOW_PRIVATE_FILE, LOCAL_REPO_NAME_FILE } from '/flatdb.js';
-import { initState, cache, getNow } from '/state.js';
+import { initState, cache, getNow, setNow, tomorrow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
 import { rewrite, rewriteLine, rewriteBlock, Msg, Line, Tag, Link } from '/rewrite.js';
 
 export { debugGlobalNotes } from '/flatdb.js';
+export { setNow, tomorrow, getNow } from '/state.js';
 
 // JAVASCRIPT UTIL
 
