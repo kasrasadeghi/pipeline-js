@@ -75,23 +75,21 @@ def create_driver():
         print(f"GeckoDriver version: {driver.capabilities['moz:geckodriverVersion']}")
     return driver
 
-def browser_wrapper(close = True):
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except TimeoutException:
-                print("ERROR: Timeout waiting for page to load")
-            except WebDriverException as e:
-                print(f"WebDriver exception: {str(e)}")
-            except AssertionError as e:
-                print(f"Test assertion failed: {str(e)}")
-                import pdb
-                pdb.post_mortem()
-            except Exception as e:
-                print(f"Test exception failed: {str(e)}")
-        return wrapper
-    return decorator
+def browser_wrapper(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except TimeoutException:
+            print("ERROR: Timeout waiting for page to load")
+        except WebDriverException as e:
+            print(f"WebDriver exception: {str(e)}")
+        except AssertionError as e:
+            print(f"Test assertion failed: {str(e)}")
+            import pdb
+            pdb.post_mortem()
+        except Exception as e:
+            print(f"Test exception failed: {str(e)}")
+    return wrapper
 
 ENTER_KEY = u'\ue007'
 
@@ -108,8 +106,7 @@ def el_id(driver, id):
 
 # --- TESTS ------------------------------------------------------------------
 
-@browser_wrapper(close=False)
-def test_first_time_setup(driver):
+def first_time_setup(driver):
 
     print("Navigating to Flask app...")
     driver.get(get_pipeline_url())
@@ -120,10 +117,6 @@ def test_first_time_setup(driver):
 
     # check page source for <title>
     assert "Pipeline" in driver.title
-
-    # pause on uncaught exceptions
-    # driver.execute_cdp_cmd("Debugger.enable", {})
-    # driver.execute_cdp_cmd("Debugger.setPauseOnExceptions", {"state": "all"})
 
     print('Test creating a new repo, sending a message, syncing the note')
 
@@ -143,6 +136,15 @@ def test_first_time_setup(driver):
     element = WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
+
+@browser_wrapper
+def test_first_time_setup(driver):
+
+    # pause on uncaught exceptions
+    # driver.execute_cdp_cmd("Debugger.enable", {})
+    # driver.execute_cdp_cmd("Debugger.setPauseOnExceptions", {"state": "all"})
+
+    first_time_setup(driver)
 
     # click message input box
     el_id(driver, "msg_input").send_keys("selenium test message")
@@ -177,7 +179,7 @@ def test_first_time_setup(driver):
 # - RESULT they will be different journal notes.  (see the uuid)
 # - HYPOTHESIS this is because the notes are created in the cache and written back to IDB, 
 #     but the other tab doesn't rebuild/ check its cache before making a new note.
-@browser_wrapper(close=True)
+@browser_wrapper
 def test_new_day_double_journal(driver):
 
     # there should already be one tab open on journal X+1 from first time setup
@@ -228,13 +230,37 @@ def test_new_day_double_journal(driver):
             titles.add(title)
     assert len(titles) == len(os.listdir('notes/selenium_test'))
 
+def test_search_duplicates(driver):
+    
+    first_time_setup(driver)
+    
+    for i in range(100):
+        el_id(driver, "msg_input").send_keys(f"selenium test message: {i}")
+        el_id(driver, "msg_input").send_keys(ENTER_KEY)
+    
+    driver.execute_script("setNow(tomorrow(getNow()));")
+
+    for i in range(100, 200):
+        el_id(driver, "msg_input").send_keys(f"selenium test message: {i}")
+        el_id(driver, "msg_input").send_keys(ENTER_KEY)
+
+    el_id(driver, "search_button").click()
+
+    el_id(driver, "search_query").click()
+    el_id(driver, "search_query").send_keys("selenium")
+
+    time.sleep(1000)
+
+
 def main():
     driver = create_driver()
     test_first_time_setup(driver)
     test_new_day_double_journal(driver)
+    driver.quit()
+    driver = create_driver()
+    test_search_duplicates(driver)
     input("Press Enter to continue...")
     driver.quit()
-    print("Test script completed.")
 
 if __name__ == "__main__":
     main()
