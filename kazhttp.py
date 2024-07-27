@@ -169,33 +169,42 @@ def create_server_socket(host, port) -> Tuple[socket.socket, bool]:  # bool is T
 def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse]) -> None:
     listen_socket, https = create_server_socket(host, port)
     while True:
-        client_connection, client_address = listen_socket.accept()
-        log('----------------------------------------')
-        log(client_address) # (address: string, port: int)
-        
         try:
-            while True:
-                request = receive_headers_and_content(client_connection)
-                if request is None:
-                    break
-
-                http_response = handle_request(request)
-                http_response.write_to(client_connection)
-
-                if request.get("connection") != "keep-alive":
-                    break
-
-                log('keep-alive, re-use accepted connection')
-                client_connection.settimeout(5)  # Set a timeout for the next request
-        
-        except socket.timeout:
-            log('keep-alive connection timed out')
-        except Exception as e:
-            log(" ".join(traceback.format_exc().splitlines()))
-        finally:
+            client_connection, client_address = listen_socket.accept()
+            log('----------------------------------------')
+            log(client_address)
+            
             try:
-                client_connection.shutdown(socket.SHUT_RDWR)
+                while True:
+                    request = receive_headers_and_content(client_connection)
+                    if request is None:
+                        break
+
+                    http_response = handle_request(request)
+                    http_response.write_to(client_connection)
+
+                    if request.get("connection") != "keep-alive":
+                        break
+
+                    log('keep-alive, waiting for next request')
+                    client_connection.settimeout(5)  # Set a timeout for the next request
+            
+            except socket.timeout:
+                log('keep-alive connection timed out')
             except Exception as e:
-                pass
-            log('shutdown and close connection')
-            client_connection.close()
+                log("Error handling request:", str(e))
+            finally:
+                try:
+                    client_connection.shutdown(socket.SHUT_RDWR)
+                except Exception as e:
+                    log("Error shutting down connection:", str(e))
+                log('shutdown and close connection')
+                client_connection.close()
+
+        except ssl.SSLEOFError:
+            log("SSL EOF Error: Client closed connection unexpectedly. Continuing to listen.")
+        except ssl.SSLError as e:
+            log("SSL Error:", str(e), "Continuing to listen.")
+        except Exception as e:
+            log("Unexpected error in main loop:", str(e))
+            # Optionally, you might want to break the loop or implement a retry mechanism here
