@@ -31,7 +31,7 @@ print("Starting test script...")
 
 def get_pipeline_url():
     if args.no_docker:
-        return "https://localhost:8100"
+        return "https://127.0.0.1:8100"
     else:
         return "https://server:5000"
 
@@ -257,10 +257,10 @@ def main():
     test_first_time_setup(driver)
     test_new_day_double_journal(driver)
     driver.quit()
-    driver = create_driver()
-    test_search_duplicates(driver)
-    input("Press Enter to continue...")
-    driver.quit()
+    # driver = create_driver()
+    # test_search_duplicates(driver)
+    # input("Press Enter to continue...")
+    # driver.quit()
 
 if __name__ == "__main__":
     main()

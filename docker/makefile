@@ -22,4 +22,4 @@ server:
 	docker-compose up --build --force-recreate server
 
 raw_server:
-	cd .. && python simple_server.py --port 8100 --host localhost --notes-root docker/notes
+	cd .. && python simple_server.py --port 8100 --host 127.0.0.1 --notes-root docker/notes

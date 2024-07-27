@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 import traceback
 
+PACKET_READ_SIZE = 65536  # 2 ^ 16
+
 def log(*k):
     print(datetime.now(), *k, flush=True)
 
@@ -47,7 +49,7 @@ def allow_cors_for_localhost(headers: Dict[str, str]):
 def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, Any]:
     log("receiving data from client connection")
     try:
-        request_data = client_connection.recv(1024)  # TODO receive more?
+        request_data = client_connection.recv(PACKET_READ_SIZE)
     except socket.timeout:
         log('timeout')
         return None
@@ -55,7 +57,7 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
     if len(request_data) == 0:
         retry_count = 5
         while True:
-            more = client_connection.recv(1024)
+            more = client_connection.recv(PACKET_READ_SIZE)
             request_data += more
             if len(more) == 0:
                 retry_count -= 1
@@ -65,10 +67,10 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
                 break
             
 
-    if len(request_data) == 1024 and request_data.startswith(b"GET "):  # only support long 'GET's for now
+    if len(request_data) == PACKET_READ_SIZE and request_data.startswith(b"GET "):  # only support long 'GET's for now
         log('MORE: requesting more')
         while True:  # TODO make this a generator and only get more when we actually need it
-            more = client_connection.recv(1024)
+            more = client_connection.recv(PACKET_READ_SIZE)
             log('received', len(more), 'bytes')
             log("got MORE:\n", more)
             request_data += more
@@ -167,28 +169,30 @@ def create_server_socket(host, port) -> Tuple[socket.socket, bool]:  # bool is T
 def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse]) -> None:
     listen_socket, https = create_server_socket(host, port)
     while True:
-        request = None
+        client_connection, client_address = listen_socket.accept()
+        log('----------------------------------------')
+        log(client_address) # (address: string, port: int)
+        
         try:
-            log('----------------------------------------')
-            client_connection, client_address = listen_socket.accept()
-            log(client_address) # (address: string, port: int)
+            while True:
+                request = receive_headers_and_content(client_connection)
+                if request is None:
+                    break
 
-            request = receive_headers_and_content(client_connection)
-            if request is None:
-                continue
+                http_response = handle_request(request)
+                http_response.write_to(client_connection)
 
-            http_response = handle_request(request)
-            http_response.write_to(client_connection)
+                if request.get("connection") != "keep-alive":
+                    break
 
+                log('keep-alive, re-use accepted connection')
+                client_connection.settimeout(5)  # Set a timeout for the next request
+        
+        except socket.timeout:
+            log('keep-alive connection timed out')
         except Exception as e:
             log(" ".join(traceback.format_exc().splitlines()))
-
         finally:
-
-            if request and request.get("connection") == "keep-alive":
-                log('keep-alive')
-                continue
-
             try:
                 client_connection.shutdown(socket.SHUT_RDWR)
             except Exception as e:
