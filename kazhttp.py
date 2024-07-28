@@ -7,6 +7,7 @@ from datetime import datetime
 import traceback
 
 PACKET_READ_SIZE = 65536  # 2 ^ 16
+LISTEN_BACKLOG = 20
 
 def log(*k):
     print(datetime.now(), *k, flush=True)
@@ -29,6 +30,14 @@ class KazHttpResponse:
           + b"\n"
           + self.body
         )
+    
+class KazHttpRequest:
+    def __init__(self, method: str, path: str, headers: Dict[str, str], body: bytes):
+        self.method = method
+        self.path = path
+        self.headers = headers
+        self.body = body
+
 
 def HTTP_OK(body: bytes, mimetype: bytes, keep_alive: bool = False) -> bytes:
     return KazHttpResponse(b"200 OK", body, keep_alive=keep_alive, mimetype=mimetype)
@@ -146,28 +155,23 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
         log(f'{len(body)=} {content_length=}')
     return {'method': method, 'path': path, 'httpver': httpver, 'headers': headers, 'body': body, "connection": connection}
 
-def create_server_socket(host, port) -> Tuple[socket.socket, bool]:  # bool is True iff https/ ssl
-    # socket.setdefaulttimeout(5)  # 5 second timeouts by default
-    raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+def create_server_socket(host, port) -> Tuple[socket.socket, ssl.SSLContext]:
+    listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    https = False
+    context = None
     if os.path.exists('cert/cert.pem'):
-        https = True
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(certfile="cert/cert.pem", keyfile="cert/key.pem")
-        listen_socket = context.wrap_socket(raw_socket, server_side=True)
-    else:
-        listen_socket = raw_socket
 
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listen_socket.bind((host, port))
-    listen_socket.listen(20)
-    log(f"Serving HTTP{'S' if https else ''} on port {port} ...")
-    return listen_socket, https
+    listen_socket.listen(LISTEN_BACKLOG)
+    log(f"Serving HTTP{'S' if context else ''} on port {port} ...")
+    return listen_socket, context
 
 
 def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse]) -> None:
-    listen_socket, https = create_server_socket(host, port)
+    listen_socket, context = create_server_socket(host, port)
     while True:
         try:
             client_connection, client_address = listen_socket.accept()
@@ -175,6 +179,14 @@ def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse])
             log(client_address)
             
             try:
+                if context is not None:
+                    try:
+                        client_connection = context.wrap_socket(client_connection, server_side=True)
+                        log("SSL handshake successful")
+                    except ssl.SSLError as ssl_err:
+                        log(f"SSL handshake failed: {ssl_err}")
+                        raise
+
                 while True:
                     request = receive_headers_and_content(client_connection)
                     if request is None:
@@ -188,23 +200,24 @@ def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse])
 
                     log('keep-alive, waiting for next request')
                     client_connection.settimeout(5)  # Set a timeout for the next request
-            
+                
+                if context is not None:
+                    try:
+                        client_connection.shutdown(socket.SHUT_RDWR)
+                        log('shutdown and close connection')
+                    except Exception as e:
+                        log("Error shutting down connection:", str(e))
+
+                
             except socket.timeout:
                 log('keep-alive connection timed out')
             except Exception as e:
                 log("Error handling request:", str(e))
+                log("".join(traceback.format_exception(e)))
+
             finally:
-                try:
-                    client_connection.shutdown(socket.SHUT_RDWR)
-                except Exception as e:
-                    log("Error shutting down connection:", str(e))
-                log('shutdown and close connection')
                 client_connection.close()
 
-        except ssl.SSLEOFError:
-            log("SSL EOF Error: Client closed connection unexpectedly. Continuing to listen.")
-        except ssl.SSLError as e:
-            log("SSL Error:", str(e), "Continuing to listen.")
         except Exception as e:
             log("Unexpected error in main loop:", str(e))
-            # Optionally, you might want to break the loop or implement a retry mechanism here
+            log("".join(traceback.format_exception(e)))
