@@ -83,6 +83,14 @@ self.addEventListener('install', (event) => {
   );
 });
 
+function urlToCachedFilePath(url) {
+  const asset = [...cacheable_assets, ...icons].some((asset) => url.endsWith(asset));
+  if (asset) {
+    return asset;
+  }
+  return baseFile;
+}
+
 // the service worker fails on /api/ subpaths and
 // returns either a cached file if it exists
 //         or just index.html if it doesn't
@@ -97,13 +105,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE_VERSION);
+        let filepath = urlToCachedFilePath(event.request.url);
 
-        
-        const is_asset = [...cacheable_assets, ...icons].some((asset) => event.request.url.endsWith(asset));
-        const is_base_file = !is_asset;
-
-        if (is_base_file) {
-          
+        if (filepath === baseFile) {
           // fetch
           try {
             LOG(`attempting fetch ${event.request.url}`);
@@ -132,13 +136,15 @@ self.addEventListener('fetch', (event) => {
           }
         }
 
-        console.asset(is_asset);
+        //console.assert(is_asset);
 
         try {
           const sw_index = await cache.match(baseFile).then((response) => response.text());
+          // LOG('sw_index:', sw_index);
           const hashes = sw_index.match(/<!-- VERSIONS: (.*) -->/);
+          // LOG('hashes:', hashes);
           const asset_hashes = JSON.parse(hashes[1]);
-          LOG('asset hashes:', asset_hashes);
+          // LOG('asset hashes:', asset_hashes);
 
           let found_asset = cacheable_assets.find((asset) => event.request.url.endsWith(asset));
           if (found_asset !== undefined) {
@@ -163,7 +169,7 @@ self.addEventListener('fetch', (event) => {
           LOG('error', e);
         }
 
-        LOG(`${event.request.url}: is_asset: ${is_asset}`)
+        LOG(`asset not cached, loading ${event.request.url} -> ${filepath}`);
 
         // fetch
         try {
