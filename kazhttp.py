@@ -154,51 +154,57 @@ def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse])
     inputs = [listen_socket]
     
     while True:
-        readable, _, _ = select.select(inputs, [], [], 1.0)
-        for sock in readable:
-            log(f'-----------------------')
-            if sock is listen_socket:
-                log('accepting new connection')
-                try:
-                    sock.settimeout(1)
-                    client_connection, client_address = sock.accept()
-                except socket.timeout:
-                    log('listen_socket timeout')
-                    continue
-                log(client_address)
-                
-                if context:
+        try:
+            readable, _, _ = select.select(inputs, [], [], 1.0)
+            for sock in readable:
+                log(f'-----------------------')
+                if sock is listen_socket:
+                    log('accepting new connection')
                     try:
-                        client_connection = context.wrap_socket(client_connection, server_side=True, do_handshake_on_connect=False)
-                        client_connection.do_handshake()
-                        log(f"SSL handshake successful with {client_address}")
-                    except ssl.SSLError as ssl_err:
-                        log(f"SSL handshake failed with {client_address}: {ssl_err}")
-                        client_connection.close()
+                        sock.settimeout(1)
+                        client_connection, client_address = sock.accept()
+                    except socket.timeout:
+                        log('listen_socket timeout')
                         continue
-                
-                inputs.append(client_connection)
-                log('added new input, inputs now:', len(inputs))
-            else:
-                log('reading new data on', sock.getpeername())
-                try:
-                    request = receive_headers_and_content(sock)
-                    if request is None:
-                        log('closing connection', sock.getpeername(), len(inputs), "(no request received)")
+                    log(client_address)
+                    
+                    if context:
+                        try:
+                            client_connection = context.wrap_socket(client_connection, server_side=True, do_handshake_on_connect=False)
+                            client_connection.do_handshake()
+                            log(f"SSL handshake successful with {client_address}")
+                        except ssl.SSLError as ssl_err:
+                            log(f"SSL handshake failed with {client_address}: {ssl_err}")
+                            client_connection.close()
+                            continue
+                    
+                    inputs.append(client_connection)
+                    log('added new input, inputs now:', len(inputs))
+                else:
+                    log('reading new data on', sock.getpeername())
+                    try:
+                        request = receive_headers_and_content(sock)
+                        if request is None:
+                            log('closing connection', sock.getpeername(), len(inputs), "(no request received)")
+                            inputs.remove(sock)
+                            sock.close()
+                            continue
+                        
+                        http_response = handle_request(request)
+                        http_response.write_to(sock)
+                        
+                        if not http_response.keep_alive:
+                            log('closing connection', sock.getpeername(), len(inputs), "(no keep-alive)")
+                            inputs.remove(sock)
+                            sock.close()
+                        
+                    except Exception as e:
+                        log(f"Error handling request: {str(e)}")
+                        log("".join(traceback.format_exception(e)))
                         inputs.remove(sock)
                         sock.close()
-                        continue
-                    
-                    http_response = handle_request(request)
-                    http_response.write_to(sock)
-                    
-                    if not http_response.keep_alive:
-                        log('closing connection', sock.getpeername(), len(inputs), "(no keep-alive)")
-                        inputs.remove(sock)
-                        sock.close()
-                    
-                except Exception as e:
-                    log(f"Error handling request: {str(e)}")
-                    log("".join(traceback.format_exception(e)))
-                    inputs.remove(sock)
-                    sock.close()
+        
+        except Exception as e:
+            log("Error in main loop")
+            log("".join(traceback.format_exception(e)))
+            break
