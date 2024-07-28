@@ -244,7 +244,7 @@ function htmlBlock(block, content) {
   console.assert(false, block, 'unexpected block type');
 }
 
-export function htmlTreeNode(thisNode, nested = false) {
+export function htmlTreeNode(thisNode) {
   return `<div class="treenode indent${thisNode.indent}">
   ${thisNode.value}
   <ul class="treenode-list">
@@ -394,12 +394,21 @@ function unparseBlock(block) {
   return ['ERROR BLOCK', ...block];
 }
 
+export function unparseTreeNode(thisNode, nested = false) {
+  let indent = thisNode.indent == -1 ? "" : "  ".repeat(thisNode.indent) + "- ";
+  let result = indent + htmlLine(thisNode.value) + "\n" + thisNode.children.map(x => unparseTreeNode(x, true)).join("");
+  if (! nested && result.endsWith("\n")) {
+    result = result.slice(0, -1);
+  }
+  return result;
+}
+
 function unparseLineContent(l) {
   if (typeof l === 'string') {
     return l;
   }
   if (l instanceof TreeNode) {
-    return htmlTreeNode(l);
+    return unparseTreeNode(l);
   }
   if (l instanceof Line) {
     return l.content;
