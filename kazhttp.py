@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple, Callable
+from typing import Any, Dict, Tuple, Callable
 import socket
 import os
 import ssl
@@ -56,7 +56,7 @@ def allow_cors_for_localhost(headers: Dict[str, str]):
     return b""
 
 def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, Any]:
-    log("awaiting recv data from client connection")
+    log("receiving data from client connection")
     try:
         request_data = client_connection.recv(PACKET_READ_SIZE)
     except socket.timeout:
@@ -155,40 +155,6 @@ def create_server_socket(host, port) -> Tuple[socket.socket, ssl.SSLContext]:
     log(f"Serving HTTP{'S' if context else ''} on port {port} ...")
     return listen_socket, context
 
-from contextlib import contextmanager
-
-@contextmanager
-def wrap_client_connection(client_connection: socket.socket, context: Optional[ssl.SSLContext]):
-    ssl_connection = None
-    try:
-        if context is not None:
-            try:
-                ssl_connection = context.wrap_socket(client_connection, server_side=True)
-                log("SSL handshake successful")
-                yield ssl_connection
-            except ssl.SSLError as ssl_err:
-                log(f"SSL handshake failed: {ssl_err}")
-                raise
-        else:
-            yield client_connection
-
-    # a bit weird, but these except blocks will catch exceptions thrown in the `with` block of the context manager
-    except socket.timeout:
-        log('keep-alive connection timed out')
-    except Exception as e:
-        log("Error handling request:", str(e))
-        log("".join(traceback.format_exception(type(e), e, e.__traceback__)))
-    finally:
-        if ssl_connection:
-            try:
-                ssl_connection.shutdown(socket.SHUT_RDWR)
-                log('shutdown and close SSL connection')
-            except Exception as e:
-                log("Error shutting down SSL connection:", str(e))
-            finally:
-                ssl_connection.close()
-        client_connection.close()
-        log('closed client connection')
 
 def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse]) -> None:
     listen_socket, context = create_server_socket(host, port)
@@ -198,21 +164,46 @@ def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse])
             log('----------------------------------------')
             log(client_address)
             
-            with wrap_client_connection(client_connection, context) as conn:
+            try:
+                if context is not None:
+                    try:
+                        client_connection = context.wrap_socket(client_connection, server_side=True)
+                        log("SSL handshake successful")
+                    except ssl.SSLError as ssl_err:
+                        log(f"SSL handshake failed: {ssl_err}")
+                        raise
+
                 while True:
-                    request = receive_headers_and_content(conn)
+                    request = receive_headers_and_content(client_connection)
                     if request is None:
                         break
 
                     http_response = handle_request(request)
-                    http_response.write_to(conn)
+                    http_response.write_to(client_connection)
 
-                    if not http_response.keep_alive:
+                    if request.get("connection") != "keep-alive":
                         break
 
-                    log('keep-alive, reuse connection')
-                    conn.settimeout(5)  # Set a timeout for the next request
+                    log('keep-alive, waiting for next request')
+                    client_connection.settimeout(5)  # Set a timeout for the next request
+                
+                if context is not None:
+                    try:
+                        client_connection.shutdown(socket.SHUT_RDWR)
+                        log('shutdown and close connection')
+                    except Exception as e:
+                        log("Error shutting down connection:", str(e))
+
+                
+            except socket.timeout:
+                log('keep-alive connection timed out')
+            except Exception as e:
+                log("Error handling request:", str(e))
+                log("".join(traceback.format_exception(e)))
+
+            finally:
+                client_connection.close()
 
         except Exception as e:
             log("Unexpected error in main loop:", str(e))
-            log("".join(traceback.format_exception(type(e), e, e.__traceback__)))
+            log("".join(traceback.format_exception(e)))
