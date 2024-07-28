@@ -62,7 +62,7 @@ self.addEventListener('fetch', (event) => {
         // fetch
         try {
           LOG(`attempting fetch ${event.request.url}`);
-          const fetchedResponse = await fetch(event.request, { signal: AbortSignal.timeout(2000) }); // 1 second timeout
+          const fetchedResponse = await fetch(event.request, { signal: AbortSignal.timeout(2000) }); // 2 second timeout
           if (!fetchedResponse.ok) {
             throw new Error(`response status is not ok: ${fetchedResponse.status} ${fetchedResponse.statusText}`);
           } else {

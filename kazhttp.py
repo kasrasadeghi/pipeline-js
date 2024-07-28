@@ -115,7 +115,6 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
     
     connection = None
     if "connection" in headers and headers["connection"] == "keep-alive":
-        client_connection.settimeout(5)
         connection = "keep-alive"
 
     if 'content-length' in headers:
@@ -191,12 +190,17 @@ def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse])
                             continue
                         
                         http_response = handle_request(request)
+
+                        if request['connection'] == 'keep-alive':
+                            http_response.keep_alive = True
+
                         http_response.write_to(sock)
                         
                         if not http_response.keep_alive:
                             log('closing connection', sock.getpeername(), len(inputs), "(no keep-alive)")
                             inputs.remove(sock)
                             sock.close()
+                        log('keep-alive, reusing connection', sock.getpeername())
                         
                     except Exception as e:
                         log(f"Error handling request: {str(e)}")
