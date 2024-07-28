@@ -4,7 +4,7 @@ Description=Pipeline Server
 [Service]
 User=^USER
 WorkingDirectory=^PIPELINE_DIR
-ExecStart=/usr/bin/python ^PIPELINE_DIR/simple_server.py --port 8000
+ExecStart=/usr/bin/python ^PIPELINE_DIR/supervisor.py --port 8000
 Environment=PYTHONUNBUFFERED=1
 Restart=always
 
