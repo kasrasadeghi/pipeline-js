@@ -132,7 +132,9 @@ def handle_request(request):
         for asset in assets:
             with open('assets/' + asset, 'r') as f:
                 bundle[asset] = f.read()
-        return HTTP_OK_JSON(bundle)
+        result = HTTP_OK_JSON(bundle)
+        log('bundle size', result.body.length)
+        return result
 
     # Handle paths for frontend pages
 
