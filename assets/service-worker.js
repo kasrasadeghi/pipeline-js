@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'pipeline-notes-v2';
+const CACHE_VERSION = 'pipeline-notes-v5';
 const baseFile = 'sw-index.html';
 const icons = [
   "favicon.ico",
@@ -98,7 +98,41 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         const cache = await caches.open(CACHE_VERSION);
 
+        
         const is_asset = [...cacheable_assets, ...icons].some((asset) => event.request.url.endsWith(asset));
+        const is_base_file = !is_asset;
+
+        if (is_base_file) {
+          
+          // fetch
+          try {
+            LOG(`attempting fetch ${event.request.url}`);
+            const fetchedResponse = await fetch(event.request, { signal: AbortSignal.timeout(2000) }); // 2 second timeout
+            if (!fetchedResponse.ok) {
+              throw new Error(`response status is not ok: ${fetchedResponse.status} ${fetchedResponse.statusText}`);
+            } else {
+              LOG(`fetch succeeded! ${event.request.url}`)
+              cache.put(baseFile, fetchedResponse.clone());
+
+              // TODO this is where we should fetch the bundle and update the cache
+
+              return fetchedResponse;
+            }
+
+          // use cache if fetch fails
+          } catch (e) {
+            LOG("network failed, loading from cache:", event.request.url, e);
+            // fetch timeout and other errors
+            let cachedResponse = await cache.match(baseFile);
+            if (cachedResponse) {
+              LOG(`found in cache! ${event.request.url} -> ${baseFile} (${cachedResponse.headers.get("content-length")} bytes)`);
+              return cachedResponse;
+            }
+            throw new Error(`cache miss '${event.request.url}' for file '${file_to_find}' after network failure`);
+          }
+        }
+
+        console.asset(is_asset);
 
         try {
           const sw_index = await cache.match(baseFile).then((response) => response.text());
@@ -139,12 +173,7 @@ self.addEventListener('fetch', (event) => {
             throw new Error(`response status is not ok: ${fetchedResponse.status} ${fetchedResponse.statusText}`);
           } else {
             LOG(`fetch succeeded! ${event.request.url}`)
-            if (is_asset) {
-              cache.put(event.request.url, fetchedResponse.clone());
-            } else {
-              // this should only be things like /disc/, /edit/, etc.
-              cache.put(baseFile, fetchedResponse.clone());
-            }
+            cache.put(event.request.url, fetchedResponse.clone());
             return fetchedResponse;
           }
 
@@ -152,17 +181,10 @@ self.addEventListener('fetch', (event) => {
         } catch (e) {
           LOG("network failed, loading from cache:", event.request.url, e);
           // fetch timeout and other errors
-          let cachedResponse = null;
-          let file_to_find = null;
-          if (is_asset) {
-            cachedResponse = await cache.match(event.request.url);
-            file_to_find = event.request.url;
-          } else {
-            cachedResponse = await cache.match(baseFile);
-            file_to_find = baseFile;
-          }
+          let cachedResponse = await cache.match(event.request.url);
+          let file_to_find = event.request.url;
           if (cachedResponse) {
-            LOG(`found in cache! ${event.request.url} -> ${file_to_find} (${cachedResponse.headers.get("content-length")} bytes)`);
+            LOG(`found in cache! ${event.request.url} (${cachedResponse.headers.get("content-length")} bytes)`);
             return cachedResponse;
           }
           throw new Error(`cache miss '${event.request.url}' for file '${file_to_find}' after network failure`);
