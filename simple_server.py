@@ -20,6 +20,8 @@ args = argparser.parse_args()
 NOTES_ROOT = args.notes_root
 HOST, PORT = args.host, args.port
 
+PRE_IMPORT = False
+
 # provide .removeprefix if it doesn't have it (e.g. python 3.8 on ubuntu 20.04)
 if not hasattr(str, 'removeprefix'):
     def removeprefix(self, prefix):
@@ -185,6 +187,14 @@ def handle_request(request):
     with open(path, 'rb') as f:
         content = f.read()
         log(f"read {path} ({len(content)})")
+
+    # programmatically import scripts so that there is no waterfall of requests
+    if PRE_IMPORT and 'assets/index.html' == path:
+        script_imports = []
+        for script in assets:
+            if script.endswith(".js"):
+                script_imports.append(b'<script type="module" src="/' + script.encode() + b'"></script>\n')
+        content = content.replace(b"<!-- script imports -->", b"".join(script_imports))
 
     http_response = HTTP_OK(content, mimetype)
     http_response.keep_alive = (connection == 'keep-alive')
