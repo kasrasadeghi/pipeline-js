@@ -64,17 +64,8 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
         return None
     
     if len(request_data) == 0:
-        retry_count = 5
-        while True:
-            more = client_connection.recv(PACKET_READ_SIZE)
-            request_data += more
-            if len(more) == 0:
-                retry_count -= 1
-            if retry_count == 0:
-                raise Exception("ERROR: retried 5 times, got 0 bytes every time, giving up.  didn't receive any data.")
-            if len(request_data) > 0:
-                break
-            
+        log('no data received')
+        return None
 
     if len(request_data) == PACKET_READ_SIZE and request_data.startswith(b"GET "):  # only support long 'GET's for now
         log('MORE: requesting more')
