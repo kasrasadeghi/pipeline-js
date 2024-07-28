@@ -181,8 +181,8 @@ def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse])
                     inputs.append(client_connection)
                     log('added new input, inputs now:', len(inputs))
                 else:
-                    log('reading new data on', sock.getpeername())
                     try:
+                        log('reading new data on', sock.getpeername())
                         request = receive_headers_and_content(sock)
                         if request is None:
                             log('closing connection', sock.getpeername(), len(inputs), "(no request received)")
