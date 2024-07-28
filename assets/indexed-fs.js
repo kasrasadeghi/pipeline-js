@@ -4,6 +4,8 @@ import { initState, cache, getNow, setNow, tomorrow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
 import { rewrite, rewriteLine, rewriteBlock, Msg, Line, Tag, Link } from '/rewrite.js';
 
+export { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
+export { rewrite } from '/rewrite.js';
 export { debugGlobalNotes } from '/flatdb.js';
 export { setNow, tomorrow, getNow } from '/state.js';
 
@@ -19,6 +21,9 @@ if (!Array.prototype.back) {
 // GLOBALS
 
 export let global = null;  // the only global variable.
+export function getGlobal() {
+  return global;
+}
 const SUBBED_REPOS_FILE = "subbed_repos";
 
 // GENERAL UTIL
@@ -84,7 +89,7 @@ function dateComp(a, b) {
 
 // JOURNAL
 
-function dateToJournalTitle(date) {
+export function dateToJournalTitle(date) {
   const year = date.getFullYear();
 
   const month = date.toLocaleString('en-us', { month: "long" });
@@ -198,12 +203,12 @@ function htmlMsgBlock(block, content) {
       return "<blockquote>" + block.slice(1).map(x => "<p>" + htmlLine(x) + "</p>").join("") + "</blockquote>";
     }
     if (block.length === 1 && block[0] instanceof TreeNode) {
-      return "<pre>" + htmlTreeNode(block[0]) + "\n</pre>";
+      return "<pre class='lower-tree'>" + htmlTreeNode(block[0]) + "\n</pre>";
     }
     return "<p class='msgblock'>" + block.map(htmlBlockPart).join("<br>") + "</p>";
   }
   if (block instanceof TreeNode) {
-    return `<pre>` + htmlTreeNode(block) + `</pre>`;
+    return `<pre class="upper-tree">` + htmlTreeNode(block) + `</pre>`;
   }
   console.assert(false, block, 'unexpected block type');
 }
@@ -212,9 +217,9 @@ function htmlBlockPart(part) {
   if (part instanceof Line) {
     return htmlLine(part);
   } else if (part instanceof TreeNode) {
-    return `<pre>` + htmlTreeNode(part) + `</pre>`;
+    return `<pre class="tree-blockpart">` + htmlTreeNode(part) + `</pre>`;
   }
-  console.assert(false, block, 'unexpected block part type');
+  console.assert(false, part, 'unexpected block part type');
 }
 
 function htmlBlock(block, content) {
