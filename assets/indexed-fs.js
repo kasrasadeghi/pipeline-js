@@ -203,12 +203,12 @@ function htmlMsgBlock(block, content) {
       return "<blockquote>" + block.slice(1).map(x => "<p>" + htmlLine(x) + "</p>").join("") + "</blockquote>";
     }
     if (block.length === 1 && block[0] instanceof TreeNode) {
-      return "<pre class='lower-tree'>" + htmlTreeNode(block[0]) + "\n</pre>";
+      return  htmlTreeNode(block[0]);
     }
     return "<p class='msgblock'>" + block.map(htmlBlockPart).join("<br>") + "</p>";
   }
   if (block instanceof TreeNode) {
-    return `<pre class="upper-tree">` + htmlTreeNode(block) + `</pre>`;
+    return htmlTreeNode(block);
   }
   console.assert(false, block, 'unexpected block type');
 }
@@ -217,7 +217,7 @@ function htmlBlockPart(part) {
   if (part instanceof Line) {
     return htmlLine(part);
   } else if (part instanceof TreeNode) {
-    return `<pre class="tree-blockpart">` + htmlTreeNode(part) + `</pre>`;
+    return htmlTreeNode(part);
   }
   console.assert(false, part, 'unexpected block part type');
 }
@@ -245,12 +245,12 @@ function htmlBlock(block, content) {
 }
 
 export function htmlTreeNode(thisNode, nested = false) {
-  let indent = thisNode.indent == -1 ? "" : "  ".repeat(thisNode.indent) + "- ";
-  let result = indent + htmlLine(thisNode.value) + "\n" + thisNode.children.map(x => htmlTreeNode(x, true)).join("");
-  if (! nested && result.endsWith("\n")) {
-    result = result.slice(0, -1);
-  }
-  return result;
+  return `<div class="treenode indent${thisNode.indent}">
+  ${thisNode.value}
+  <ul class="treenode-list">
+  ${thisNode.children.map(x => "<li>" + htmlTreeNode(x, true) + "</li>").join("")}
+  </ul>
+  </div>`;
 }
 
 // calendar format, just the weekday

@@ -408,3 +408,14 @@ p.msgblock {
   color: var(--placeholder_text_color);
   user-select: none;
 }
+
+.treenode {
+  padding: 5px;
+  border-left: 1px solid white;
+}
+
+.treenode-list {
+  margin-block-start: 5px;
+  margin-block-end: 5px;
+  padding-inline-start: 20px;
+}
