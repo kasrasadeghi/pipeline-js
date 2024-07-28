@@ -20,8 +20,6 @@ args = argparser.parse_args()
 NOTES_ROOT = args.notes_root
 HOST, PORT = args.host, args.port
 
-PRE_IMPORT = False
-
 # provide .removeprefix if it doesn't have it (e.g. python 3.8 on ubuntu 20.04)
 if not hasattr(str, 'removeprefix'):
     def removeprefix(self, prefix):
@@ -33,11 +31,11 @@ if not hasattr(str, 'removeprefix'):
 def get_repo_path(repo):
     return os.path.join(NOTES_ROOT, repo)
 
-def compute_status(repos, headers) -> KazHttpResponse:
-    def hash(note_path):
-        with open(note_path, "rb") as f:
-            return hashlib.sha256(f.read()).hexdigest()
+def hash(path):
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
 
+def compute_status(repos, headers) -> KazHttpResponse:
     def hash_repo(repo):
         repo_path = get_repo_path(repo)
         if not os.path.isdir(repo_path):
@@ -127,6 +125,15 @@ def handle_request(request):
         response.keep_alive = (connection == 'keep-alive')
         return response
 
+    if path.startswith('/bundle/'):
+        path = path.removeprefix('/bundle/')
+        assets = path.split("+")
+        bundle = {}
+        for asset in assets:
+            with open('assets/' + asset, 'r') as f:
+                bundle[asset] = f.read()
+        return HTTP_OK_JSON(bundle)
+
     # Handle paths for frontend pages
 
     mimetype_table = {
@@ -137,17 +144,22 @@ def handle_request(request):
         ".ico": b"image/x-icon"
     }
 
-    assets = [
+    cacheable_assets = [
         "style.css",
-        "indexed-fs.js",
-        "service-worker.js",
-        "parse.js",
+        "boolean-state.js",
         "filedb.js",
         "flatdb.js",
-        "state.js",
-        "boolean-state.js",
+        "indexed-fs.js",
+        "parse.js",
         "rewrite.js",
+        "state.js",
     ]
+
+    non_cacheable_assets = [
+        "service-worker.js",
+    ]
+
+    assets = cacheable_assets + non_cacheable_assets
 
     icons = [
         "favicon.ico",
@@ -188,13 +200,11 @@ def handle_request(request):
         content = f.read()
         log(f"read {path} ({len(content)})")
 
-    # programmatically import scripts so that there is no waterfall of requests
-    if PRE_IMPORT and 'assets/index.html' == path:
-        script_imports = []
-        for script in assets:
-            if script.endswith(".js"):
-                script_imports.append(b'<script type="module" src="/' + script.encode() + b'"></script>\n')
-        content = content.replace(b"<!-- script imports -->", b"".join(script_imports))
+    if path == 'assets/index.html':
+        import json
+        versions = {asset: hash('assets/' + asset) for asset in cacheable_assets}
+        version_dump = "<!-- VERSIONS: " + json.dumps(versions) + " -->"
+        content = content.replace(b"<!-- versions -->", version_dump.encode())
 
     http_response = HTTP_OK(content, mimetype)
     http_response.keep_alive = (connection == 'keep-alive')
