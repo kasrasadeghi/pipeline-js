@@ -157,51 +157,52 @@ def create_server_socket(host, port) -> Tuple[socket.socket, ssl.SSLContext]:
 
 
 def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse]) -> None:
+    import select
     listen_socket, context = create_server_socket(host, port)
+    listen_socket.setblocking(False)
+    inputs = [listen_socket]
+    
     while True:
-        try:
-            client_connection, client_address = listen_socket.accept()
-            log('----------------------------------------')
-            log(client_address)
-
-            if context is not None:
-                try:
-                    client_connection = context.wrap_socket(client_connection, server_side=True)
-                    log(f"SSL handshake successful with {client_address}")
-                except ssl.SSLError as ssl_err:
-                    log(f"SSL handshake failed with {client_address}: {ssl_err}")
-                    client_connection.close()
-                    continue  # to next accept
-
-            try:
-
-                while True:
-                    request = receive_headers_and_content(client_connection)
-                    if request is None:
-                        break
-
-                    http_response = handle_request(request)
-                    http_response.write_to(client_connection)
-
-                    if request.get("connection") != "keep-alive":
-                        break
-
-                    log('keep-alive, waiting for next request')
-            except Exception as e:
-                log("Error handling request:", str(e))
-                log("".join(traceback.format_exception(e)))
-
-            finally:
-
-                if context is not None:
-                    try:
-                        client_connection.shutdown(socket.SHUT_RDWR)
-                        log('shutdown and close connection')
-                    except Exception as e:
-                        log("Error shutting down connection:", str(e))
+        readable, _, _ = select.select(inputs, [], [], 1.0)
+        for sock in readable:
+            log(f'-----------------------')
+            if sock is listen_socket:
+                log('accepting new connection')
+                client_connection, client_address = sock.accept()
+                log(client_address)
                 
-                client_connection.close()
-
-        except Exception as e:
-            log("Unexpected error in main loop:", str(e))
-            log("".join(traceback.format_exception(e)))
+                if context:
+                    try:
+                        client_connection = context.wrap_socket(client_connection, server_side=True, do_handshake_on_connect=False)
+                        client_connection.do_handshake()
+                        log(f"SSL handshake successful with {client_address}")
+                    except ssl.SSLError as ssl_err:
+                        log(f"SSL handshake failed with {client_address}: {ssl_err}")
+                        client_connection.close()
+                        continue
+                
+                inputs.append(client_connection)
+                log('added new input, inputs now:', len(inputs))
+            else:
+                log('reading new data on', sock.getpeername())
+                try:
+                    request = receive_headers_and_content(sock)
+                    if request is None:
+                        log('closing connection', sock.getpeername(), len(inputs), "(no request received)")
+                        inputs.remove(sock)
+                        sock.close()
+                        continue
+                    
+                    http_response = handle_request(request)
+                    http_response.write_to(sock)
+                    
+                    if not http_response.keep_alive:
+                        log('closing connection', sock.getpeername(), len(inputs), "(no keep-alive)")
+                        inputs.remove(sock)
+                        sock.close()
+                    
+                except Exception as e:
+                    log(f"Error handling request: {str(e)}")
+                    log("".join(traceback.format_exception(e)))
+                    inputs.remove(sock)
+                    sock.close()
