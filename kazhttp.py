@@ -168,7 +168,12 @@ def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse])
             log(f'-----------------------')
             if sock is listen_socket:
                 log('accepting new connection')
-                client_connection, client_address = sock.accept()
+                try:
+                    sock.settimeout(1)
+                    client_connection, client_address = sock.accept()
+                except socket.timeout:
+                    log('listen_socket timeout')
+                    continue
                 log(client_address)
                 
                 if context:
