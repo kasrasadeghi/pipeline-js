@@ -16,7 +16,7 @@ pipeline_proxy_command = ['./pipeline-proxy', '8000']
 simple_server_command = ['python', 'simple_server.py', '--port', '8001']
 simple_server_direct_command = ['python', 'simple_server.py', '--port', '8000']
 
-# Global variables for tracking
+# Global variables
 last_alive_time = {
     'pipeline_proxy': None,
     'simple_server': None
@@ -25,9 +25,7 @@ autorestart_enabled = {
     'pipeline_proxy': False,
     'simple_server': False
 }
-
-# New global variable to track the current mode
-is_proxied_mode = True
+is_proxied_mode = False
 
 def start_subprocesses():
     global pipeline_proxy_process, simple_server_process, is_proxied_mode
@@ -107,10 +105,12 @@ def liveness_check():
                 restart_process(process_name)
         time.sleep(60)  # Wait for 1 minute before next check
 
+def tail(f, n):
+    return subprocess.check_output(['tail', '-n', str(n), f], text=True)
+    
 @app.route('/')
 def index():
-    with open('logs/server') as f:
-        simple_server_logs = f.read()
+    simple_server_logs = tail('logs/server', 1000)
 
     pipeline_proxy_logs = None
     if is_proxied_mode:

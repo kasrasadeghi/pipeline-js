@@ -85,52 +85,6 @@ pre { font-family: Courier; margin: 0px; color: var(--base_text_color); }
 emph.tag { color: var(--tag_color); font-weight: 500; display: inline; }
 emph.cmd { color: var(--cmd_color); }
 
-/* note title */
-h1.title {
-  margin-left: 1em; padding-left: 10px; padding-bottom: 6px; padding-right: 10px;
-  border-left: 2px white solid; border-bottom: 2px white solid;
-}
-
-/* debug */
-span.mono {
-  font-feature-settings: "liga" 0;
-  font-family: monospace;
-}
-
-/* disc roots */
-.msg_container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  overflow-wrap: anywhere;
-}
-.msg_dash {
-  margin: 0 0.5em 0 0.5em;
-}
-
-/* collapsing roots */
-details { width: 100%; }
-details > summary {
-  display: inline-block;  /* to prevent 'list-item' display type*/
-}
-details > summary > div > div > .msg_content {
-  border-right: solid 10px #ffa0ab;
-}
-details[open] > summary > div > div > .msg_content {
-  border-right: solid 10px #a0abff;
-}
-/* - only show the tag summary for collapsed tags */
-details > summary > .tags-summary {
-  display: true;
-}
-details[open] > summary > .tags-summary {
-  display: none;
-}
-
-/* quote */
-.quote-box { color: var(--quote_timestamp_color); }
-.quote-msg { color: white; }
-
 /* banner */
 .banner-box {
   display: flex;
