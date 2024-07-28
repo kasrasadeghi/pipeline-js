@@ -139,12 +139,15 @@ self.addEventListener('fetch', (event) => {
         //console.assert(is_asset);
 
         try {
+          // The baseFile contains a list of asset hashes, and is used as the reference point
+          // to detect whether the other assets are stale or up-to-date.
+
           const sw_index = await cache.match(baseFile).then((response) => response.text());
-          // LOG('sw_index:', sw_index);
+          LOG('sw_index:', sw_index);
           const hashes = sw_index.match(/<!-- VERSIONS: (.*) -->/);
-          // LOG('hashes:', hashes);
+          LOG('hashes:', hashes);
           const asset_hashes = JSON.parse(hashes[1]);
-          // LOG('asset hashes:', asset_hashes);
+          LOG('asset hashes:', asset_hashes);
 
           let found_asset = cacheable_assets.find((asset) => event.request.url.endsWith(asset));
           if (found_asset !== undefined) {

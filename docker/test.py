@@ -98,7 +98,7 @@ def el_id(driver, id):
         result = driver.find_element(By.ID, id)
         return result
     except NoSuchElementException as e:
-        print(f"Element with ID {id} not found")
+        print(f"Element with ID {id} not found, waiting")
         result = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, id))
         )
@@ -156,6 +156,7 @@ def test_first_time_setup(driver):
     # get current uuid using javascript
     current_uuid = driver.execute_script("return getCurrentNoteUuid()")
 
+    repo_name = "selenium_test"
     assert os.path.exists('notes/' + repo_name)
     assert os.path.exists('notes/' + current_uuid)
 
