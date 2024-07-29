@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'pipeline-notes-v5';
+const CACHE_VERSION = 'pipeline-notes-v2';
 const baseFile = 'sw-index.html';
 const icons = [
   "favicon.ico",
@@ -37,6 +37,12 @@ async function hashToString(arraybuffer) {
 }
 
 async function fillServiceWorkerCache() {
+  // delete contents of all caches
+  const keys = await caches.keys();
+  for (let key of keys) {
+    await caches.delete(key);
+  }
+
   const cache = await caches.open(CACHE_VERSION);
   
   // Cache the base file and icons
@@ -59,9 +65,10 @@ async function fillServiceWorkerCache() {
     const bundle = await response.json();
     LOG('retrieved bundle of', cacheable_assets);
     
-    for (let [asset, content] of Object.entries(bundle)) {
-      await cache.put(asset, new Response(content, {
-        headers: { 'Content-Type': getContentType(asset) }
+    for (let [asset, obj] of Object.entries(bundle)) {
+      await cache.put(asset, new Response(obj.content, {
+        url: self.location.origin + asset,
+        headers: { 'Content-Type': getContentType(asset), "x-hash": obj.hash },
       }));
     }
   } catch (e) {
@@ -84,7 +91,7 @@ self.addEventListener('install', (event) => {
 });
 
 function urlToCachedFilePath(url) {
-  const asset = [...cacheable_assets, ...icons].some((asset) => url.endsWith(asset));
+  const asset = [...cacheable_assets, ...icons].find((asset) => url.endsWith(asset));
   if (asset) {
     return asset;
   }
@@ -115,7 +122,7 @@ self.addEventListener('fetch', (event) => {
             if (!fetchedResponse.ok) {
               throw new Error(`response status is not ok: ${fetchedResponse.status} ${fetchedResponse.statusText}`);
             } else {
-              LOG(`fetch succeeded! ${event.request.url}`)
+              LOG(`RESULT fetch succeeded! ${event.request.url}`)
               cache.put(baseFile, fetchedResponse.clone());
 
               // TODO this is where we should fetch the bundle and update the cache
@@ -129,50 +136,57 @@ self.addEventListener('fetch', (event) => {
             // fetch timeout and other errors
             let cachedResponse = await cache.match(baseFile);
             if (cachedResponse) {
-              LOG(`found in cache! ${event.request.url} -> ${baseFile} (${cachedResponse.headers.get("content-length")} bytes)`);
+              LOG(`RESULT network failed, but found in cache! ${event.request.url} -> ${baseFile} (${cachedResponse.headers.get("content-length")} bytes)`);
               return cachedResponse;
             }
             throw new Error(`cache miss '${event.request.url}' for file '${file_to_find}' after network failure`);
           }
         }
 
-        //console.assert(is_asset);
+        LOG(`checking cache for asset ${event.request.url} -> ${filepath}`);
 
+        let asset_cache_log = [];
         try {
           // The baseFile contains a list of asset hashes, and is used as the reference point
           // to detect whether the other assets are stale or up-to-date.
 
           const sw_index = await cache.match(baseFile).then((response) => response.text());
-          LOG('sw_index:', sw_index);
+          asset_cache_log.push(['sw_index:', sw_index]);
           const hashes = sw_index.match(/<!-- VERSIONS: (.*) -->/);
-          LOG('hashes:', hashes);
+          asset_cache_log.push(['hashes:', hashes]);
           const asset_hashes = JSON.parse(hashes[1]);
-          LOG('asset hashes:', asset_hashes);
+          asset_cache_log.push(['asset_hashes:', asset_hashes]);
 
-          let found_asset = cacheable_assets.find((asset) => event.request.url.endsWith(asset));
-          if (found_asset !== undefined) {
-            const asset_hash = asset_hashes[found_asset];
-            if (asset_hash) {
-              const response = await cache.match(event.request.url);
-              if (response) {
-                const cached_hash = await sha256sum(await response.clone().text());
-                if (cached_hash !== asset_hash) {
-                  LOG('found asset in cache, but hash does not match, fetching:', event.request.url, 'conflicting hashes were', cached_hash, asset_hash);
-                  // TODO should fetch the whole bundle and update the cache
-                  // - probably should only do this when we fetch a new sw-index / baseFile
-                } else {
-                  LOG('found asset in cache, no need to fetch:', event.request.url);
-                  return response;
-                }
+          const asset_hash = asset_hashes[filepath];
+          
+          if (asset_hash) {
+            const response = await cache.match(event.request.url);
+            if (response) {
+              LOG(filepath, response);
+              const cached_response = await response.clone().text();
+              // LOG(cached_response);
+              const cached_hash = await sha256sum(cached_response);
+              // TODO icons and pngs don't seem to hash properly.  maybe we should use bytes?  or maybe we should do this hashing on the server and bundle it with each response?
+              // - do we even need this hashing?  can't we just assume that things are up to date if the version table in the cache is the same as the version table in the index file? 
+
+              if (cached_hash !== asset_hash) {
+                asset_cache_log.push(['found asset in cache, but hash does not match, fetching:', event.request.url, 'conflicting hashes were', cached_hash, asset_hash]);
+                // TODO should fetch the whole bundle and update the cache
+                // - probably should only do this when we fetch a new sw-index / baseFile
+              } else {
+                LOG('RESULT found asset in cache, no need to fetch:', event.request.url);
+                return response;
               }
             }
+          } else {
+            LOG('asset hash not found in hashes, fetching:', event.request.url, asset_cache_log);
           }
 
         } catch (e) {
-          LOG('error', e);
+          LOG('error', e, asset_cache_log);
         }
 
-        LOG(`asset not cached, loading ${event.request.url} -> ${filepath}`);
+        LOG(`asset not cached, loading ${event.request.url} -> ${filepath}`, asset_cache_log);
 
         // fetch
         try {
@@ -181,7 +195,7 @@ self.addEventListener('fetch', (event) => {
           if (!fetchedResponse.ok) {
             throw new Error(`response status is not ok: ${fetchedResponse.status} ${fetchedResponse.statusText}`);
           } else {
-            LOG(`fetch succeeded! ${event.request.url}`)
+            LOG(`RESULT fetch succeeded! ${event.request.url}`, "cache keys", await cache.keys(), fetchedResponse, fetchedResponse.headers.get('Content-Type'), fetchedResponse.headers.get('x-hash'));
             cache.put(event.request.url, fetchedResponse.clone());
             return fetchedResponse;
           }
@@ -193,7 +207,7 @@ self.addEventListener('fetch', (event) => {
           let cachedResponse = await cache.match(event.request.url);
           let file_to_find = event.request.url;
           if (cachedResponse) {
-            LOG(`found in cache! ${event.request.url} (${cachedResponse.headers.get("content-length")} bytes)`);
+            LOG(`RESULT network failed, but found in cache! ${event.request.url} (${cachedResponse.headers.get("Content-Length")} bytes)`);
             return cachedResponse;
           }
           throw new Error(`cache miss '${event.request.url}' for file '${file_to_find}' after network failure`);

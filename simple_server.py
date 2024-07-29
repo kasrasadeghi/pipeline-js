@@ -31,9 +31,12 @@ if not hasattr(str, 'removeprefix'):
 def get_repo_path(repo):
     return os.path.join(NOTES_ROOT, repo)
 
-def hash(path):
+def hash_content(content) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+def hash(path) -> str:
     with open(path, "rb") as f:
-        return hashlib.sha256(f.read()).hexdigest()
+        return hash_content(f.read())
 
 def compute_status(repos, headers) -> KazHttpResponse:
     def hash_repo(repo):
@@ -139,6 +142,7 @@ def handle_request(request):
     # Handle paths for frontend pages
 
     mimetype_table = {
+        "manifest.json": b"application/manifest+json",
         ".html": b"text/html",
         ".css": b"text/css",
         ".js": b"text/javascript",
@@ -155,6 +159,7 @@ def handle_request(request):
         "parse.js",
         "rewrite.js",
         "state.js",
+        "manifest.json",
     ]
 
     non_cacheable_assets = [
@@ -174,9 +179,6 @@ def handle_request(request):
     if path == '/sw-index.html':
         path = 'assets/index.html'
         mimetype = b"text/html"
-    elif path == "/manifest.json":
-        path = "assets/manifest.json"
-        mimetype = b"application/manifest+json"
     elif path == "/pipeline-cert.pem":
         path = "cert/cert.pem"
         mimetype = b"application/x-x509-ca-cert"
@@ -185,8 +187,9 @@ def handle_request(request):
         mimetype = mimetype_table[os.path.splitext(path)[1]]
     elif path.removeprefix("/") in assets:
         path = "assets/" + path.removeprefix("/")
-        mimetype = mimetype_table[os.path.splitext(path)[1]]
-    elif not path.startswith('/api'):
+        mimetype = next(mt for file_ending, mt in mimetype_table.items() if path.endswith(file_ending))
+        assert mimetype is not None
+    else:
         path = 'assets/index.html'
         mimetype = b"text/html"
 
@@ -204,7 +207,9 @@ def handle_request(request):
 
     if path == 'assets/index.html':
         import json
-        versions = {asset: hash('assets/' + asset) for asset in cacheable_assets}
+        asset_versions = {asset: hash('assets/' + asset) for asset in cacheable_assets}
+        icon_versions = {icon: hash('icons/' + icon) for icon in icons}
+        versions = {**asset_versions, **icon_versions}
         version_dump = "<!-- VERSIONS: " + json.dumps(versions) + " -->"
         content = content.replace(b"<!-- versions -->", version_dump.encode())
 
