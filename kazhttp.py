@@ -18,18 +18,20 @@ class KazHttpResponse:
         self.mimetype = mimetype
         self.body = body
         self.keep_alive = keep_alive
-        self.extra_headers = b""
+        self.extra_headers = extra_headers
+    
+    def to_bytes(self):
+        return (
+            b"HTTP/1.1 " + self.status + b"\r\n"
+            + (b"Connection: keep-alive\n" if self.keep_alive else b"Connection: close\r\n")
+            + b"Content-Type: " + self.mimetype + b"; charset=utf-8\r\n"
+            + self.extra_headers
+            + b"Content-Length: " + str(len(self.body)).encode() + b"\r\n"
+            + b"\r\n"
+            + self.body)
 
     def write_to(self, connection: socket.socket):
-        connection.sendall(
-            b"HTTP/1.1 " b"\n"
-          + (b"Connection: keep-alive\n" if self.keep_alive else b"Connection: close\n")
-          + b"Content-Type: " + self.mimetype + b"; charset=utf-8\n"
-          + self.extra_headers
-          + b"Content-Length: " + str(len(self.body)).encode() + b"\n"
-          + b"\n"
-          + self.body
-        )
+        connection.sendall(self.to_bytes())
     
 class KazHttpRequest:
     def __init__(self, method: str, path: str, headers: Dict[str, str], body: bytes):
@@ -39,8 +41,8 @@ class KazHttpRequest:
         self.body = body
 
 
-def HTTP_OK(body: bytes, mimetype: bytes, keep_alive: bool = False) -> bytes:
-    return KazHttpResponse(b"200 OK", body, keep_alive=keep_alive, mimetype=mimetype)
+def HTTP_OK(body: bytes, mimetype: bytes, keep_alive: bool = False, extra_headers=b"") -> bytes:
+    return KazHttpResponse(b"200 OK", body, keep_alive=keep_alive, mimetype=mimetype, extra_headers=extra_headers)
 
 def HTTP_OK_JSON(obj: Any, extra_header=b"", keep_alive: bool = False) -> bytes:
     return KazHttpResponse(b"200 OK", json.dumps(obj).encode('utf-8'), mimetype=b"application/json", keep_alive=keep_alive, extra_headers=extra_header)
@@ -206,13 +208,17 @@ def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse])
                             log('closing connection', sock.getpeername(), len(inputs), "(no keep-alive)")
                             inputs.remove(sock)
                             sock.close()
-                        log('keep-alive, reusing connection', sock.getpeername())
+                        else:
+                            log('keep-alive, reusing connection', sock.getpeername())
                         
                     except Exception as e:
                         log(f"Error handling request: {str(e)}")
                         log("".join(traceback.format_exception(e)))
-                        inputs.remove(sock)
-                        sock.close()
+                        try:
+                            inputs.remove(sock)
+                            sock.close()
+                        except Exception as e:
+                            log(f"Error closing socket: {str(e)}")
         
         except Exception as e:
             log("Error in main loop")
