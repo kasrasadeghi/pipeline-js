@@ -98,6 +98,13 @@ function urlToCachedFilePath(url) {
   return baseFile;
 }
 
+function headersToObj(headers) {
+  return Array.from(headers.entries()).reduce((acc, [key, value]) => {
+    acc[key] = value;
+    return acc;
+  });
+}
+
 // the service worker fails on /api/ subpaths and
 // returns either a cached file if it exists
 //         or just index.html if it doesn't
@@ -162,7 +169,7 @@ self.addEventListener('fetch', (event) => {
           if (asset_hash) {
             const response = await cache.match(event.request.url);
             if (response) {
-              LOG(filepath, response);
+              LOG("found cached response for filepath with version hash in index.html", filepath, response, headersToObj(response.headers));
               const cached_response = await response.clone().text();
               // LOG(cached_response);
               const cached_hash = await sha256sum(cached_response);
@@ -195,7 +202,7 @@ self.addEventListener('fetch', (event) => {
           if (!fetchedResponse.ok) {
             throw new Error(`response status is not ok: ${fetchedResponse.status} ${fetchedResponse.statusText}`);
           } else {
-            LOG(`RESULT fetch succeeded! ${event.request.url}`, "cache keys", await cache.keys(), fetchedResponse, fetchedResponse.headers.get('Content-Type'), fetchedResponse.headers.get('x-hash'));
+            LOG(`RESULT fetch succeeded! ${event.request.url}`, "cache keys", await cache.keys(), fetchedResponse, headersToObj(fetchedResponse.headers));
             cache.put(event.request.url, fetchedResponse.clone());
             return fetchedResponse;
           }

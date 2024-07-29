@@ -134,7 +134,7 @@ def handle_request(request):
         bundle = {}
         for asset in assets:
             with open('assets/' + asset, 'r') as f:
-                bundle[asset] = f.read()
+                bundle[asset] = {'content': f.read(), 'x-hash': hash('assets/' + asset)}
         result = HTTP_OK_JSON(bundle)
         log('bundle size', len(result.body))
         return result
@@ -205,6 +205,7 @@ def handle_request(request):
         content = f.read()
         log(f"read {path} ({len(content)})")
 
+    version_header = b""
     if path == 'assets/index.html':
         import json
         asset_versions = {asset: hash('assets/' + asset) for asset in cacheable_assets}
@@ -212,8 +213,11 @@ def handle_request(request):
         versions = {**asset_versions, **icon_versions}
         version_dump = "<!-- VERSIONS: " + json.dumps(versions) + " -->"
         content = content.replace(b"<!-- versions -->", version_dump.encode())
+    else:
+        version_header = b"x-hash: " + hash_content(content).encode() + b"\r\n"
+        log(f"{version_header=}")
 
-    http_response = HTTP_OK(content, mimetype)
+    http_response = HTTP_OK(content, mimetype, extra_headers=version_header)
     http_response.keep_alive = (connection == 'keep-alive')
     return http_response
 
