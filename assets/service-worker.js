@@ -170,11 +170,13 @@ self.addEventListener('fetch', (event) => {
             const response = await cache.match(event.request.url);
             if (response) {
               LOG("found cached response for filepath with version hash in index.html", filepath, response, headersToObj(response.headers));
-              const cached_response = await response.clone().text();
-              // LOG(cached_response);
-              const cached_hash = await sha256sum(cached_response);
-              // TODO icons and pngs don't seem to hash properly.  maybe we should use bytes?  or maybe we should do this hashing on the server and bundle it with each response?
-              // - do we even need this hashing?  can't we just assume that things are up to date if the version table in the cache is the same as the version table in the index file? 
+              // the x-hash is now run on the server and stored in every request, mostly because hashing the images in javascript doesn't work
+              // - for some reason, png requests don't have a .bytes() method, and the .text() method doesn't return the same hash as the server
+              // const cached_response = await response.clone().text();
+              // const cached_hash = await sha256sum(cached_response);
+              const cached_hash = response.headers.get('x-hash');
+              // theoretically, we can just assume that contents of the cache are correct as long as we fetch a bundle every time the version hashes in the index.html changes, and then just do edge-detection for the versions changing
+              // - comparing hashes allows us to have a little more certainty that what we've cached actually matches the index.html on the server, but i need to think through this a bit more to make sure it's actually necessary, or even correct.
 
               if (cached_hash !== asset_hash) {
                 asset_cache_log.push(['found asset in cache, but hash does not match, fetching:', event.request.url, 'conflicting hashes were', cached_hash, asset_hash]);
