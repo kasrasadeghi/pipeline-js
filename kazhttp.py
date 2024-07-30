@@ -31,7 +31,9 @@ class KazHttpResponse:
             + self.body)
 
     def write_to(self, connection: socket.socket):
-        connection.sendall(self.to_bytes())
+        response_bytes = self.to_bytes()
+        log("sending", len(response_bytes), "bytes")
+        connection.sendall(response_bytes)
     
 class KazHttpRequest:
     def __init__(self, method: str, path: str, headers: Dict[str, str], body: bytes):
@@ -58,9 +60,9 @@ def allow_cors_for_localhost(headers: Dict[str, str]):
     return b""
 
 def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, Any]:
-    log("receiving data from client connection")
     try:
         request_data = client_connection.recv(PACKET_READ_SIZE)
+        log("received", len(request_data), "bytes")
     except socket.timeout:
         log('timeout before receiving data')
         return None
