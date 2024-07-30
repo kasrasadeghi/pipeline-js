@@ -108,9 +108,15 @@ def handle_api_request(request) -> KazHttpResponse:
         log("wrote notes/" + note)
         return HTTP_OK(b"wrote notes/" + note.encode(), mimetype=b"text/plain")
     
+    elif path.startswith('/status') and method == 'GET':
+        not_repos = ['.git', 'raw']
+        is_repo = lambda x: os.path.isdir(os.path.join(NOTES_ROOT, x)) and x not in not_repos
+        repos = [repo for repo in os.listdir(NOTES_ROOT) if is_repo(repo)]
+        return compute_status(repos, headers)
+
     elif path.startswith('/status/') and method == 'GET':
-        repos = path.removeprefix('/status/')
-        return compute_status(repos.split(','), headers)
+        repos = path.removeprefix('/status/').split(',')
+        return compute_status(repos, headers)
     else:
         return HTTP_NOT_FOUND(b"api not found: " + path.encode() + b" method: " + method.encode())
 

@@ -24,7 +24,6 @@ export let global = null;  // the only global variable.
 export function getGlobal() {
   return global;
 }
-const SUBBED_REPOS_FILE = "subbed_repos";
 
 // GENERAL UTIL
 
@@ -969,10 +968,9 @@ export async function handleMsg(event) {
   await paintDiscRoutine();
 
   if (hasRemote()) {
-    let repos = await getRepos();
     let sync_success = true;
     try {
-      let combined_remote_status = await getRemoteStatus(repos.join(","));
+      let combined_remote_status = await getCombinedRemoteStatus();
       displayState("syncing...");
       await pullRemoteSimple(combined_remote_status);
       
@@ -1453,64 +1451,15 @@ async function syncButton() {
   }
 }
 
-async function getRepos() {
-  let local_repo_name = await global.notes.local_repo_name();
-  let subbed_repo_content = await cache.readFile(SUBBED_REPOS_FILE);
-  if (subbed_repo_content === null) {
-    await cache.writeFile(SUBBED_REPOS_FILE, '');
-    return [local_repo_name];
-  }
-  if (subbed_repo_content.trim() === '') {
-    return [local_repo_name];
-  }
-  let subbed_repos = (await cache.readFile(SUBBED_REPOS_FILE)).split(" ");
-  return [local_repo_name, ...subbed_repos];
-}
-
 async function renderSync() {
   await cache.updateFile(SYNC_FILE, c => c === null ? '{}' : c);
 
   let remote_addr = (await cache.readFile(SYNC_REMOTE_FILE)) || '';
-
-  const repo_sync_menu = (repo, type) => {
-    let menu_content = '';
-    if (type === 'local') {
-      menu_content = (
-        `<button style="margin: 10px;" onclick="pushLocalNotes('${repo}')">push update</button>`
-        + `<button style="margin: 10px;" onclick="pushLocalNotes('${repo}', true)">check for push update</button>`)
-    } else {
-      menu_content = (
-        `<button style="margin: 10px;" onclick="pullRemoteNotes('${repo}')">update</button>`
-        + `<button style="margin: 10px;" onclick="pullRemoteNotes('${repo}', true)">check for update</button>`)
-    }
-    return `<div style="min-width: 400px; border: 1px white solid; margin: 10px">
-    <div>
-      <h3 style="margin: 10px">${repo}${type === 'local' ? " (local)" : ""}</h3>
-      <button style="margin: 10px;" onclick="putAllNotes('${repo}')">put all</button>
-      <button style="margin: 10px;" onclick="getAllNotes('${repo}')">get all</button>
-      ${menu_content}
-    </div>
-    <pre id="${repo}_sync_output"></pre>
-  </div>`
-  };
-  let [local, ...remotes] = await getRepos();
-
-
-  let subscribed_repos_message = "Not subscribed to any repositories.";
-  if (remotes.length > 0) {
-    subscribed_repos_message = "Subscribed to " + remotes.map(colorize_repo).join(", ") + ".";
-  }
-
   return [`
   <p>Sync is a very experimental feature! use at your own risk!</p>
   <div>
     ${TextField({id:'remote', file_name: SYNC_REMOTE_FILE, label: 'set remote addr', value: remote_addr, rerender: 'renderSync'})}
-    <div style="margin: 10px">
-      ${TextField({id: 'subscriptions', file_name: SUBBED_REPOS_FILE, rerender: 'renderSetup', value: remotes.join(" "), label: 'subscribe to repos'})}
-      <br/>
-      <label for='subscriptions'>subscribe to a list of (whitespace-separated) repositories</label>
-    </div>
-    ${subscribed_repos_message}
+    <p>The current remote is '${remote_addr}'</p>
   </div>
   <div style='display: flex;'>` + repo_sync_menu(local, 'local') + remotes.map(remote => repo_sync_menu(remote, 'remote')).join("") + `</div>`,
   `<div>
@@ -1533,6 +1482,7 @@ export async function fetchNotes(repo, uuids) {
   }
   let result = await fetch((await getRemote()) +'/api/get/' + repo + "/" + uuids.join(",")).then(t => t.json());
   for (let note in result) {
+    // TODO we want to do a batched write set of files, or update set of files, in a single transaction
     await global.notes.writeFile(note, result[note]);
   }
 }
@@ -1556,7 +1506,7 @@ async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
     // console.log('using combined remote status');
     remote_status = combined_remote_status[repo] || {};
   } else {
-    remote_status = await getRemoteStatus(repo);
+    console.assert(false, 'must used combined remote status');
   }
   let updated = statusDiff(local_status, remote_status);
   let updated_notes = Object.keys(updated);
@@ -1576,7 +1526,7 @@ async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
 }
 
 async function pullRemoteSimple(combined_remote_status) {
-  let [ignored_local, ...remotes] = await getRepos();
+  let remotes = Object.keys(combined_remote_status).filter(x => x !== global.notes.local_repo_name());
   console.time('pull remote simple');
   await Promise.all(remotes.map(async subscribed_remote =>
     await pullRemoteNotes(subscribed_remote, /*dry run*/false, combined_remote_status)));
@@ -1584,7 +1534,7 @@ async function pullRemoteSimple(combined_remote_status) {
 }
 
 async function pushLocalSimple(combined_remote_status) {
-  let [local, ...ignored_remotes] = await getRepos();
+  let local = await global.notes.local_repo_name();
   console.time('push local simple');
   await pushLocalNotes(local, /*dry run*/false, combined_remote_status);
   console.timeEnd('push local simple');
@@ -1605,7 +1555,7 @@ async function pushLocalNotes(repo, dry_run, combined_remote_status) {
     console.log('using combined remote status');
     remote_status = combined_remote_status[repo] || {};
   } else {
-    remote_status = await getRemoteStatus(repo);
+    console.assert(false, 'must used combined remote status');
   }
   let updated = statusDiff(remote_status, local_status);  // flipped, so it is what things in local aren't yet in the remote.
   // local is the new state, remote is the old state, this computes the diff to get from the old state to the new.
@@ -1645,6 +1595,7 @@ function delay(millis) {
 }
 
 async function putNotes(repo, uuids) {
+  // TODO make this a batch as well
   let failures = [];
   for (let file of uuids.map(x => repo + '/' + x)) {
     for (let i of [1, 2, 3]) {
@@ -1714,10 +1665,8 @@ function statusDiff(left, right) {
   return diff;
 }
 
-async function getRemoteStatus(repo_or_repos) {
-  console.log('getting remote status for', repo_or_repos); // may be comma separated list
-  let statuses = await fetch((await getRemote()) + '/api/status/' + repo_or_repos).then(x => x.json());
-  return statuses;
+async function getCombinedRemoteStatus() {
+  return await fetch((await getRemote()) + '/api/status').then(x => x.json());
 }
 
 async function getLocalStatus(repo) {
@@ -1750,7 +1699,7 @@ async function perfChecksum() {
 
 async function perfStatus() {
   console.time('remote status');
-  await getRemoteStatus('core');
+  await getCombinedRemoteStatus();
   console.timeEnd('remote status');
 
   console.time('local status');
@@ -2137,7 +2086,7 @@ export async function renderMenu() {
       ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
       ${MenuButton({icon: 'list', action: 'gotoList()'})}
       ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
-      ${MenuButton({icon: 'sync', action: 'gotoSync()'})}
+      ${syncButton()}
       ${MenuButton({icon: 'setup', action: 'gotoSetup()'})}
       ${await ToggleButton({id: 'show_private_toggle', file: SHOW_PRIVATE_FILE, label: lookupIcon('private'), rerender: 'renderMenu'})}
     </div>`
