@@ -2271,7 +2271,7 @@ export function getCurrentNoteUuid() {
   return null;
 }
 
-async function handleRouting() {
+export async function handleRouting() {
   console.log("notes that match today's date:", global.notes.getNotesWithTitle(today(), global.notes.local_repo_name()));
   console.log("initializing from path", window.location.pathname);
 
