@@ -110,7 +110,9 @@ def tail(f, n):
     
 @app.route('/')
 def index():
-    simple_server_logs = tail('logs/server', 1000)
+    with open('logs/server', 'rb') as f:
+        server_log_bytecount = len(f.read())
+    simple_server_logs = f"{server_log_bytecount / 1024:.4} kilobytes in logs/server\n\n" + tail('logs/server', 1000)
 
     pipeline_proxy_logs = None
     if is_proxied_mode:
