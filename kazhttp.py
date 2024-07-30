@@ -178,6 +178,14 @@ def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse])
                             log(f"SSL handshake failed with {client_address}: {ssl_err}")
                             client_connection.close()
                             continue
+                        except ssl.ConnectionResetError as ssl_err:
+                            log(f"SSL handshake failed with {client_address}: {ssl_err}")
+                            client_connection.close()
+                            continue
+                        except Exception as e:
+                            log(f"SSL handshake failed with {client_address}, general error: {e}")
+                            client_connection.close()
+                            continue
                     
                     inputs.append(client_connection)
                     log('added new input, inputs now:', len(inputs))
