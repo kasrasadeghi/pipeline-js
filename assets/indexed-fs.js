@@ -1739,8 +1739,9 @@ function gather_sorted_messages() {
 }
 
 async function search(text, is_case_sensitive=false) {
+  let messages = gather_sorted_messages();
   if (text === '' || text === null || text === undefined) {
-    return [];
+    return messages;
   }
 
   console.time('search total');
@@ -1753,7 +1754,6 @@ async function search(text, is_case_sensitive=false) {
   console.log = (x) => {};
   
   console.time('search gather msgs');
-  let messages = gather_sorted_messages();
   let show_private_messages = await readBooleanFile(SHOW_PRIVATE_FILE, "false");
   if (show_private_messages === "true") {
     messages = messages.filter(m => includes(m.content, text));
@@ -1784,24 +1784,30 @@ const SEARCH_RESULTS_PER_PAGE = 100;
 function renderSearchMain(urlParams, all_messages) {
   let page = urlParams.get('page');
   if (page === 'all') {
-    return `<h3>render all ${all_messages.length} results</h3><div class='msglist'>${all_messages.map((x) => htmlMsg(x, 'search')).join("")}</div>`;
+    return `<h3>render all ${all_messages.length} results</h3><div class='msglist'>${all_messages.reverse().map((x) => htmlMsg(x, 'search')).join("")}</div>`;
   }
   page = (page === null ? 0 : parseInt(page));
   let messages = all_messages.slice(page * SEARCH_RESULTS_PER_PAGE, (page + 1) * SEARCH_RESULTS_PER_PAGE);
-  return `<h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3><div class='msglist'>${messages.map((x) => htmlMsg(x, 'search')).join("")}</div>`;
+  return `<h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3><div class='msglist'>${messages.reverse().map((x) => htmlMsg(x, 'search')).join("")}</div>`;
+}
+
+function paintSearchMain(urlParams, all_messages) {
+  let main = document.getElementsByTagName('main')[0];
+  main.innerHTML = renderSearchMain(urlParams, all_messages);
+  main.scrollTop = main.scrollHeight;
 }
 
 function renderSearchPagination(all_messages) {
 
   // must be global because it captures `all_messages`
+  console.log('setting global.handlers.paginate');
   global.handlers.paginate = (delta) => {
-    let main = document.getElementsByTagName('main')[0];
 
     if (delta === 'all') {
       const urlParams = new URLSearchParams(window.location.search);
       urlParams.set('page', 'all');
       window.history.pushState({}, "", "/search/?" + urlParams.toString());
-      main.innerHTML = renderSearchMain(urlParams, all_messages);
+      paintSearchMain(urlParams, all_messages);
       return;
     }
     // delta is an integer, probably +1 or -1
@@ -1811,7 +1817,7 @@ function renderSearchPagination(all_messages) {
     page = (page === null ? 0 : parseInt(page));
     page = clamp(page + delta, /*bottom*/0, /*top*/Math.floor(all_messages.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
     window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=" + page);
-    main.innerHTML = renderSearchMain(urlParams, all_messages);
+    paintSearchMain(urlParams, all_messages);
   };
   let pagination = document.getElementById('search-pagination');
   pagination.innerHTML = `
@@ -1829,15 +1835,14 @@ function runSearch() {
   document.title = `Search "${text}" - Pipeline Notes`;
 
   const has_text = !(text === null || text === undefined || text === '');
-  if (has_text && global.notes.sorted_messages === undefined) {
-    console.log('has text, gathering messages');
-    gather_sorted_messages();
-  }
+  // if (has_text && global.notes.sorted_messages === undefined) {
+  //   console.log('has text, gathering messages');
+  //   gather_sorted_messages();
+  // }
 
   // search footer should already be rendered
   search(text, case_sensitive).then(all_messages => {
-    let main = document.getElementsByTagName('main')[0];
-    main.innerHTML = renderSearchMain(urlParams, all_messages);
+    paintSearchMain(urlParams, all_messages);
     renderSearchPagination(all_messages);
   });
   console.log('checking for text');
@@ -1881,12 +1886,7 @@ export async function gotoSearch() {
   window.history.pushState({}, "", "/search/?" + urlParams.toString());
   footer.innerHTML = await renderSearchFooter();
   document.getElementById('search_query')?.focus();
-  if (urlParams.get('q') !== null) {
-    runSearch();
-  } else {
-    document.getElementsByTagName('main')[0].innerHTML = ``;
-    gather_sorted_messages();
-  }
+  runSearch();
   return false;
 }
 
@@ -2357,6 +2357,7 @@ export async function run() {
   await initFlatDB(reloadNecessary);
   await initState(reloadNecessary);
   
+  console.log('initializing global');
   global = {};
   global.handlers = {};
   global.notes = await buildFlatCache();
