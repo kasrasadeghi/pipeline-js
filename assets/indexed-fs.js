@@ -1,6 +1,6 @@
 import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
 import { buildFlatCache, initFlatDB, SHOW_PRIVATE_FILE, LOCAL_REPO_NAME_FILE } from '/flatdb.js';
-import { initState, cache, getNow, setNow, tomorrow } from '/state.js';
+import { initState, cache, getNow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
 import { rewrite, rewriteLine, rewriteBlock, Msg, Line, Tag, Link } from '/rewrite.js';
 
@@ -696,7 +696,6 @@ function parseRef(ref) {
   let s = ref.split('#');  // a ref looks like: "uuid#datetime_id" 
   // EXAMPLE bigmac-js/f726c89e-7473-4079-bd3f-0e7c57b871f9.note#Sun Jun 02 2024 20:45:46 GMT-0700 (Pacific Daylight Time)
   console.assert(s.length == 2);
-  console.log(s);
   let [uuid, datetime_id] = s;
   return {uuid, datetime_id};
 }
@@ -1189,7 +1188,7 @@ const compute_seasonal_color = (date_obj) => {
   return color;
 }
 
-async function paintList() {
+export async function paintList() {
   document.title = "List - Pipeline Notes";
   // calendar view
 
@@ -1712,7 +1711,9 @@ async function perfStatus() {
 // 570ms, then 30ms once cached
 function gather_messages() {
   // TODO only rewrite the pages that have changed since the last time we gathered messages
-  if (global.notes.all_messages === undefined) {
+  global.search = global.search || {};
+  if (global.search.all_messages === undefined) {
+    global.search.all_messages = 'searching';
     console.log('gathering messages');
     // rewriting all of the pages takes 500ms ish
     const pages = global.notes.metadata_map.map(x => global.notes.rewrite(x.uuid));
@@ -1722,9 +1723,9 @@ function gather_messages() {
     // a section is a list of blocks
     const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
     const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
-    global.notes.all_messages = messages;
+    global.search.all_messages = messages;
   }
-  return global.notes.all_messages;
+  return global.search.all_messages;
 }
 
 function gather_sorted_messages() {
@@ -1781,7 +1782,8 @@ function clamp(value, lower, upper) {
 
 const SEARCH_RESULTS_PER_PAGE = 100;
 
-function renderSearchMain(urlParams, all_messages) {
+function renderSearchMain(urlParams) {
+  let all_messages = global.search.results;
   let page = urlParams.get('page');
   if (page === 'all') {
     return `<h3>render all ${all_messages.length} results</h3><div class='msglist'>${all_messages.reverse().map((x) => htmlMsg(x, 'search')).join("")}</div>`;
@@ -1791,39 +1793,37 @@ function renderSearchMain(urlParams, all_messages) {
   return `<h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3><div class='msglist'>${messages.reverse().map((x) => htmlMsg(x, 'search')).join("")}</div>`;
 }
 
-function paintSearchMain(urlParams, all_messages) {
+function paintSearchMain(urlParams) {
   let main = document.getElementsByTagName('main')[0];
-  main.innerHTML = renderSearchMain(urlParams, all_messages);
+  main.innerHTML = renderSearchMain(urlParams);
   main.scrollTop = main.scrollHeight;
 }
 
-function renderSearchPagination(all_messages) {
-
-  // must be global because it captures `all_messages`
-  console.log('setting global.handlers.paginate');
-  global.handlers.paginate = (delta) => {
-
-    if (delta === 'all') {
-      const urlParams = new URLSearchParams(window.location.search);
-      urlParams.set('page', 'all');
-      window.history.pushState({}, "", "/search/?" + urlParams.toString());
-      paintSearchMain(urlParams, all_messages);
-      return;
-    }
-    // delta is an integer, probably +1 or -1
+export function searchPagination(delta) {
+  if (delta === 'all') {
     const urlParams = new URLSearchParams(window.location.search);
-    const text = urlParams.get('q');
-    let page = urlParams.get('page');
-    page = (page === null ? 0 : parseInt(page));
-    page = clamp(page + delta, /*bottom*/0, /*top*/Math.floor(all_messages.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
-    window.history.pushState({}, "", "/search/?q=" + encodeURIComponent(text) + "&page=" + page);
-    paintSearchMain(urlParams, all_messages);
-  };
+    urlParams.set('page', 'all');
+    window.history.pushState({}, "", "/search/?" + urlParams.toString());
+    paintSearchMain(urlParams);
+    return;
+  }
+
+  // delta is an integer, probably +1 or -1
+  const urlParams = new URLSearchParams(window.location.search);
+  let page = urlParams.get('page');
+  page = (page === null ? 0 : parseInt(page));
+  page = clamp(page + delta, /*bottom*/0, /*top*/Math.floor(global.search.results.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
+  urlParams.set('page', page);
+  window.history.pushState({}, "", "/search/?" + urlParams.toString());
+  paintSearchMain(urlParams);
+}
+
+function paintSearchPagination() {
   let pagination = document.getElementById('search-pagination');
   pagination.innerHTML = `
-    ${MenuButton({icon: 'next', action: 'return global.handlers.paginate(1)'})}
-    ${MenuButton({icon: 'prev', action: 'return global.handlers.paginate(-1)'})}
-    ${MenuButton({icon: 'all', action: "return global.handlers.paginate('all')"})}
+    ${MenuButton({icon: 'next', action: 'return searchPagination(1)'})}
+    ${MenuButton({icon: 'prev', action: 'return searchPagination(-1)'})}
+    ${MenuButton({icon: 'all', action: "return searchPagination('all')"})}
   `;
 }
 
@@ -1835,15 +1835,12 @@ function runSearch() {
   document.title = `Search "${text}" - Pipeline Notes`;
 
   const has_text = !(text === null || text === undefined || text === '');
-  // if (has_text && global.notes.sorted_messages === undefined) {
-  //   console.log('has text, gathering messages');
-  //   gather_sorted_messages();
-  // }
-
   // search footer should already be rendered
-  search(text, case_sensitive).then(all_messages => {
-    paintSearchMain(urlParams, all_messages);
-    renderSearchPagination(all_messages);
+  search(text, case_sensitive).then(search_results => {
+    global.search = global.search || {};
+    global.search.results = search_results;
+    paintSearchMain(urlParams);
+    paintSearchPagination();
   });
   console.log('checking for text');
   if (!has_text && global.notes.sorted_messages === undefined) {
@@ -2086,7 +2083,7 @@ export async function renderMenu() {
       ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
       ${MenuButton({icon: 'list', action: 'gotoList()'})}
       ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
-      ${syncButton()}
+      ${await syncButton()}
       ${MenuButton({icon: 'setup', action: 'gotoSetup()'})}
       ${await ToggleButton({id: 'show_private_toggle', file: SHOW_PRIVATE_FILE, label: lookupIcon('private'), rerender: 'renderMenu'})}
     </div>`
@@ -2359,7 +2356,6 @@ export async function run() {
   
   console.log('initializing global');
   global = {};
-  global.handlers = {};
   global.notes = await buildFlatCache();
   console.log('today is', today());
   console.log('global is', global);
