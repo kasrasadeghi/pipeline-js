@@ -535,7 +535,7 @@ export async function editMessage(item_origin, msg_id) {
       let rewritten_blocks = blocks.map(rewriteBlock);
       // if there are two emptylines next to each other, delete one
       for (let i = 0; i < rewritten_blocks.length - 1; i++) {
-        if (rewritten_blocks[i] instanceof EmptyLine && rewritten_blocks[i + 1] instanceof EmptyLine) {
+        while (rewritten_blocks[i] instanceof EmptyLine && rewritten_blocks[i + 1] instanceof EmptyLine) {
           rewritten_blocks.splice(i, 1);
         }
       }
@@ -980,6 +980,7 @@ export async function handleMsg(event) {
       await pushLocalSimple(combined_remote_status);
     } catch (e) {
       console.log('sync failed', e);
+      displayState("sync failed, cannot connect to api server");
       sync_success = false;
     }
     if (! sync_success) {
@@ -2259,10 +2260,10 @@ export function getCurrentNoteUuid() {
   // console.log("getting note uuid from path", window.location.pathname);
 
   if (window.location.pathname.startsWith('/disc/')) {
-    let uuid = window.location.pathname.slice("/disc/".length);
+    let uuid = decodeURI(window.location.pathname.slice("/disc/".length));
     return uuid;
   } else if (window.location.pathname.startsWith('/edit/')) {
-    let uuid = window.location.pathname.slice("/edit/".length);
+    let uuid = decodeURI(window.location.pathname.slice("/edit/".length));
     return uuid;
   }
   return null;
