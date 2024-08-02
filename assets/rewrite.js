@@ -79,6 +79,10 @@ export class Msg {
   toJSON() {
     return Object.assign({}, this);
   }
+
+  repr() {
+    return JSON.stringify([this.date, this.content, this.origin]);
+  }
 }
 
 export function rewriteBlock(block, note) {

@@ -1724,6 +1724,22 @@ function gather_messages() {
     // a section is a list of blocks
     const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
     const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
+
+    // detect duplicates
+    let found_duplicate = false;
+    let msg_set = new Set();
+    for (let msg of messages.map(x => x.repr())) {
+      if (msg_set.has(msg)) {
+        found_duplicate = true;
+        break;
+      }
+    }
+    
+    if (found_duplicate) {
+      alert('error: found duplicates');
+      console.assert(false, 'should have no duplicates');
+    }
+
     global.search.all_messages = messages;
   }
   return global.search.all_messages;
