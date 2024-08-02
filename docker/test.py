@@ -35,10 +35,10 @@ def get_pipeline_url():
     else:
         return "https://server:5000"
 
-def create_driver():
+def create_driver(browser):
     print("Setting up WebDriver...")
 
-    if args.browser == 'chrome':
+    if browser == 'chrome':
         # Set up Chrome options
         options = ChromeOptions()
         options.add_argument("--no-sandbox")
@@ -50,7 +50,7 @@ def create_driver():
             options.add_argument("--ssl-cert-path=cert/cert.pem")
         else:
             options.add_argument("--ssl-cert-path=/opt/selenium/cert/cert.pem")
-    elif args.browser == 'firefox':
+    elif browser == 'firefox':
         # Set up Firefox options
         options = FirefoxOptions()
         options.add_argument("--ignore-certificate-errors")
@@ -58,9 +58,9 @@ def create_driver():
 
     # Set up Selenium WebDriver
     if args.no_docker:
-        if args.browser == 'chrome':
+        if browser == 'chrome':
             driver = webdriver.Chrome(options=options)
-        elif args.browser == 'firefox':
+        elif browser == 'firefox':
             driver = webdriver.Firefox(options=options)
     else:
         driver = webdriver.Remote(
@@ -69,9 +69,9 @@ def create_driver():
         )
     print("WebDriver set up successfully.")
     print(f"Browser version: {driver.capabilities['browserVersion']}")
-    if args.browser == 'chrome':
+    if browser == 'chrome':
         print(f"ChromeDriver version: {driver.capabilities['chrome']['chromedriverVersion'].split(' ')[0]}")
-    elif args.browser == 'firefox':
+    elif browser == 'firefox':
         print(f"GeckoDriver version: {driver.capabilities['moz:geckodriverVersion']}")
     return driver
 
@@ -106,7 +106,7 @@ def el_id(driver, id):
 
 # --- TESTS ------------------------------------------------------------------
 
-def first_time_setup(driver):
+def first_time_setup(driver, repo_name="selenium_test"):
 
     print("Navigating to Flask app...")
     driver.get(get_pipeline_url())
@@ -119,14 +119,13 @@ def first_time_setup(driver):
     assert "Pipeline" in driver.title
 
     print('Test creating a new repo, sending a message, syncing the note')
-
-    repo_name = "selenium_test"
+    
     # remove folder if it exists
     if os.path.exists('notes/' + repo_name):
         shutil.rmtree('notes/' + repo_name)
 
-    print('type in "selenium_test"')
-    el_id(driver, "local_repo_name").send_keys("selenium_test")
+    print(f'type in repo name "{repo_name}"')
+    el_id(driver, "local_repo_name").send_keys(repo_name)
     el_id(driver, "local_repo_name_button").click()
 
     print("click journal button")
@@ -137,17 +136,20 @@ def first_time_setup(driver):
         EC.presence_of_element_located((By.TAG_NAME, "body"))
     )
 
+    driver.execute_cdp_cmd("Debugger.enable", {})
+    driver.execute_cdp_cmd("Debugger.setPauseOnExceptions", {"state": "all"})
+
 @browser_wrapper
 def test_first_time_setup(driver):
 
     # pause on uncaught exceptions
-    # driver.execute_cdp_cmd("Debugger.enable", {})
-    # driver.execute_cdp_cmd("Debugger.setPauseOnExceptions", {"state": "all"})
 
-    first_time_setup(driver)
+    repo_name = "selenium_test"
+
+    first_time_setup(driver, repo_name)
 
     # click message input box
-    el_id(driver, "msg_input").send_keys("selenium test message")
+    el_id(driver, "msg_input").send_keys("selenium_test message")
     el_id(driver, "msg_input").send_keys(ENTER_KEY)
 
     # press enter on empty to sync
@@ -156,7 +158,6 @@ def test_first_time_setup(driver):
     # get current uuid using javascript
     current_uuid = driver.execute_script("return getCurrentNoteUuid()")
 
-    repo_name = "selenium_test"
     assert os.path.exists('notes/' + repo_name)
     assert os.path.exists('notes/' + current_uuid)
 
@@ -164,7 +165,7 @@ def test_first_time_setup(driver):
     print('Test creating a new message on a new day')
     driver.execute_script("setNow(tomorrow(getNow()));")
 
-    el_id(driver, "msg_input").send_keys("selenium testing on a new day")
+    el_id(driver, "msg_input").send_keys("selenium_test on a new day")
     el_id(driver, "msg_input").send_keys(ENTER_KEY)
 
 
@@ -231,37 +232,43 @@ def test_new_day_double_journal(driver):
             titles.add(title)
     assert len(titles) == len(os.listdir('notes/selenium_test'))
 
-def test_search_duplicates(driver):
+def test_search_duplicates(chrome, firefox):
     
-    first_time_setup(driver)
+    first_time_setup(chrome, 'chrome-repo')
+    first_time_setup(firefox, 'firefox-repo')
     
     for i in range(100):
-        el_id(driver, "msg_input").send_keys(f"selenium test message: {i}")
-        el_id(driver, "msg_input").send_keys(ENTER_KEY)
+        el_id(chrome, "msg_input").send_keys(f"chrome test message: {i}")
+        el_id(chrome, "msg_input").send_keys(ENTER_KEY)
+
+        el_id(firefox, "msg_input").send_keys(f"firefox test message: {i}")
+        el_id(firefox, "msg_input").send_keys(ENTER_KEY)
     
-    driver.execute_script("setNow(tomorrow(getNow()));")
+    # chrome.execute_script("setNow(tomorrow(getNow()));")
 
-    for i in range(100, 200):
-        el_id(driver, "msg_input").send_keys(f"selenium test message: {i}")
-        el_id(driver, "msg_input").send_keys(ENTER_KEY)
+    # for i in range(100, 200):
+    #     el_id(chrome, "msg_input").send_keys(f"selenium_test message: {i}")
+    #     el_id(chrome, "msg_input").send_keys(ENTER_KEY)
 
-    el_id(driver, "search_button").click()
+    el_id(chrome, "search_button").click()
 
-    el_id(driver, "search_query").click()
-    el_id(driver, "search_query").send_keys("selenium")
-
-    time.sleep(1000)
+    el_id(chrome, "search_query").click()
+    el_id(chrome, "search_query").send_keys("selenium")
 
 
 def main():
-    driver = create_driver()
+    driver = create_driver(args.browser)
     test_first_time_setup(driver)
     test_new_day_double_journal(driver)
+    input("Press Enter to continue...")
     driver.quit()
-    # driver = create_driver()
-    # test_search_duplicates(driver)
+
+    # chrome = create_driver('chrome')
+    # firefox = create_driver('firefox')
+    # test_search_duplicates(chrome, firefox)
     # input("Press Enter to continue...")
-    # driver.quit()
+    # chrome.quit()
+    # firefox.quit()
 
 if __name__ == "__main__":
     main()

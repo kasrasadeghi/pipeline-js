@@ -51,12 +51,8 @@ def compute_status(repos, headers) -> KazHttpResponse:
             return HTTP_NOT_FOUND(b"bad repo: " + repo.encode())
 
     cors_header = allow_cors_for_localhost(headers)
-    if len(repos) == 1:
-        status = hash_repo(repo)
-        return HTTP_OK_JSON(status, extra_header=cors_header)
-    else:
-        status = {repo: hash_repo(repo) for repo in repos}
-        return HTTP_OK_JSON(status, extra_header=cors_header)
+    status = {repo: hash_repo(repo) for repo in repos}
+    return HTTP_OK_JSON(status, extra_header=cors_header)
 
 
 def handle_api_request(request) -> KazHttpResponse:
