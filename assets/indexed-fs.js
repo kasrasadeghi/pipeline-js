@@ -446,7 +446,7 @@ class Deleted {
 
 export async function getMessageFromElement(element) {
   let msg_id = element.id;
-  let page = await global.notes.rewrite(getCurrentNoteUuid());
+  let page = global.notes.rewrite(getCurrentNoteUuid());
   let msg = page.filter(section => section.title === 'entry').flatMap(x => x.blocks).find(block => block.date === msg_id);
   return msg;
 }
@@ -1717,10 +1717,12 @@ async function perfStatus() {
 function detectDuplicates(messages) {
   // detect duplicates
   let found_duplicate = false;
+  let duplicate = null;
   let msg_set = new Set();
   let reprs = messages.map(x => x.repr());
   for (let repr of reprs) {
     if (msg_set.has(repr)) {
+      duplicate = repr;
       found_duplicate = true;
       break;
     }
@@ -1729,7 +1731,7 @@ function detectDuplicates(messages) {
 
   if (found_duplicate) {
     alert('error: found duplicates');
-    console.assert(false, 'should have no duplicates');
+    console.assert(false, 'should have no duplicates', duplicate);
   } else {
     console.log('no duplicates found', messages, reprs);
   }
@@ -1751,7 +1753,7 @@ function gather_messages() {
     const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
     const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
     
-    detectDuplicates(messages);
+    // detectDuplicates(messages);
 
     global.search.all_messages = messages;
   }
@@ -1766,7 +1768,7 @@ function gather_sorted_messages() {
     console.log('sorting gathered messages');
     global.notes.sorted_messages = 'sorting';
     let messages = gather_messages().sort((a, b) => dateComp(b, a));
-    detectDuplicates(messages);
+    // detectDuplicates(messages);
     global.notes.sorted_messages = messages;
   }
   return global.notes.sorted_messages;

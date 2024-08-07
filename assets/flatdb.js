@@ -94,6 +94,39 @@ async function getNoteMetadataMap(caller) {
   return {current_version, result};
 }
 
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze
+// ORIGINAL NOTES from mozilla:
+// To make an object immutable, recursively freeze each non-primitive property (deep freeze).
+// Use the pattern on a case-by-case basis based on your design when you know the object contains no cycles in the reference graph, 
+// otherwise an endless loop will be triggered.
+// For example, functions created with the function syntax have a prototype property 
+// with a constructor property that points to the function itself, so they have cycles by default.
+// Other functions, such as arrow functions, can still be frozen.
+//
+// An enhancement to deepFreeze() would be to store the objects it has already visited, 
+// so you can suppress calling deepFreeze() recursively when an object is in the process of being made immutable.
+// For one example, see using WeakSet to detect circular references.
+// You still run a risk of freezing an object that shouldn't be frozen, such as window.
+// 
+// KAZ NOTES
+// we're using this to freeze cached values, so that they are not modified when used.
+// to modify an element, we'll need to run structuredClone on it, and then modify the clone.
+function deepFreeze(object) {
+  // Retrieve the property names defined on object
+  const propNames = Reflect.ownKeys(object);
+
+  // Freeze properties before freezing self
+  for (const name of propNames) {
+    const value = object[name];
+
+    if ((value && typeof value === "object") || typeof value === "function") {
+      deepFreeze(value);
+    }
+  }
+
+  return Object.freeze(object);
+}
+
 // === Efficient cache that preserves a read/scan of the whole database ===
 // - we'll probably have to handle page transitions with a state machine that interrupts renders and clears the cache if it has been invalidated.
 // N.B. it is _not_ correct to stash this and only modify the elements that are modified from write operations and syncs, because other pages may have modified this.
@@ -197,14 +230,15 @@ class FlatCache {
     let note = this.get_note(uuid);
     if (note.rewrite === undefined) {
       let page = parseContent(note.content);
-      note.rewrite = rewrite(page, uuid);
+      let rewrite_result = rewrite(page, uuid);
+      note.rewrite = deepFreeze(rewrite_result);
     }
 
-    // without structuredClone, it is dangerous to modify the result of .rewrite(), because it is passed by reference.
-    // - this was the source of BUG search duplication, but only for the past 2 days.
+    // without deepFreeze, it is dangerous to modify the result of .rewrite(), because it is passed by reference.
+    // - this was the source of BUG search duplication, where messages were duplicated, but only for the past 2 days.
     // - the CAUSE was that we mixed the most recent page (adding the previous page into it) on the journal,
     //   but we did that on the passed-by-reference cached result of the page rewrite.
-    return structuredClone(note.rewrite);
+    return note.rewrite;
   }
 
   local_repo_name() {
