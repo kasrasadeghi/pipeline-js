@@ -199,7 +199,12 @@ class FlatCache {
       let page = parseContent(note.content);
       note.rewrite = rewrite(page, uuid);
     }
-    return note.rewrite;
+
+    // without structuredClone, it is dangerous to modify the result of .rewrite(), because it is passed by reference.
+    // - this was the source of BUG search duplication, but only for the past 2 days.
+    // - the CAUSE was that we mixed the most recent page (adding the previous page into it) on the journal,
+    //   but we did that on the passed-by-reference cached result of the page rewrite.
+    return structuredClone(note.rewrite);
   }
 
   local_repo_name() {

@@ -863,9 +863,14 @@ async function mixPage(uuid, mix_as_journal=true) {
   entry_messages.sort(dateComp);
   let new_blocks = [...entry_nonmessages, ...entry_messages];
 
-  let current_entry_section = rewritten.filter(section => section.title === 'entry')[0];
+  // dangerous to modify the result of .rewrite(), because it is passed by reference.
+  // - this was the source of BUG search duplication, but only for the past 2 days.
+  // - the CAUSE was that we mixed the most recent page (adding the previous page into it) on the journal,
+  //   but we did that on the passed-by-reference cached result of the page rewrite.
+  let mixed_page = structuredClone(rewritten);
+  let current_entry_section = mixed_page.filter(section => section.title === 'entry')[0];
   current_entry_section.blocks = new_blocks;
-  return rewritten;
+  return mixed_page;
 }
 
 async function renderDiscMixedBody(uuid) {
@@ -1709,6 +1714,27 @@ async function perfStatus() {
 
 // SEARCH
 
+function detectDuplicates(messages) {
+  // detect duplicates
+  let found_duplicate = false;
+  let msg_set = new Set();
+  let reprs = messages.map(x => x.repr());
+  for (let repr of reprs) {
+    if (msg_set.has(repr)) {
+      found_duplicate = true;
+      break;
+    }
+    msg_set.add(repr);
+  }
+
+  if (found_duplicate) {
+    alert('error: found duplicates');
+    console.assert(false, 'should have no duplicates');
+  } else {
+    console.log('no duplicates found', messages, reprs);
+  }
+}
+
 // 570ms, then 30ms once cached
 function gather_messages() {
   // TODO only rewrite the pages that have changed since the last time we gathered messages
@@ -1724,21 +1750,8 @@ function gather_messages() {
     // a section is a list of blocks
     const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
     const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
-
-    // detect duplicates
-    let found_duplicate = false;
-    let msg_set = new Set();
-    for (let msg of messages.map(x => x.repr())) {
-      if (msg_set.has(msg)) {
-        found_duplicate = true;
-        break;
-      }
-    }
     
-    if (found_duplicate) {
-      alert('error: found duplicates');
-      console.assert(false, 'should have no duplicates');
-    }
+    detectDuplicates(messages);
 
     global.search.all_messages = messages;
   }
@@ -1751,7 +1764,10 @@ function gather_sorted_messages() {
   // - we should probably do that after we show previous and next days on the same journal, so if the notes gets optimized, it's still legible to the user.
   if (global.notes.sorted_messages === undefined) {
     console.log('sorting gathered messages');
-    global.notes.sorted_messages = gather_messages().sort((a, b) => dateComp(b, a));
+    global.notes.sorted_messages = 'sorting';
+    let messages = gather_messages().sort((a, b) => dateComp(b, a));
+    detectDuplicates(messages);
+    global.notes.sorted_messages = messages;
   }
   return global.notes.sorted_messages;
 }
