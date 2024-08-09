@@ -287,12 +287,7 @@ function renderDatetime(date, mode) {
   let now = getNow();
 
   let time_format = timestamp_format;
-  if (mode === 'search') {
-    time_format = datetime_format;
-    if (now.getFullYear() !== new Date(date).getFullYear()) {
-      time_format = datetime_year_format
-    }
-  } else if (mode === "brief") {
+  if (mode === "brief") {
     time_format = datetime_brief_format;
     if (now.getFullYear() !== new Date(date).getFullYear()) {
       time_format = datetime_brief_year_format;
@@ -637,7 +632,7 @@ export function htmlMsg(item, mode, origin_content) {
   }
 
   let line = htmlLine(item.msg);
-  let style_option = item.origin !== getCurrentNoteUuid() ? " style='background: #5f193f'": "";
+  let style_option = item.origin !== global.notes.maybe_current_journal() ? " style='background: #5f193f'": "";
 
   let block_content = htmlMsgBlockContent(item, origin_content);
   let has_block_content = '';
@@ -647,6 +642,7 @@ export function htmlMsg(item, mode, origin_content) {
 
   let edit_link = '';
   let editable = '';
+  // can only edit messages on the current note, so we `=== getCurrentNoteUuid()`
   if (origin_content !== undefined && item.origin === getCurrentNoteUuid()) {
     if (!checkWellFormed(item.origin, origin_content)) {
       console.warn(item.origin, "should be well-formed");
@@ -2266,7 +2262,6 @@ async function getTagsFromMixedNote(uuid) {
 
 async function getJournalUUID() {
   console.log(global);
-  await global.notes.ensure_valid_cache(); // cache coherence
   let notes = global.notes.getNotesWithTitle(today(), global.notes.local_repo_name());
   if (notes.length === 0) {
     let uuid = await global.notes.newJournal(today(), getNow());
@@ -2278,7 +2273,6 @@ async function getJournalUUID() {
 
 export async function gotoJournal() {
   let uuid = await getJournalUUID();
-  await global.notes.ensure_valid_cache(); // cache coherence
   await gotoDisc(uuid);
 }
 

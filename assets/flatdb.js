@@ -28,6 +28,27 @@ async function get_local_repo_name() {
   return cache.readFile(LOCAL_REPO_NAME_FILE);
 }
 
+function today() {
+  const today = getNow();
+  return dateToJournalTitle(today);
+}
+
+export function dateToJournalTitle(date) {
+  const year = date.getFullYear();
+
+  const month = date.toLocaleString('en-us', { month: "long" });
+  const day = date.getDate();
+
+  const day_suffix =
+      [11, 12, 13].includes(day) ? 'th'
+    : day % 10 === 1 ? 'st'
+    : day % 10 === 2 ? 'nd'
+    : day % 10 === 3 ? 'rd'
+    : 'th';
+
+  return `${month} ${day}${day_suffix}, ${year}`;
+}
+
 class Note {
   uuid;
   content;
@@ -132,6 +153,12 @@ function deepFreeze(object) {
 // N.B. it is _not_ correct to stash this and only modify the elements that are modified from write operations and syncs, because other pages may have modified this.
 // - we'll have to make a cache within indexedDB that is invalidated when the database in a cooperative way _between tabs_ for that to work.
 // - that might also have pernicious bugs.
+
+// DESIGN DECISIONS
+// - any operation that modifies the cache must check that the version before the modification is the same as the indexedDB version,
+//   otherwise they must refresh the cache.
+//   - this is because write and update operations are performed in an async context, but the cache is often used in a non-async context, 
+//     making it very un-ergonomic to refresh the cache and check that it's valid on every read.
 
 class FlatCache {
   constructor() {
@@ -239,6 +266,17 @@ class FlatCache {
     // - the CAUSE was that we mixed the most recent page (adding the previous page into it) on the journal,
     //   but we did that on the passed-by-reference cached result of the page rewrite.
     return note.rewrite;
+  }
+
+  maybe_current_journal() {
+    let notes = this.getNotesWithTitle(today(), this.local_repo_name());
+    if (notes.length === 0) {
+      return null;
+      // let uuid = await global.notes.newJournal(today(), getNow());
+      // notes = [uuid];
+      // // TODO maybe we only want to do a full update of the cache on sync, hmm.  nah, it seems like it should be on every database operation, for _consistency_'s (ACID) sake.
+    }
+    return notes[0];
   }
 
   local_repo_name() {
