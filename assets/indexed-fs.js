@@ -283,7 +283,7 @@ const datetime_brief_format = new Intl.DateTimeFormat('en-us', { month: 'short',
 const datetime_brief_year_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short'});
 
 
-function renderDatetime(date, mode) {
+function renderDatetime(date) {
   let now = getNow();
 
   let time_format = timestamp_format;
@@ -613,7 +613,7 @@ export function htmlMsg(item, mode, origin_content) {
 
   let date = Date.parse(timezoneCompatibility(item.date));
   
-  let timestamp_content = renderDatetime(date, mode);
+  let timestamp_content = renderDatetime(date);
   let href_id = `/disc/${item.origin}#${item.date}`;
   let msg_timestamp_link = shortcircuitLink(href_id, timestamp_content, 'msg_timestamp');
 
@@ -754,7 +754,7 @@ function htmlLine(line) {
         }
         if (x.type === 'internal_ref') {
           let ref = parseRef(x.display);
-          let shorter_datetime = renderDatetime(new Date(ref.datetime_id), 'brief');
+          let shorter_datetime = renderDatetime(new Date(ref.datetime_id));
           return `<div style="display:inline">
             <button onclick="return expandRef(this, '${x.display}')">get</button>
             <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${shorter_datetime}</a>
@@ -763,7 +763,7 @@ function htmlLine(line) {
         if (x.type === 'internal_search') {
           
           // TODO add time of search to search result?
-          // let shorter_datetime = renderDatetime(new Date(ref.datetime_id), 'brief');
+          // let shorter_datetime = renderDatetime(new Date(ref.datetime_id));
           return `<div style="display:inline">
             <button onclick="return expandSearch(this, '${x.display}')">get</button>
             <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${x.display}</a>
