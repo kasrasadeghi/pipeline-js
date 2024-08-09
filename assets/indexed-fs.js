@@ -287,21 +287,14 @@ function renderDatetime(date, mode) {
   let now = getNow();
 
   let time_format = timestamp_format;
-  if (mode === "brief") {
-    time_format = datetime_brief_format;
-    if (now.getFullYear() !== new Date(date).getFullYear()) {
-      time_format = datetime_brief_year_format;
-    }
-  } else {
-    if (now.getDate() !== new Date(date).getDate() ||
-        now.getMonth() !== new Date(date).getMonth() || 
-        now.getFullYear() !== new Date(date).getFullYear()
-    ) {
-      time_format = timestamp_day_format;
-    }
-    if (now.getFullYear() !== new Date(date).getFullYear()) {
-      time_format = timestamp_year_format;
-    }
+  if (now.getDate() !== new Date(date).getDate() ||
+      now.getMonth() !== new Date(date).getMonth() || 
+      now.getFullYear() !== new Date(date).getFullYear()
+  ) {
+    time_format = timestamp_day_format;
+  }
+  if (now.getFullYear() !== new Date(date).getFullYear()) {
+    time_format = timestamp_year_format;
   }
   
   return time_format
