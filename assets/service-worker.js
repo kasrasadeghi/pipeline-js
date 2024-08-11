@@ -20,6 +20,11 @@ const cacheable_assets = [
 ];
 
 function LOG(...data) {
+  // ignore nonresults
+  if (! data.map(x => `${x}`).join(" ").startsWith("RESULT")) {
+    return;
+  }
+  
   console.log('SERVICE WORKER', ...data);
 }
 
