@@ -15,6 +15,7 @@ argparser = argparse.ArgumentParser(description="Run a simple pipeline replicati
 argparser.add_argument("--port", type=int, required=True, help="Port to host the server on")
 argparser.add_argument("--notes-root", type=str, help="Root directory for notes", default=os.path.join(os.path.expanduser('~'), "notes"))
 argparser.add_argument("--host", type=str, help="Host to bind to", default="")
+argparser.add_argument("--no-api", action="store_true", help="Disable the api server.  Used for debugging service worker failures and caching failures by providing fresh new assets from a wireguard config that has the same IP.")
 args = argparser.parse_args()
 
 NOTES_ROOT = args.notes_root
@@ -56,6 +57,9 @@ def compute_status(repos, headers) -> KazHttpResponse:
 
 
 def handle_api_request(request) -> KazHttpResponse:
+    if args.no_api:
+        return HTTP_NOT_FOUND("this is a non-api server")
+
     method = request['method']
     headers = request['headers']
     body = request['body']
@@ -226,7 +230,10 @@ def handle_request(request):
 
 def main():
     log(f"hosting pipeline server on host '{HOST}' and port '{PORT}'")
-    log(f"notes root '{NOTES_ROOT}' in home folder '{os.path.expanduser('~')}'")
+    if args.no_api:
+        log(f"no notes root, because this is a non-api server")
+    else:
+        log(f"notes root '{NOTES_ROOT}' in home folder '{os.path.expanduser('~')}'")
     run(host=HOST, port=PORT, handle_request=handle_request)
 
 

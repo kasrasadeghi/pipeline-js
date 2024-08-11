@@ -5,6 +5,9 @@ simple:
 	#python -m http.server
 	python simple_server.py --port 8000
 
+non_api:
+	python simple_server.py --port 8000 --no-api
+
 curltime:
 	curl -w "@curl-format.txt" -o /dev/null -s "http://localhost:8000/api/status/core"
 
