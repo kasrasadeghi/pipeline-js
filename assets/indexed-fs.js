@@ -826,12 +826,14 @@ async function mixPage(uuid, mix_as_journal=true) {
     let tomorrow = new Date(date);
     tomorrow.setDate(date.getDate() + 1);
     console.log('tomorrow', dateToJournalTitle(tomorrow));
-    sibling_notes.push(...global.notes.getNotesWithTitle(dateToJournalTitle(tomorrow)));
+    let tomorrow_notes = await global.notes.getNotesWithTitle(dateToJournalTitle(tomorrow));
+    sibling_notes.push(...tomorrow_notes);
 
     let yesterday = new Date(date);
     yesterday.setDate(date.getDate() - 1);
     console.log('yesterday', dateToJournalTitle(yesterday));
-    sibling_notes.push(...global.notes.getNotesWithTitle(dateToJournalTitle(yesterday)));
+    let yesterday_notes = await global.notes.getNotesWithTitle(dateToJournalTitle(yesterday));
+    sibling_notes.push(...yesterday_notes);
   }
 
   console.log('mixing entry sections of', sibling_notes.map(note => note.uuid), "with current note", uuid);
@@ -2160,7 +2162,7 @@ async function routineContent() {
 
     let page = parseContent(most_recent_routine_note.content);
     page = rewrite(page, most_recent_routine_note.uuid);
-    let maybe_current_journal = global.notes.getNotesWithTitle(today(), local_repo_name);
+    let maybe_current_journal = await global.notes.getNotesWithTitle(today(), local_repo_name);
     if (maybe_current_journal.length === 0) {
       return "no journal found for today";
     }
@@ -2255,7 +2257,7 @@ async function getTagsFromMixedNote(uuid) {
 
 async function getJournalUUID() {
   console.log(global);
-  let notes = global.notes.getNotesWithTitle(today(), global.notes.local_repo_name());
+  let notes = await global.notes.getNotesWithTitle(today(), global.notes.local_repo_name());
   if (notes.length === 0) {
     let uuid = await global.notes.newJournal(today(), getNow());
     notes = [uuid];
@@ -2291,7 +2293,7 @@ export function getCurrentNoteUuid() {
 }
 
 export async function handleRouting() {
-  console.log("notes that match today's date:", global.notes.getNotesWithTitle(today(), global.notes.local_repo_name()));
+  console.log("notes that match today's date:", await global.notes.getNotesWithTitle(today(), global.notes.local_repo_name()));
   console.log("initializing from path", window.location.pathname);
 
   if (window.location.pathname.startsWith('/disc/')) {

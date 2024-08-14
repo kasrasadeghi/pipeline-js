@@ -257,18 +257,18 @@ def test_search_duplicates(chrome, firefox):
 
 
 def main():
-    # driver = create_driver(args.browser)
-    # test_first_time_setup(driver)
-    # test_new_day_double_journal(driver)
-    # input("Press Enter to continue...")
-    # driver.quit()
-
-    chrome = create_driver('chrome')
-    firefox = create_driver('firefox')
-    test_search_duplicates(chrome, firefox)
+    driver = create_driver(args.browser)
+    test_first_time_setup(driver)
+    test_new_day_double_journal(driver)
     input("Press Enter to continue...")
-    chrome.quit()
-    firefox.quit()
+    driver.quit()
+
+    # chrome = create_driver('chrome')
+    # firefox = create_driver('firefox')
+    # test_search_duplicates(chrome, firefox)
+    # input("Press Enter to continue...")
+    # chrome.quit()
+    # firefox.quit()
 
 if __name__ == "__main__":
     main()

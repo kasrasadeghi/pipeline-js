@@ -237,7 +237,8 @@ class FlatCache {
     return this.booleanFiles[SHOW_PRIVATE_FILE];
   }
 
-  getNotesWithTitle(title, repo) {
+  async getNotesWithTitle(title, repo) {
+    await this.ensure_valid_cache();
     if (repo === undefined) {
       return this.metadata_map.filter(note => note.title === title);
     }
@@ -268,8 +269,12 @@ class FlatCache {
     return note.rewrite;
   }
 
+  // a non-async alternative that fails if the current_journal hasn't been made.
+  // returns null for a quick check, EXAMPLE if search needs to check if a message is on the current page to render it green or pink
   maybe_current_journal() {
-    let notes = this.getNotesWithTitle(today(), this.local_repo_name());
+    let title = today();
+    let repo = this.local_repo_name();
+    let notes = this.metadata_map.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
     if (notes.length === 0) {
       return null;
       // let uuid = await global.notes.newJournal(today(), getNow());
@@ -295,6 +300,7 @@ Title: ${title}`;
     // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
     let uuid = (await this.local_repo_name()) + '/' + crypto.randomUUID() + '.note';
     await this.writeFile(uuid, content);
+    await this.ensure_valid_cache();
     return uuid;
   }
 
@@ -306,6 +312,7 @@ Tags: Journal`;
     // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
     let uuid = (await this.local_repo_name()) + '/' + crypto.randomUUID() + '.note';
     await this.writeFile(uuid, content);
+    await this.ensure_valid_cache();
     return uuid;
   }
 }
