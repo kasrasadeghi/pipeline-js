@@ -410,8 +410,8 @@ p.msgblock {
 }
 
 .treenode {
-  padding: 5px;
   border-left: 1px solid white;
+  list-style-type: none;
 }
 
 .treenode-list {
