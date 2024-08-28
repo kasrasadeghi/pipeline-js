@@ -6,9 +6,9 @@ import datetime
 import argparse
 
 argparser = argparse.ArgumentParser()
-argparser.add_argument('--application-port', type=int, default=8000)
-argparser.add_argument('--proxied-backend-port', type=int, default=8001)
-argparser.add_argument('--supervisor-port', type=int, default=8002)
+argparser.add_argument('--application-port', type=str, default="8000")
+argparser.add_argument('--proxy-port', type=str, default="8001")
+argparser.add_argument('--supervisor-port', type=str, default="8002")
 argparser.add_argument('--host', type=str)
 args = argparser.parse_args()
 
@@ -34,9 +34,9 @@ app = Flask(__name__)
 pipeline_proxy_process = None
 simple_server_process = None
 
-pipeline_proxy_command = ['./pipeline-proxy', '8000']
-simple_server_command = ['python', 'simple_server.py', '--port', '8001']
-simple_server_direct_command = ['python', 'simple_server.py', '--port', '8000']
+pipeline_proxy_command = ['./pipeline-proxy', args.application_port]
+simple_server_command = ['python', 'simple_server.py', '--port', args.proxy_port]
+simple_server_direct_command = ['python', 'simple_server.py', '--port', args.application_port]
 
 # Global variables
 last_alive_time = {
@@ -69,8 +69,8 @@ def stop_subprocesses():
         simple_server_process.terminate()
 
     # Use fuser -k to kill 8000/tcp and 8001/tcp
-    subprocess.run(['fuser', '-k', '8000/tcp'])
-    subprocess.run(['fuser', '-k', '8001/tcp'])
+    subprocess.run(['fuser', '-k', args.application_port + '/tcp'])
+    subprocess.run(['fuser', '-k', args.proxy_port + '/tcp'])
 
 def restart_subprocesses():
     stop_subprocesses()
@@ -104,18 +104,18 @@ def restart_process(process_name):
         if process_name == 'pipeline_proxy':
             if pipeline_proxy_process is not None:
                 pipeline_proxy_process.terminate()
-            subprocess.run(['fuser', '-k', '8000/tcp'])
+            subprocess.run(['fuser', '-k', args.application_port + '/tcp'])
             pipeline_proxy_process = subprocess.Popen(pipeline_proxy_command, stdout=open('logs/proxy', 'w'), stderr=subprocess.STDOUT)
         elif process_name == 'simple_server':
             if simple_server_process is not None:
                 simple_server_process.terminate()
-            subprocess.run(['fuser', '-k', '8001/tcp'])
+            subprocess.run(['fuser', '-k', args.proxy_port + '/tcp'])
             simple_server_process = subprocess.Popen(simple_server_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
     else:
         if process_name == 'simple_server':
             if simple_server_process is not None:
                 simple_server_process.terminate()
-            subprocess.run(['fuser', '-k', '8000/tcp'])
+            subprocess.run(['fuser', '-k', args.application_port + '/tcp'])
             simple_server_process = subprocess.Popen(simple_server_direct_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
 
 def liveness_check():
@@ -164,8 +164,8 @@ def index():
     <h1>Subprocesses Status</h1>
     <p>Current Mode: {'Proxied' if is_proxied_mode else 'Non-Proxied'}</p>
     {status_html}
-    {subprocess.run(['fuser', '8000/tcp'], capture_output=True, text=True)}
-    {subprocess.run(['fuser', '8001/tcp'], capture_output=True, text=True)}
+    {subprocess.run(['fuser', args.application_port + '/tcp'], capture_output=True, text=True)}
+    {subprocess.run(['fuser', args.proxy_port + '/tcp'], capture_output=True, text=True)}
     <form action="/restart" method="post">
         <input type="submit" value="Restart All Subprocesses">
     </form>
@@ -216,15 +216,15 @@ def toggle_autorestart():
 def api_status():
     subprocess_status = check_subprocesses()
 
-    # Add CORS header from origin 10.50.50.2:8000
+    # Add CORS header from origin args.host:8000
     response = make_response(jsonify({"proxy": subprocess_status.get('pipeline_proxy', (False, None))[0], 'server': subprocess_status['simple_server'][0]}))
-    response.headers.add('Access-Control-Allow-Origin', 'https://10.50.50.2:8000')
+    response.headers.add('Access-Control-Allow-Origin', f'https://{args.host}:' + args.application_port)
 
     return response
 
 if __name__ == '__main__':
     print('starting subprocesses')
-    subprocess.run(['fuser', '-k', '8002/tcp'])
+    subprocess.run(['fuser', '-k', args.supervisor_port + '/tcp'])
     restart_subprocesses()
     
     # Start the liveness check thread
@@ -232,4 +232,4 @@ if __name__ == '__main__':
     liveness_thread.start()
     
     print('starting flask app')
-    app.run(port=8002, host="10.50.50.2", ssl_context=("cert/cert.pem", "cert/key.pem"))
+    app.run(port=int(args.supervisor_port), host=args.host, ssl_context=("cert/cert.pem", "cert/key.pem"))
