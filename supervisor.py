@@ -3,6 +3,28 @@ from flask import Flask, request, redirect, jsonify, make_response
 import threading
 import time
 import datetime
+import argparse
+
+argparser = argparse.ArgumentParser()
+argparser.add_argument('--application-port', type=int, default=8000)
+argparser.add_argument('--proxied-backend-port', type=int, default=8001)
+argparser.add_argument('--supervisor-port', type=int, default=8002)
+argparser.add_argument('--host', type=str)
+args = argparser.parse_args()
+
+if args.host is None:
+    wireguard_addr = subprocess.check_output('ip -br addr show type wireguard', shell=True, text=True)
+    assert len(wireguard_addr.strip().split("\n")) == 1, (
+        "cannot automatically determine host address of wireguard interface, as more than one exists:\n" +
+        f" $ ip -br addr show type wireguard\n{wireguard_addr}\n" +
+        "\n" +
+        "run `sudo systemctl disable wg-quick@[interface]` and `sudo systemctl stop wg-quick@[interface]` to disable one of them\n"
+    )
+    assert len(wireguard_addr.split()) == 3
+    assert wireguard_addr.split()[2].endswith('/24') or wireguard_addr.split()[2].endswith('/32'), (wireguard_addr.split()[2] + " does not end with /24 or /32")
+    # [wgname, 'UNKNOWN', 10.56.78.1/24]
+    args.host = wireguard_addr.split()[2].split('/')[0]
+
 
 escape = lambda x: x.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 
