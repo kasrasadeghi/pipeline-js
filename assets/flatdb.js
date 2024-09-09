@@ -2,7 +2,8 @@ import FileDB from '/filedb.js';
 import { cache, getNow } from '/state.js';
 import { readBooleanFile } from '/boolean-state.js';
 import { parseContent } from '/parse.js';
-import { rewrite } from '/rewrite.js';
+import { rewrite, Msg } from '/rewrite.js';
+import { dateComp } from '/date-util.js';
 
 export const SHOW_PRIVATE_FILE = 'private mode state';
 
@@ -314,6 +315,90 @@ Tags: Journal`;
     await this.writeFile(uuid, content);
     await this.ensure_valid_cache();
     return uuid;
+  }
+
+  get_messages_around(uuid) {
+    let note = this.get_note(uuid);
+
+    // get date of the note
+    let origin_date = new Date(note.metadata.Date);
+    // get messages that are 24 hours before and after that date from the message list
+    // TODO optimization ideas:
+    // - we know these are sorted, so we can binary search
+    // - there are fewer notes than messages, so maybe we can binary search on the notes first, to give us a good over-approximation that we can refine
+    //   - maybe we can store the interval range of the dates that appear in a note
+    let messages = this.get_message_list(); // a list of Msg
+    console.log(messages.length);
+    
+    // for now, we'll just do a linear search
+    let msg_24h_before_idx = null;
+    let msg_24h_after_idx = null;
+    for (let i = 0; i < messages.length; i++) {
+      // if we don't have a before, and the message is less than 24 hours before the origin date
+      // set it to before
+      // 86400000 is the number of milliseconds in a day
+      if (msg_24h_before_idx === null && (new Date(messages[i].date) < origin_date - 86400000)) {
+        msg_24h_before_idx = i;
+      } else if (msg_24h_after_idx === null && (new Date(messages[i].date) > origin_date + 2*86400000)) {
+        msg_24h_after_idx = i;
+        break;
+      }
+    }
+
+    if (msg_24h_before_idx === null) {
+      msg_24h_before_idx = messages.length;
+    }
+    if (msg_24h_after_idx === null) {
+      msg_24h_after_idx = 0;
+    }
+
+    let valid = msg_24h_before_idx !== null && msg_24h_after_idx !== null;
+    if (!valid) {
+      console.assert(false, `could not find messages 24 hours before and after origin date ${origin_date}: ${msg_24h_before_idx} ${msg_24h_after_idx}`);
+    }
+
+    // the results are sorted most recent first, so we need to reverse the slice
+    let result = messages.slice(msg_24h_after_idx, msg_24h_before_idx);
+    console.log('all_messages', messages);
+    console.log('messages around result', result);
+    console.log(msg_24h_before_idx, msg_24h_after_idx);
+    console.log('origin_date of note', origin_date, uuid);
+    return result;
+  }
+
+  // message list
+
+  // 570ms, then 30ms once cached
+  gather_messages() {
+    // TODO only rewrite the pages that have changed since the last time we gathered messages
+
+    console.log('gathering messages');
+    // rewriting all of the pages takes 500ms ish
+    const pages = this.metadata_map.map(x => this.rewrite(x.uuid));
+
+    // each page is usually 2 sections, 'entry' and 'METADATA'
+    // a page is a list of sections
+    // a section is a list of blocks
+    const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
+    const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
+    
+    // detectDuplicates(messages);
+
+    return messages;
+  }
+
+  gather_sorted_messages() {
+    // sorting takes 300ms
+    // TODO sort by bins?  we should find the notes that are journals and have clear dilineations, and "optimize" the notes.
+    // - we should probably do that after we show previous and next days on the same journal, so if the notes gets optimized, it's still legible to the user.
+    console.log('sorting gathered messages');
+    let messages = this.gather_messages().sort((a, b) => dateComp(b, a));
+    // detectDuplicates(messages);
+    return messages;
+  }
+
+  get_message_list() {
+    return this.gather_sorted_messages();
   }
 }
 

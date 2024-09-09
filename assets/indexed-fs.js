@@ -3,6 +3,7 @@ import { buildFlatCache, initFlatDB, SHOW_PRIVATE_FILE, LOCAL_REPO_NAME_FILE } f
 import { initState, cache, getNow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
 import { rewrite, rewriteLine, rewriteBlock, Msg, Line, Tag, Link } from '/rewrite.js';
+import { dateComp, timezoneCompatibility } from '/date-util.js';
 
 export { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
 export { rewrite } from '/rewrite.js';
@@ -33,57 +34,6 @@ function paintSimple(render_result) {
   let footer = document.getElementsByTagName('footer')[0];
   [main.innerHTML, footer.innerHTML] = render_result;
   return {main, footer};
-}
-
-// DATE UTIL
-
-const COMPATIBILITY_TIMEZONES = {
-  'PST': 'GMT-0800 (Pacific Standard Time)',
-  'PDT': 'GMT-0700 (Pacific Daylight Time)',
-  'EST': 'GMT-0500 (Eastern Standard Time)',
-  'EDT': 'GMT-0400 (Eastern Daylight Time)',
-  'CST': 'GMT-0600 (Central Standard Time)',
-  'CDT': 'GMT-0500 (Central Daylight Time)',
-  'MST': 'GMT-0700 (Mountain Standard Time)',
-  'MDT': 'GMT-0600 (Mountain Daylight Time)',
-  'HST': 'GMT-1000 (Hawaiian Standard Time)',
-  // european timezones
-  'CET': 'GMT+0100 (Central European Time)',
-  'CEST': 'GMT+0200 (Central European Summer Time)',
-  // japan
-  'JST': 'GMT+0900 (Japan Standard Time)',
-  'JDT': 'GMT+1000 (Japan Daylight Time)',
-};
-
-function timezoneCompatibility(datestring) {
-  // old dates look like: Wed Jan 17 22:02:44 PST 2024
-  // new dates look like: Thu Jan 17 2024 22:02:44 GMT-0800 (Pacific Standard Time)
-  // NB: they end in ')'
-  if (datestring.endsWith(")")) {
-    return datestring; // no compatibility needed
-  }
-  let chunks = datestring.split(" ").filter(x => x !== '');
-  if (chunks.length !== 6) {
-    // TODO console.warn("datestring should have 6 chunks: weekday, month, monthday, time, timezone, year", chunks, datestring);
-    return datestring;
-  }
-  let time = chunks[3];
-  let timezone = chunks[4];
-  console.assert(timezone in COMPATIBILITY_TIMEZONES, timezone, "timezone should be in compatibility_timezones, from", datestring, COMPATIBILITY_TIMEZONES);
-  let year = chunks[5];
-  let new_chunks = chunks.slice(0, 3);  // first three are the same.
-  new_chunks.push(year, time, COMPATIBILITY_TIMEZONES[timezone]);
-  return new_chunks.join(" ");
-}
-
-function dateComp(a, b) {
-  if (a instanceof Msg || Object.hasOwn(a, 'date')) {
-    a = a.date;
-  }
-  if (b instanceof Msg || Object.hasOwn(b, 'date')) {
-    b = b.date;
-  }
-  return new Date(timezoneCompatibility(a)) - new Date(timezoneCompatibility(b));
 }
 
 // JOURNAL
@@ -145,46 +95,12 @@ function pageIsJournal(page) {
 
 async function htmlNote(uuid) {
   console.log('rendering note for', uuid);
-  let content = await global.notes.readFile(uuid);
-  if (content === null) {
-    return `ERROR 3: couldn't find file '${uuid}'`;
-  }
-  return htmlNoteContent(uuid, content);
-}
-
-function htmlNoteContent(uuid, content) {
-  console.assert(content !== null, content, 'content should not be null');
-  let page = parseContent(content);
-  let rewritten = rewrite(page, uuid);
-  let rendered = rewritten.map((s, i) => htmlSection(s, i, content, uuid)).join("");
-  if (rendered === '') {
-    return 'no messages yet';
-  }
-  return "<div class='msglist'>" + rendered + "</div>"; // TODO it might make sense to move this _within_ section rendering
-}
-
-function htmlSection(section, i, content, uuid) {
-  let output = [];
-  if (! ('entry' === section.title && i === 0)) {
-    output.push(`--- ${section.title} ---`)
-  }
-  if (section.title === 'METADATA' && pageIsJournal(global.notes.rewrite(uuid))) {
-    return "";
-  }
-  if (['METADATA', 'HTML'].includes(section.title)) {
-    output.push(...section.lines);
-    return "<pre>" + output.join("\n") + "</pre>";
-  }
-
-  if (section.blocks.length === 0) {
-    return '\n';
-  }
-
-  output.push(...section.blocks.map(b => htmlBlock(b, content)));
-
-  let result = output.join("");
-  result = trimTrailingRenderedBreak(result);
-  return result;
+  let messages = global.notes.get_messages_around(uuid);
+  messages.reverse();
+  // let messages = [];
+  let content = global.notes.get_note(uuid).content;
+  let rendered_messages = messages.map(msg => htmlMsg(msg, /*mode*/undefined, content));
+  return rendered_messages.join("");
 }
 
 function htmlMsgBlock(block, content) {
@@ -219,28 +135,6 @@ function htmlBlockPart(part) {
     return htmlTreeNode(part);
   }
   console.assert(false, part, 'unexpected block part type');
-}
-
-function htmlBlock(block, content) {
-  if (block instanceof Msg) {
-    return htmlMsg(block, /*mode*/undefined, content);
-  }
-  if (block instanceof EmptyLine) {
-    return "<br/>";
-  }
-  if (block instanceof Array) {
-    if (block.length === 1 && block[0] instanceof TreeNode) {
-      return "<pre>" + block[0].toString() + "\n</pre>";
-    }
-    if (block[0] == 'QUOTE') {
-      return "<blockquote>" + block.slice(1).map(x => "<p>" + htmlLine(x) + "</p>").join("") + "</blockquote>";
-    }
-    return "<p>" + block.map(htmlLine).join("") + "\n</p>";
-  }
-  if (block instanceof TreeNode) {
-    return `<pre>` + htmlTreeNode(block) + `</pre>`;
-  }
-  console.assert(false, block, 'unexpected block type');
 }
 
 export function htmlTreeNode(thisNode) {
@@ -814,71 +708,6 @@ async function paintDisc(uuid, flag) {
   }
 }
 
-async function mixPage(uuid, mix_as_journal=true) {
-  let rewritten = global.notes.rewrite(uuid);
-
-  // notes that share our title
-  let sibling_notes = global.notes.getAllNotesWithSameTitleAs(uuid);
-
-  if (mix_as_journal) {
-    let date = new Date(timezoneCompatibility(global.notes.get_note(uuid).date));
-    
-    let tomorrow = new Date(date);
-    tomorrow.setDate(date.getDate() + 1);
-    console.log('tomorrow', dateToJournalTitle(tomorrow));
-    let tomorrow_notes = await global.notes.getNotesWithTitle(dateToJournalTitle(tomorrow));
-    sibling_notes.push(...tomorrow_notes);
-
-    let yesterday = new Date(date);
-    yesterday.setDate(date.getDate() - 1);
-    console.log('yesterday', dateToJournalTitle(yesterday));
-    let yesterday_notes = await global.notes.getNotesWithTitle(dateToJournalTitle(yesterday));
-    sibling_notes.push(...yesterday_notes);
-  }
-
-  console.log('mixing entry sections of', sibling_notes.map(note => note.uuid), "with current note", uuid);
-  let sibling_pages = sibling_notes.map((sibling_note) => rewrite(parseContent(sibling_note.content), sibling_note.uuid));
-
-  let entry_sections = sibling_pages.map(page => page.filter(section => section.title === 'entry')[0]);
-  let entry_blocks = entry_sections.map(entry_section => entry_section.blocks);
-  let entry_nonmessage_blocks = entry_blocks.map(blocks => {
-    let first_msg_idx = blocks.findIndex(b => b instanceof Msg);
-    if (first_msg_idx !== -1) {
-      return blocks.slice(0, first_msg_idx);
-    }
-    return blocks;
-  });
-  let entry_nonmessages = entry_nonmessage_blocks.reduce((a, b) => [...a, ...b], []);
-  let entry_message_blocks = entry_blocks.map((blocks, i) => blocks.slice(entry_nonmessage_blocks[i].length));
-  let entry_messages = entry_message_blocks.reduce((a, b) => [...a, ...b], []);
-  entry_messages.sort(dateComp);
-  let new_blocks = [...entry_nonmessages, ...entry_messages];
-
-  // dangerous to modify the result of .rewrite(), because it is passed by reference.
-  // - this was the source of BUG search duplication, but only for the past 2 days.
-  // - the CAUSE was that we mixed the most recent page (adding the previous page into it) on the journal,
-  //   but we did that on the passed-by-reference cached result of the page rewrite.
-  let mixed_page = structuredClone(rewritten);
-  let current_entry_section = mixed_page.filter(section => section.title === 'entry')[0];
-  current_entry_section.blocks = new_blocks;
-  return mixed_page;
-}
-
-async function renderDiscMixedBody(uuid) {
-  await global.notes.ensure_valid_cache();
-  let page = await mixPage(uuid, pageIsJournal(global.notes.rewrite(uuid)));
-  if (page === null) {
-    return `ERROR 1: couldn't find file '${uuid}'`;
-  }
-
-  const content = global.notes.get_note(uuid).content;  
-  let rendered = page.map((s, i) => htmlSection(s, i, content, uuid)).join("\n");
-  if (rendered.trim() === '') {
-    return 'no messages yet';
-  }
-  return "<div class='msglist'>" + rendered + "</div>";
-}
-
 async function paintDiscRoutine() {
   // maintain the scroll of the modal when repainting it
   let left = document.getElementsByClassName("menu-modal")[0].scrollLeft;
@@ -891,16 +720,6 @@ async function paintDiscRoutine() {
   document.getElementsByClassName("menu-modal")[0].scrollLeft = left;
   document.getElementsByClassName("menu-modal")[0].scrollTop = top;
 }
-
-export async function clickMix() {
-  // toggle mix state in the file
-  let mix_state = await toggleBooleanFile(MIX_FILE, "false");
-  global.notes.booleanFiles[MIX_FILE] = mix_state;
-  await paintDisc(getCurrentNoteUuid(), 'only main');
-  let button = document.getElementById('mix_button') || document.getElementById('focus_button');
-  button.innerHTML = lookupIcon(mix_state === "true" ? 'focus' : 'mix');
-  return false;
-};
 
 export function getSupervisorStatusPromise() {
   const hostname = window.location.hostname;  // "10.50.50.2"
@@ -1003,15 +822,6 @@ async function paintDiscFooter(uuid) {
     document.getElementById('well_formed_display').innerHTML = well_formed;
   }, 100);
 
-  const has_remote = await hasRemote();
-  let mix_state = "false";
-  let mix_button = '';
-  if (has_remote) {
-    mix_state = await readBooleanFile(MIX_FILE, "false");
-    let mix_button_value = mix_state === 'true' ? 'focus' :'mix';
-    mix_button = MenuButton({icon: mix_button_value, action: 'return clickMix(event)'});
-  }
-
   let msg_form = "";
   let edit_button = "";
   if (uuid.startsWith(global.notes.local_repo_name())) {
@@ -1047,7 +857,6 @@ async function paintDiscFooter(uuid) {
         ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
         ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
         ${MenuButton({icon: 'routine', action: 'return toggleMenu()'})}
-        ${mix_button}
       </div>
       <div id="footer_message_container">
         <div id='state_display'></div>
@@ -1058,14 +867,7 @@ async function paintDiscFooter(uuid) {
 }
 
 async function renderDiscBody(uuid) {
-  let mix_state = await readBooleanFile(MIX_FILE, "false");
-  console.log('mix state', mix_state);
-  let rendered_note = '';
-  if (mix_state === "true") {
-    rendered_note = await renderDiscMixedBody(uuid);
-  } else {
-    rendered_note = await htmlNote(uuid);
-  }
+  let rendered_note = htmlNote(uuid);
   return rendered_note;
 }
 
@@ -1728,43 +1530,6 @@ function detectDuplicates(messages) {
   }
 }
 
-// 570ms, then 30ms once cached
-function gather_messages() {
-  // TODO only rewrite the pages that have changed since the last time we gathered messages
-  global.search = global.search || {};
-  if (global.search.all_messages === undefined) {
-    global.search.all_messages = 'searching';
-    console.log('gathering messages');
-    // rewriting all of the pages takes 500ms ish
-    const pages = global.notes.metadata_map.map(x => global.notes.rewrite(x.uuid));
-
-    // each page is usually 2 sections, 'entry' and 'METADATA'
-    // a page is a list of sections
-    // a section is a list of blocks
-    const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
-    const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
-    
-    // detectDuplicates(messages);
-
-    global.search.all_messages = messages;
-  }
-  return global.search.all_messages;
-}
-
-function gather_sorted_messages() {
-  // sorting takes 300ms
-  // TODO sort by bins?  we should find the notes that are journals and have clear dilineations, and "optimize" the notes.
-  // - we should probably do that after we show previous and next days on the same journal, so if the notes gets optimized, it's still legible to the user.
-  if (global.notes.sorted_messages === undefined) {
-    console.log('sorting gathered messages');
-    global.notes.sorted_messages = 'sorting';
-    let messages = gather_messages().sort((a, b) => dateComp(b, a));
-    // detectDuplicates(messages);
-    global.notes.sorted_messages = messages;
-  }
-  return global.notes.sorted_messages;
-}
-
 async function search(text, is_case_sensitive=false) {
   let messages = gather_sorted_messages();
   if (text === '' || text === null || text === undefined) {
@@ -2246,11 +2011,8 @@ async function renderRoutine() {
 }
 
 async function getTagsFromMixedNote(uuid) {
-  let page = await mixPage(uuid);
-  return page
-    .flatMap(s => s.blocks?.filter(x => x instanceof Msg))  // get all messages from every section
-    .filter(x => x)  // filter away sections that didn't have blocks
-    .flatMap(x => x.msg.parts.filter(p => p instanceof Tag));  // get all tags from every message
+  let msgs = await global.notes.get_messages_around(uuid);
+  return msgs.flatMap(x => x.msg.parts.filter(p => p instanceof Tag));  // get all tags from every message
 }
 
 // MAIN

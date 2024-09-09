@@ -10,6 +10,7 @@ const icons = [
 const cacheable_assets = [
   "style.css",
   "boolean-state.js",
+  "date-util.js",
   "filedb.js",
   "flatdb.js",
   "indexed-fs.js",
