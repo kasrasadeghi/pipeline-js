@@ -3,7 +3,7 @@ import { cache, getNow } from '/state.js';
 import { readBooleanFile } from '/boolean-state.js';
 import { parseContent } from '/parse.js';
 import { rewrite, Msg } from '/rewrite.js';
-import { dateComp } from '/date-util.js';
+import { dateComp, timezoneCompatibility } from '/date-util.js';
 
 export const SHOW_PRIVATE_FILE = 'private mode state';
 
@@ -163,9 +163,11 @@ function deepFreeze(object) {
 
 class FlatCache {
   constructor() {
-    this.metadata_map = null;
+    this.metadata_map = null;  // a list of Notes
     this._local_repo = null;
+    this._messages_cacher = null;
     this.version = null;
+    this._cache_current_journal = null;
   }
 
   async refresh_cache() {
@@ -178,6 +180,12 @@ class FlatCache {
 
     this.booleanFiles = {};
     this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");
+
+    if (this._messages_cacher !== null) {
+      clearInterval(this._messages_cacher.timer);
+    }
+    this._messages_cacher = new IncrementalWorker(this.incrementally_gather_sorted_messages());
+    this._messages_cacher.start();
   }
 
   // NOTE use this before read operations to ensure coherence
@@ -257,6 +265,10 @@ class FlatCache {
 
   rewrite(uuid) {
     let note = this.get_note(uuid);
+    if (note === null) {
+      console.assert(false, `could not find note ${uuid}`);
+      return null;
+    }
     if (note.rewrite === undefined) {
       let page = parseContent(note.content);
       let rewrite_result = rewrite(page, uuid);
@@ -274,14 +286,19 @@ class FlatCache {
   // returns null for a quick check, EXAMPLE if search needs to check if a message is on the current page to render it green or pink
   maybe_current_journal() {
     let title = today();
+    if (this._cache_current_journal !== null && this.get_note(this._cache_current_journal).title === title) {
+      return this._cache_current_journal;
+    }
+    console.log('getting current journal', title);
     let repo = this.local_repo_name();
     let notes = this.metadata_map.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
     if (notes.length === 0) {
       return null;
-      // let uuid = await global.notes.newJournal(today(), getNow());
-      // notes = [uuid];
-      // // TODO maybe we only want to do a full update of the cache on sync, hmm.  nah, it seems like it should be on every database operation, for _consistency_'s (ACID) sake.
+      // we always ensure the cache is correct after a write operation, so we don't need to do it here, nor in other non-async contexts.
+      // - reasoning: writes and updates can be slow, but the user doesn't expect any read to be slow
     }
+    console.assert(notes.length === 1, `expected 1 journal, got ${notes.length}`);
+    this._cache_current_journal = notes[0];
     return notes[0];
   }
 
@@ -327,7 +344,27 @@ Tags: Journal`;
     // - we know these are sorted, so we can binary search
     // - there are fewer notes than messages, so maybe we can binary search on the notes first, to give us a good over-approximation that we can refine
     //   - maybe we can store the interval range of the dates that appear in a note
-    let messages = this.get_message_list(); // a list of Msg
+
+    // TODO get a list of notes, and possible notes that overlap with the 72-hour range in any way
+    const can_overlap = (date_str, origin_date) => {
+      let date = Date.parse(timezoneCompatibility(date_str));
+      // 86400000 is the number of milliseconds in a day
+      return (Math.abs(origin_date - date) < 86400000*2);
+    }
+
+    let messages = null;
+    // if (this._messages_cacher === null || this._messages_cacher.is_done === false) {
+      console.log('no cached messages, using a shortcut');
+      let notes_that_can_overlap = this.metadata_map
+        .filter(note => can_overlap(note.date, origin_date));
+      console.log(notes_that_can_overlap);
+      
+      messages = notes_that_can_overlap.map(note => this.get_messages_in(note.uuid)).flat().sort((a, b) => dateComp(b, a));
+    // } else {
+    //   console.assert(this._messages_cacher.is_done === true, 'messages cacher should be complete');
+    //   messages = this._messages_cacher.current_result;
+    // }
+
     console.log(messages.length);
     
     // for now, we'll just do a linear search
@@ -381,7 +418,12 @@ Tags: Journal`;
     // a section is a list of blocks
     const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
     const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
+
+    // let sorted_notes = this.metadata_map.sort((a, b) => dateComp(b, a));
+    // // TODO append messages from each note by doing a setTimeout for approximately 20ms.
     
+    // let messages = this.metadata_map.flatMap(x => this.get_messages_in(x.uuid));
+
     // detectDuplicates(messages);
 
     return messages;
@@ -397,8 +439,106 @@ Tags: Journal`;
     return messages;
   }
 
-  get_message_list() {
-    return this.gather_sorted_messages();
+  // generator
+  *incrementally_gather_sorted_messages() {
+    console.log('gathering messages');
+
+    // rewriting all of the pages takes 500ms ish
+    let sorted_notes = this.metadata_map.sort((a, b) => dateComp(b, a));
+    for (let note of sorted_notes) {
+      let page = this.rewrite(note.uuid);
+      // TODO gather messages here and merge them into the full result.
+      yield;
+    }
+
+    const pages = this.metadata_map.map(x => this.rewrite(x.uuid));
+    yield;
+
+    // each page is usually 2 sections, 'entry' and 'METADATA'
+    // a page is a list of sections
+    // a section is a list of blocks
+    const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
+    const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
+    yield;
+    const sorted_messages = messages.sort((a, b) => dateComp(b, a));
+    return sorted_messages;
+  }
+
+  subscribe_to_messages_cacher(user) {
+    // TODO maybe each user area should have a subscription ID, and then when you unsubscribe, you can pass that ID.
+    // TODO that way we don't need to propagate to the same user twice, and when the same user re-subscribes, it just deletes its prior subscription.
+    return this._messages_cacher.observeResult(user);
+  }
+
+  get_messages_in(uuid) {
+    // each page is usually 2 sections, 'entry' and 'METADATA'
+    // a page is a list of sections
+    // a section is a list of blocks
+    let page = this.rewrite(uuid);  // a list of sections
+    const entry_sections = page.filter(s => s.title === 'entry');
+    const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
+    return messages;
+  }
+}
+
+class IncrementalWorker {
+  constructor(generator) {
+    this.generator = generator;
+    this.users = [];
+    this.is_done = false;
+    this.current_result = undefined;
+    this.needs_propagate = false;
+    this.timer = null;
+    this.quantum_length = 8; // in milliseconds
+  }
+
+  // perform work until the quantum is done, default 8ms
+  quantum() {
+    if (this.is_done) {
+      return;
+    }
+
+    let now = performance.now();  // time in milliseconds with sub-millisecond precision
+    while (performance.now() - now < this.quantum_length) {
+      const { value, done } = this.generator.next();
+      
+      if (value !== undefined) {
+        this.current_result = value;
+        this.needs_propagate = true;
+      }
+      if (done) {
+        this.is_done = true;
+        break;
+      }
+    }
+    this.propagate();
+  }
+
+  // start performing work
+  start() {
+    this.timer = setInterval(() => {
+      this.quantum();
+    }, 2*this.quantum_length);
+  }
+
+  // propagate current result to all users
+  propagate() {
+    if (this.needs_propagate) {
+      this.users.forEach(user => {
+        user(this.current_result);
+      });
+      this.needs_propagate = false;
+    }
+  }
+
+  observeResult(user) {
+    this.users.push(user);
+
+    // if we're done, we should call the user immediately
+    // otherwise we can just wait for the next propagate
+    if (this.is_done) {
+      user(this.current_result);
+    }
   }
 }
 
@@ -407,3 +547,63 @@ export async function buildFlatCache() {
   await flatCache.refresh_cache();
   return flatCache;
 }
+
+// class AsyncOperation {
+//   constructor(func) {
+//     this.func = func;
+//     this.result = null;
+//     this.isComplete = false;
+//     this.promise = null;
+//   }
+
+//   start() {
+//     if (this.promise) {
+//       return this.promise;
+//     }
+
+//     const myfunc = this.func;
+
+//     this.promise = new Promise((resolve) => {
+//       setTimeout(() => {
+//         this.result = myfunc();
+//         this.isComplete = true;
+//         resolve(this.result);
+//       }, 0);
+//     });
+
+//     return this.promise;
+//   }
+
+//   getResult() {
+//     if (this.isComplete) {
+//       return Promise.resolve(this.result);
+//     }
+
+//     if (!this.promise) {
+//       this.start();
+//     }
+
+//     return this.promise;
+//   }
+// }
+
+// // Demonstration of awaiting the promise multiple times
+// async function demonstrateMultipleAwaits() {
+//   console.log("Starting demonstration...");
+//   const example_expensive_operation = Array(1000000).fill().map(() => Math.random()).reduce((a, b) => a + b);
+//   const operation = new AsyncOperation(example_expensive_operation);
+
+//   console.log("First await:");
+//   const result1 = await operation.getResult();
+//   console.log("Result 1:", result1);
+
+//   console.log("Second await:");
+//   const result2 = await operation.getResult();
+//   console.log("Result 2:", result2);
+
+//   console.log("Third await:");
+//   const result3 = await operation.getResult();
+//   console.log("Result 3:", result3);
+
+//   console.log("All results are the same:", result1 === result2 && result2 === result3);
+// }
