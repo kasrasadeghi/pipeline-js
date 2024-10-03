@@ -168,6 +168,8 @@ class FlatCache {
     this._messages_cacher = null;
     this.version = null;
     this._cache_current_journal = null;
+    this.scheduler = new IncrementalScheduler();
+    this.scheduler.start();
   }
 
   async refresh_cache() {
@@ -181,11 +183,8 @@ class FlatCache {
     this.booleanFiles = {};
     this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");
 
-    if (this._messages_cacher !== null) {
-      clearInterval(this._messages_cacher.timer);
-    }
     this._messages_cacher = new IncrementalWorker(this.incrementally_gather_sorted_messages());
-    this._messages_cacher.start();
+    this.scheduler.addWorker('sorted_messages', this._messages_cacher);
   }
 
   // NOTE use this before read operations to ensure coherence
@@ -481,6 +480,43 @@ Tags: Journal`;
   }
 }
 
+class IncrementalScheduler {
+  constructor() {
+    this.timer = null;
+    this.workers = new Map();
+    this.quantum_length = 8; // in milliseconds
+  }
+  
+  // this doesn't exactly work.  we need it to cycle through all of the workers within one quantum, 
+  // but this gives an entire quantum to each worker
+  // TODO it's fine, because we only have one worker
+  start() {
+    this.timer = setInterval(() => {
+      this.workers.forEach(worker => {
+        this.quantum(worker);
+      });
+    }, 2*this.quantum_length);  // give 8ms to other tasks
+  }
+  
+  quantum(worker) {
+    // perform work until the quantum is done, default 8ms
+    
+    if (worker.is_done) {
+      return;
+    }
+
+    let now = performance.now();  // time in milliseconds with sub-millisecond precision
+    while (performance.now() - now < this.quantum_length) {
+      worker.step();
+    }
+    worker.propagate();
+  }
+
+  addWorker(name, worker) {
+    this.workers.set(name, worker);
+  }
+}
+
 class IncrementalWorker {
   constructor(generator) {
     this.generator = generator;
@@ -488,37 +524,17 @@ class IncrementalWorker {
     this.is_done = false;
     this.current_result = undefined;
     this.needs_propagate = false;
-    this.timer = null;
-    this.quantum_length = 8; // in milliseconds
   }
 
-  // perform work until the quantum is done, default 8ms
-  quantum() {
-    if (this.is_done) {
-      return;
-    }
-
-    let now = performance.now();  // time in milliseconds with sub-millisecond precision
-    while (performance.now() - now < this.quantum_length) {
-      const { value, done } = this.generator.next();
+  step() {
+    const { value, done } = this.generator.next();
       
-      if (value !== undefined) {
-        this.current_result = value;
-        this.needs_propagate = true;
-      }
-      if (done) {
-        this.is_done = true;
-        break;
-      }
+    if (value !== undefined) {
+      this.current_result = value;
+      this.needs_propagate = true;
     }
-    this.propagate();
-  }
-
-  // start performing work
-  start() {
-    this.timer = setInterval(() => {
-      this.quantum();
-    }, 2*this.quantum_length);
+    this.is_done = done;
+    return this.is_done;
   }
 
   // propagate current result to all users
