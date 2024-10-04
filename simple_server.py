@@ -162,10 +162,14 @@ def handle_request(request):
         "date-util.js",
         "filedb.js",
         "flatdb.js",
+        "global.js",
         "indexed-fs.js",
         "parse.js",
+        "remote.js",
         "rewrite.js",
         "state.js",
+        "status.js",
+        "sync.js",
         "manifest.json",
     ]
 

@@ -1,3 +1,5 @@
+import { getRemote } from '/remote.js';
+import { kazglobal } from '/global.js';
 
 async function sha256sum(input_string) {
   // console.time('sha256sum');
@@ -18,7 +20,7 @@ async function hashToString(arraybuffer) {
 // tells you the number of things in `right` that are not in `left`, or have different hashes.
 // we can think of `right` as the `source` of possible changes, and `left` as the `destination`,
 // as the result must contain all elements in `right` that are not in `left` or are updated.
-function statusDiff(left, right) {
+export function statusDiff(left, right) {
   let diff = {};
   let left_keys = Object.keys(left);
   for (let note in right) {
@@ -37,11 +39,11 @@ function statusDiff(left, right) {
   return diff;
 }
 
-async function getCombinedRemoteStatus() {
+export async function getCombinedRemoteStatus() {
   return await fetch((await getRemote()) + '/api/status').then(x => x.json());
 }
 
-async function getLocalStatus(repo) {
+export async function getLocalStatus(repo) {
   const notes = await getLocalNotes(repo);
   let status = {};
   console.time('get local status ' + repo);

@@ -1,28 +1,13 @@
+import { getRemote } from '/remote.js';
+import { cache } from '/state.js';
+import { kazglobal } from '/global.js';
+import { getLocalStatus, statusDiff } from '/status.js';
 
 const SYNC_FILE = 'sync_status';
-const SYNC_REMOTE_FILE = 'sync_remote';
 
 export async function gotoSync() {
   window.history.pushState({}, "", "/sync");
   paintSimple(await renderSync());
-}
-
-async function getRemote() {
-  let result = await cache.updateFile(SYNC_REMOTE_FILE, state =>
-    state === null ? "" : state
-  );
-  return result.content;
-}
-
-async function hasRemote() {
-  let hostname = window.location.hostname;
-  let self_hosted = hostname.startsWith("10.") || hostname.startsWith("192.");
-  // if we're self_hosted, we have a remote, even if the remote is ''.
-  if (self_hosted) {
-    return true;
-  }
-  // otherwise, we need to check if the remote is set.
-  return (await getRemote()).trim() !== '';
 }
 
 async function syncButton() {
@@ -36,7 +21,7 @@ async function syncButton() {
 async function renderSync() {
   await cache.updateFile(SYNC_FILE, c => c === null ? '{}' : c);
 
-  let remote_addr = (await cache.readFile(SYNC_REMOTE_FILE)) || '';
+  let remote_addr = getRemote() || '';
   return [`
   <p>Sync is a very experimental feature! use at your own risk!</p>
   <div>
@@ -107,7 +92,7 @@ async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
   }
 }
 
-async function pullRemoteSimple(combined_remote_status) {
+export async function pullRemoteSimple(combined_remote_status) {
   let remotes = Object.keys(combined_remote_status).filter(x => x !== kazglobal.notes.local_repo_name());
   console.time('pull remote simple');
   await Promise.all(remotes.map(async subscribed_remote =>
@@ -115,7 +100,7 @@ async function pullRemoteSimple(combined_remote_status) {
   console.timeEnd('pull remote simple');
 }
 
-async function pushLocalSimple(combined_remote_status) {
+export async function pushLocalSimple(combined_remote_status) {
   let local = await kazglobal.notes.local_repo_name();
   console.time('push local simple');
   await pushLocalNotes(local, /*dry run*/false, combined_remote_status);

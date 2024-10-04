@@ -4,7 +4,12 @@ import { initState, cache, getNow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
 import { rewrite, rewriteLine, rewriteBlock, Msg, Line, Tag, Link } from '/rewrite.js';
 import { dateComp, timezoneCompatibility } from '/date-util.js';
+import { hasRemote } from '/remote.js';
+import { getCombinedRemoteStatus } from '/status.js';
+import { pullRemoteSimple, pushLocalSimple } from '/sync.js';
+import { initializeKazGlobal, kazglobal } from '/global.js';
 
+export { getGlobal } from '/global.js';
 export { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
 export { rewrite } from '/rewrite.js';
 export { debugGlobalNotes } from '/flatdb.js';
@@ -17,13 +22,6 @@ if (!Array.prototype.back) {
   Array.prototype.back = function() {
     return this[this.length - 1];
   }
-}
-
-// GLOBALS
-
-export let kazglobal = null;  // the only global variable.
-export function getGlobal() {
-  return kazglobal;
 }
 
 // GENERAL UTIL
@@ -1517,6 +1515,7 @@ export async function renderSetup() {
   return [
     `<div style="margin: 10px">
        ${TextField({id: 'local_repo_name', file_name: LOCAL_REPO_NAME_FILE, rerender: 'renderSetup', value: local_repo_name, label: 'set local repo name'})}
+       ${TextAction({id: 'get_local_repo_name', label: lookupIcon('get repo'), value: '', action: 'restoreRepo'})}
        </div>
        <p>${local_repo_name_message}</p>
      ${splash}
@@ -1524,6 +1523,12 @@ export async function renderSetup() {
      `,
     add_links
   ];
+}
+
+export async function restoreRepo(id) {
+  let text = document.getElementById(id).value;
+  await kazglobal.notes.restoreRepo(text);
+  await kazglobal.notes.gotoJournal();
 }
 
 export async function gotoSetup() {
@@ -1604,6 +1609,7 @@ function lookupIcon(full_name) {
     'notes': "NOTE",
     'case': "CASE",
     'private': "PRIV",
+    'get repo': "GET_",
   }[full_name];
 }
 
@@ -1839,12 +1845,10 @@ export async function run() {
   
   await initFlatDB(reloadNecessary);
   await initState(reloadNecessary);
-  
-  console.log('initializing global');
-  kazglobal = {};
-  kazglobal.notes = await buildFlatCache();
+
+  await initializeKazGlobal();
   console.log('today is', today());
-  console.log('global is', kazglobal);
+  console.log('global is', kazglobal);  
 
   await handleRouting();
 }

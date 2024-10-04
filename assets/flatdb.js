@@ -189,7 +189,9 @@ class FlatCache {
 
   // NOTE use this before read operations to ensure coherence
   async ensure_valid_cache() {
-    if (this.version !== (await global_notes.getVersion())) {
+    let idb_version = await global_notes.getVersion();
+    if (this.version !== idb_version) {
+      console.log(`cache: versions ${this.version} != ${idb_version} don't match, refreshing cache`);
       await this.refresh_cache();
     }
   }
@@ -198,42 +200,40 @@ class FlatCache {
     let expected_version = this.version;
     let result = await global_notes.writeFile(uuid, content, expected_version);
     if (result.content === null) {
-      // expected version was stale, someone else updated before us, revalidate cache
+      console.log('cache: expected version was stale, someone else updated before us, revalidate cache');
       await this.ensure_valid_cache();
       return;
     }
     if (result.new_version === expected_version + 1) {
-      // our update was the only change
+      console.log('cache: our update was the only change');
       await global_notes.writeFile(uuid, content);
       if (this.get_note(uuid) !== null) {
         this.get_note(uuid).content = content;
       }
     } else {
-      // someone else updated before us, revalidate cache
+      console.log('cache: someone else updated before us, revalidate cache');
       await this.ensure_valid_cache();
     }
-    // TODO how is there two failure modes?
   }
 
   async updateFile(uuid, updater) {
     let expected_version = this.version;
     let result = await global_notes.updateFile(uuid, updater, expected_version);
     if (result.content === null) {
-      // expected version was stale, someone else updated before us, someone else updated before us, revalidate cache
+      console.log('cache: expected version was stale, someone else updated before us, revalidate cache');
       await this.ensure_valid_cache();
       return;
     }
     if (result.new_version === expected_version + 1) {
-      // our update was the only change
+      console.log('cache: our update was the only change');
       await global_notes.writeFile(uuid, content);
       if (this.get_note(uuid) !== null) {
         this.get_note(uuid).content = content;
       }
     } else {
-      // someone else updated before us, revalidate cache
+      console.log('cache: someone else updated before us, revalidate cache');
       await this.ensure_valid_cache();
     }
-    // TODO how is there two failure modes?
   }
 
   async readFile(uuid) {
@@ -285,8 +285,8 @@ class FlatCache {
   // returns null for a quick check, EXAMPLE if search needs to check if a message is on the current page to render it green or pink
   maybe_current_journal() {
     let title = today();
-    if (this._cache_current_journal !== null && this.get_note(this._cache_current_journal).title === title) {
-      return this._cache_current_journal;
+    if (this._cache_current_journal !== null && this._cache_current_journal.title === title) {
+      return this._cache_current_journal.uuid;
     }
     console.log('getting current journal', title);
     let repo = this.local_repo_name();
@@ -297,7 +297,7 @@ class FlatCache {
       // - reasoning: writes and updates can be slow, but the user doesn't expect any read to be slow
     }
     console.assert(notes.length === 1, `expected 1 journal, got ${notes.length}`);
-    this._cache_current_journal = notes[0];
+    this._cache_current_journal = {uuid: notes[0], title};
     return notes[0];
   }
 
@@ -404,40 +404,6 @@ Tags: Journal`;
 
   // message list
 
-  // 570ms, then 30ms once cached
-  gather_messages() {
-    // TODO only rewrite the pages that have changed since the last time we gathered messages
-
-    console.log('gathering messages');
-    // rewriting all of the pages takes 500ms ish
-    const pages = this.metadata_map.map(x => this.rewrite(x.uuid));
-
-    // each page is usually 2 sections, 'entry' and 'METADATA'
-    // a page is a list of sections
-    // a section is a list of blocks
-    const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
-    const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
-
-    // let sorted_notes = this.metadata_map.sort((a, b) => dateComp(b, a));
-    // // TODO append messages from each note by doing a setTimeout for approximately 20ms.
-    
-    // let messages = this.metadata_map.flatMap(x => this.get_messages_in(x.uuid));
-
-    // detectDuplicates(messages);
-
-    return messages;
-  }
-
-  gather_sorted_messages() {
-    // sorting takes 300ms
-    // TODO sort by bins?  we should find the notes that are journals and have clear dilineations, and "optimize" the notes.
-    // - we should probably do that after we show previous and next days on the same journal, so if the notes gets optimized, it's still legible to the user.
-    console.log('sorting gathered messages');
-    let messages = this.gather_messages().sort((a, b) => dateComp(b, a));
-    // detectDuplicates(messages);
-    return messages;
-  }
-
   // generator
   *incrementally_gather_sorted_messages() {
     console.log('gathering messages');
@@ -445,7 +411,7 @@ Tags: Journal`;
     // rewriting all of the pages takes 500ms ish
     let sorted_notes = this.metadata_map.sort((a, b) => dateComp(b, a));
     for (let note of sorted_notes) {
-      let page = this.rewrite(note.uuid);
+      this.rewrite(note.uuid);
       // TODO gather messages here and merge them into the full result.
       yield;
     }
@@ -477,6 +443,14 @@ Tags: Journal`;
     const entry_sections = page.filter(s => s.title === 'entry');
     const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
     return messages;
+  }
+
+  async restoreRepo(repo) {
+    this._local_repo = repo;
+    await cache.writeFile(LOCAL_REPO_NAME_FILE, repo);
+
+    // get all notes from the server
+    
   }
 }
 
