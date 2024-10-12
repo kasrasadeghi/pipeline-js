@@ -35,29 +35,6 @@ function paintSimple(render_result) {
   return {main, footer};
 }
 
-// JOURNAL
-
-export function dateToJournalTitle(date) {
-  const year = date.getFullYear();
-
-  const month = date.toLocaleString('en-us', { month: "long" });
-  const day = date.getDate();
-
-  const day_suffix =
-      [11, 12, 13].includes(day) ? 'th'
-    : day % 10 === 1 ? 'st'
-    : day % 10 === 2 ? 'nd'
-    : day % 10 === 3 ? 'rd'
-    : 'th';
-
-  return `${month} ${day}${day_suffix}, ${year}`;
-}
-
-function today() {
-  const today = getNow();
-  return dateToJournalTitle(today);
-}
-
 // PARSE
 
 //#endregion PARSE
@@ -84,7 +61,7 @@ function pageIsJournal(page) {
 
 // RENDER
 
-async function htmlNote(uuid) {
+function htmlNote(uuid) {
   console.log('rendering note for', uuid);
   let messages = kazglobal.notes.get_messages_around(uuid);
   messages.reverse();
@@ -827,7 +804,7 @@ async function paintDiscFooter(uuid) {
 
 async function renderDiscBody(uuid) {
   let rendered_note = htmlNote(uuid);
-  return rendered_note;
+  return `<div class="msglist">` + rendered_note + `</div>`;
 }
 
 export async function gotoDisc(uuid) {
@@ -1204,14 +1181,14 @@ export async function restoreRepoAction(id) {
 
 export async function gotoSetup() {
   paintSimple(await renderSetup());
-  window.history.pushState({},"", "/setup");
+  window.history.pushState({}, "", "/setup");
 }
 
 // MENU
 
 export async function gotoMenu() {
   paintSimple(await renderMenu());
-  window.history.pushState({},"", "/menu");
+  window.history.pushState({}, "", "/menu");
 }
 
 export async function gotoNewNote(id) {
@@ -1303,11 +1280,10 @@ async function routineContent() {
 
     let page = parseContent(most_recent_routine_note.content);
     page = rewrite(page, most_recent_routine_note.uuid);
-    let maybe_current_journal = await kazglobal.notes.getNotesWithTitle(today(), local_repo_name);
-    if (maybe_current_journal.length === 0) {
+    let current_journal = kazglobal.notes.maybe_current_journal();
+    if (current_journal === null) {
       return "no journal found for today";
     }
-    let current_journal = maybe_current_journal[0];
     const tags = await getTagsFromMixedNote(current_journal);
 
     const error = (msg, obj) => {
@@ -1491,7 +1467,7 @@ export async function run() {
   await initState(reloadNecessary);
 
   await initializeKazGlobal();
-  console.log('today is', today());
+  console.log('today is', getNow());
   console.log('global is', kazglobal);  
 
   await handleRouting();
