@@ -1,4 +1,4 @@
-import FileDB from '/filedb.js';
+import { FileDB } from '/filedb.js';
 
 export let cache = null;
 export async function initState(reloadNecessary) {

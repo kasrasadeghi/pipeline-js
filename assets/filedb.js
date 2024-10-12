@@ -1,7 +1,14 @@
 const currentFileDBVersion = 2;
 const versionStoreName = '.version';
 
-export default class FileDB {
+export class File {
+  constructor({path, content}) {
+    this.path = path;
+    this.content = content;
+  }
+}
+
+export class FileDB {
   constructor(dbName = "pipeline-db", storeName = "notes") {
     this.db = null;
     this.dbName = dbName;
@@ -9,6 +16,7 @@ export default class FileDB {
       throw new Error("storeName cannot start with '.', as those are reserved for internal structures");
     }
     this.storeName = storeName;
+    this.versionStoreName = versionStoreName;
   }
 
   async init(versionChange) {
@@ -26,7 +34,7 @@ export default class FileDB {
             this.db.createObjectStore(this.storeName, { keyPath: 'path' });
 
           case 1:
-            this.db.createObjectStore(versionStoreName, { keyPath: 'key' });
+            this.db.createObjectStore(this.versionStoreName, { keyPath: 'key' });
         }
 
         // maybe TODO create index on title and date and other metadata
@@ -63,7 +71,7 @@ export default class FileDB {
     });
   }
 
-  async bumpVersion(transaction) {
+  async bumpVersion(transaction, operationName) {
     const versionStore = transaction.objectStore(versionStoreName);
     let version = await this.promisify(versionStore.get('version'));
 
@@ -73,6 +81,7 @@ export default class FileDB {
 
     let prior_version = version.value;
     version.value++;
+    console.log('db: bumping version to', version.value, 'as part of', operationName);
     await this.promisify(versionStore.put(version));
     return {prior_version, new_version: version.value};
   }
@@ -97,28 +106,30 @@ export default class FileDB {
   async writeFile(path, content, expected_version) {
     const transaction = this.db.transaction([this.storeName, versionStoreName], "readwrite");
     const objectStore = transaction.objectStore(this.storeName);
-    let versions = await this.bumpVersion(transaction);
+    let {new_version, prior_version} = await this.bumpVersion(transaction, 'writeFile');
     await this.promisify(objectStore.put({ path, content }));
 
-    if (expected_version !== undefined && versions.prior_version !== expected_version) {
-      return {new_version: versions.new_version, content: null};
+    if (expected_version !== undefined && prior_version !== expected_version) {
+      return {new_version: new_version, content: null};
     } else {
-      return {new_version: versions.new_version, content};
+      return {new_version: new_version, content};
     }
   }
 
   async readAllFiles() {
+    console.time('read all files');
     const transaction = this.db.transaction([this.storeName, versionStoreName]);
-    let current_version = await this.getVersion(transaction);
+    const current_version = await this.getVersion(transaction);
     const objectStore = transaction.objectStore(this.storeName);
-    return {current_version, result: await this.promisify(objectStore.getAll())};
+    const result = {current_version, result: await this.promisify(objectStore.getAll())};
+    console.timeEnd('read all files');
+    return result;
   }
 
   async updateFile(path, updater, expected_version) {
     const transaction = this.db.transaction([this.storeName, versionStoreName], "readwrite");
     const objectStore = transaction.objectStore(this.storeName);
-    let prior_version = await this.getVersion(transaction);
-    let new_version = await this.bumpVersion(transaction);
+    let {new_version, prior_version} = await this.bumpVersion(transaction, 'updateFile');
     
     const result = await this.promisify(objectStore.get(path));
     
@@ -131,6 +142,22 @@ export default class FileDB {
       return {new_version, content: null};
     } else {
       return {new_version, content: updated_content};
+    }
+  }
+
+  async putFiles(files, expected_version) {
+    const transaction = this.db.transaction([this.storeName, versionStoreName], "readwrite");
+    const objectStore = transaction.objectStore(this.storeName);
+    let {new_version, prior_version} = await this.bumpVersion(transaction, 'putFiles');
+    
+    for (let uuid in files) {
+      await this.promisify(objectStore.put({path: uuid, content: files[uuid]}));
+    }
+
+    if (expected_version !== undefined && prior_version !== expected_version) {
+      return {new_version, files: null};
+    } else {
+      return {new_version, files};
     }
   }
 

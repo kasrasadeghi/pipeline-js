@@ -1,40 +1,36 @@
 import { getRemote } from '/remote.js';
 import { cache } from '/state.js';
-import { kazglobal } from '/global.js';
-import { getLocalStatus, statusDiff } from '/status.js';
+import { initializeKazGlobal, getGlobal, kazglobal } from '/global.js';
+import { getCombinedRemoteStatus, getLocalStatus, statusDiff } from '/status.js';
+import { LOCAL_REPO_NAME_FILE } from '/flatdb.js';
 
-const SYNC_FILE = 'sync_status';
-
-export async function gotoSync() {
-  window.history.pushState({}, "", "/sync");
-  paintSimple(await renderSync());
+export async function restoreRepo(repo) {
+  await initializeKazGlobal(false);
+  await cache.writeFile(LOCAL_REPO_NAME_FILE, repo);
+  await getAllNotes(repo);
+  await getGlobal().notes.refresh_cache();  // refresh the cache after loading the notes.
 }
 
-async function syncButton() {
-  if (await hasRemote()) {
-    return MenuButton({icon: 'sync', action: 'gotoSync()'});
-  } else {
-    return ``;
+// attempts to sync.
+// @returns true if sync succeeded.  false if it failed.
+// 
+export async function sync(displayState) {
+  try {
+    let combined_remote_status = await getCombinedRemoteStatus();
+    displayState("syncing...");
+    await pullRemoteSimple(combined_remote_status);
+    
+    // don't paint after syncing.  it's jarring/disruptive as sync is sometimes slow (500ms)
+    // await paintDisc(uuid, 'only main'); 
+
+    displayState("done");
+    await pushLocalSimple(combined_remote_status);
+    return true;
+  } catch (e) {
+    console.log('sync failed', e);
+    displayState("sync failed, cannot connect to api server");
+    return false;
   }
-}
-
-async function renderSync() {
-  await cache.updateFile(SYNC_FILE, c => c === null ? '{}' : c);
-
-  let remote_addr = getRemote() || '';
-  return [`
-  <p>Sync is a very experimental feature! use at your own risk!</p>
-  <div>
-    ${TextField({id:'remote', file_name: SYNC_REMOTE_FILE, label: 'set remote addr', value: remote_addr, rerender: 'renderSync'})}
-    <p>The current remote is '${remote_addr}'</p>
-  </div>
-  <div style='display: flex;'>` + repo_sync_menu(local, 'local') + remotes.map(remote => repo_sync_menu(remote, 'remote')).join("") + `</div>`,
-  `<div>
-    ${MenuButton({icon: 'list', action: 'gotoList()'})}
-    ${MenuButton({icon: 'setup', action: 'gotoSetup()'})}
-    ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
-  </div>
-  `]
 }
 
 export async function fetchNotes(repo, uuids) {
@@ -47,10 +43,17 @@ export async function fetchNotes(repo, uuids) {
   if (repo.endsWith('/')) {
     repo = repo.slice(0, -1);
   }
-  let result = await fetch((await getRemote()) +'/api/get/' + repo + "/" + uuids.join(",")).then(t => t.json());
-  for (let note in result) {
-    // TODO we want to do a batched write set of files, or update set of files, in a single transaction
-    await kazglobal.notes.writeFile(note, result[note]);
+
+  // batch uuids per 100
+  let batch_size = 100;
+  let batches = [];
+  for (let i = 0; i < uuids.length; i += batch_size) {
+    batches.push(uuids.slice(i, i + batch_size));
+  }
+  for (let batch of batches) {
+    console.log('sync: getting all messages')
+    let result = await fetch((await getRemote()) +'/api/get/' + repo + "/" + batch.join(",")).then(t => t.json());
+    await getGlobal().notes.putFiles(result);
   }
 }
 
@@ -63,32 +66,6 @@ export async function getAllNotes(repo) {
     await fetchNotes(repo, list);
   } catch (e) {
     console.log(e);
-  }
-}
-
-async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
-  let local_status = await getLocalStatus(repo);
-  let remote_status = undefined;
-  if (combined_remote_status !== undefined) {
-    // console.log('using combined remote status');
-    remote_status = combined_remote_status[repo] || {};
-  } else {
-    console.assert(false, 'must used combined remote status');
-  }
-  let updated = statusDiff(local_status, remote_status);
-  let updated_notes = Object.keys(updated);
-  console.assert(updated_notes.every(x => x.startsWith(repo + '/')));
-
-  let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
-
-  if (dry_run) {
-    writeOutputIfElementIsPresent(repo + '_sync_output', "update found:\n" + JSON.stringify(updated, undefined, 2));
-  } else {
-    writeOutputIfElementIsPresent(repo + '_sync_output', "update committed:\n" + JSON.stringify(updated, undefined, 2));
-    console.log('updated uuids', updated_uuids);
-    if (updated_uuids.length > 0) {
-      await fetchNotes(repo, updated_uuids);
-    }
   }
 }
 
@@ -107,35 +84,46 @@ export async function pushLocalSimple(combined_remote_status) {
   console.timeEnd('push local simple');
 }
 
-function writeOutputIfElementIsPresent(element_id, content) {
-  let element = document.getElementById(element_id);
-  if (element === null) {
-    return;
-  }
-  element.innerHTML = content;
-}
-
-async function pushLocalNotes(repo, dry_run, combined_remote_status) {
+async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
+  console.time('computing status for local notes ' + repo);
+  console.assert(combined_remote_status !== undefined, 'must used combined remote status');
   let local_status = await getLocalStatus(repo);
-  let remote_status = undefined;
-  if (combined_remote_status !== undefined) {
-    console.log('using combined remote status');
-    remote_status = combined_remote_status[repo] || {};
-  } else {
-    console.assert(false, 'must used combined remote status');
-  }
-  let updated = statusDiff(remote_status, local_status);  // flipped, so it is what things in local aren't yet in the remote.
-  // local is the new state, remote is the old state, this computes the diff to get from the old state to the new.
-
+  let remote_status = combined_remote_status[repo] || {};
+  let updated = statusDiff(local_status, remote_status);
   let updated_notes = Object.keys(updated);
   console.assert(updated_notes.every(x => x.startsWith(repo + '/')));
+  console.timeEnd('computing status for local notes ' + repo);
 
   let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
 
   if (dry_run) {
-    writeOutputIfElementIsPresent(repo + '_sync_output', "push update found:\n" + JSON.stringify(updated, undefined, 2));
+    // writeOutputIfElementIsPresent(repo + '_sync_output', "update found:\n" + JSON.stringify(updated, undefined, 2));
   } else {
-    writeOutputIfElementIsPresent(repo + '_sync_output', "push update committed:\n" + JSON.stringify(updated, undefined, 2));
+    // writeOutputIfElementIsPresent(repo + '_sync_output', "update committed:\n" + JSON.stringify(updated, undefined, 2));
+    console.log('updated uuids', updated_uuids);
+    if (updated_uuids.length > 0) {
+      await fetchNotes(repo, updated_uuids);
+    }
+  }
+}
+
+async function pushLocalNotes(repo, dry_run, combined_remote_status) {
+  console.time('computing status for local notes ' + repo);
+  console.assert(combined_remote_status !== undefined, 'must used combined remote status');
+  let remote_status = combined_remote_status[repo] || {};
+  let local_status = await getLocalStatus(repo);
+  let updated = statusDiff(remote_status, local_status);  // flipped, so it is what things in local aren't yet in the remote.
+  // local is the new state, remote is the old state, this computes the diff to get from the old state to the new.
+  let updated_notes = Object.keys(updated);
+  console.assert(updated_notes.every(x => x.startsWith(repo + '/')));  
+  console.timeEnd('computing status for local notes ' + repo);
+
+  let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
+
+  if (dry_run) {
+    // writeOutputIfElementIsPresent(repo + '_sync_output', "push update found:\n" + JSON.stringify(updated, undefined, 2));
+  } else {
+    // writeOutputIfElementIsPresent(repo + '_sync_output', "push update committed:\n" + JSON.stringify(updated, undefined, 2));
     console.log('updated uuids', updated_uuids);
     if (updated_uuids.length > 0) {
       await putNotes(repo, updated_uuids);

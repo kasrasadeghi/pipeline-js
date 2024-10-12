@@ -1,15 +1,14 @@
 import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
-import { buildFlatCache, initFlatDB, SHOW_PRIVATE_FILE, LOCAL_REPO_NAME_FILE } from '/flatdb.js';
+import { initFlatDB, SHOW_PRIVATE_FILE, LOCAL_REPO_NAME_FILE } from '/flatdb.js';
 import { initState, cache, getNow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
 import { rewrite, rewriteLine, rewriteBlock, Msg, Line, Tag, Link } from '/rewrite.js';
 import { dateComp, timezoneCompatibility } from '/date-util.js';
 import { hasRemote } from '/remote.js';
-import { getCombinedRemoteStatus } from '/status.js';
-import { pullRemoteSimple, pushLocalSimple } from '/sync.js';
-import { initializeKazGlobal, kazglobal } from '/global.js';
+import { sync, restoreRepo } from '/sync.js';
+import { getGlobal, initializeKazGlobal, kazglobal } from '/global.js';
 
-export { getGlobal } from '/global.js';
+export { getGlobal };
 export { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
 export { rewrite } from '/rewrite.js';
 export { debugGlobalNotes } from '/flatdb.js';
@@ -674,7 +673,6 @@ function htmlLine(line) {
 
 // DISC
 
-const MIX_FILE = 'disc mix state';
 const MENU_TOGGLE_FILE = 'disc menu toggle state';
 const LIST_NOTES_TOGGLE_FILE = 'list notes toggle state';
 const SEARCH_CASE_SENSITIVE_FILE = 'search case sensitive state';
@@ -732,7 +730,6 @@ export async function handleMsg(event) {
   // yield to the UI thread with settimeout 0, so the msg_input clientHeight uses the post-keyboardEvent UI state.
   setTimeout(() => {
     let footer_menu_size = (document.getElementById('msg_input').clientHeight) + 80; // for one line, client height is 31px
-    console.log('setting footer menu to ', footer_menu_size, 'px');
     document.documentElement.style.setProperty("--footer_menu_size", footer_menu_size + "px");
   }, 0);
 
@@ -757,7 +754,7 @@ export async function handleMsg(event) {
 
     // if we're in a journal and we're not on the current one, redirect to the current journal
     if (is_journal) {
-      let today_uuid = await getJournalUUID();
+      let today_uuid = await kazglobal.notes.get_or_create_current_journal();
       if (current_uuid !== today_uuid) {
         current_uuid = today_uuid;
         window.history.pushState({}, "", `/disc/${current_uuid}`);
@@ -780,22 +777,7 @@ export async function handleMsg(event) {
   await paintDiscRoutine();
 
   if (hasRemote()) {
-    let sync_success = true;
-    try {
-      let combined_remote_status = await getCombinedRemoteStatus();
-      displayState("syncing...");
-      await pullRemoteSimple(combined_remote_status);
-      
-      // don't paint after syncing.  it's jarring/disruptive as sync is sometimes slow (500ms)
-      // await paintDisc(uuid, 'only main'); 
-
-      displayState("done");
-      await pushLocalSimple(combined_remote_status);
-    } catch (e) {
-      console.log('sync failed', e);
-      displayState("sync failed, cannot connect to api server");
-      sync_success = false;
-    }
+    const sync_success = sync(displayState);
     if (! sync_success) {
       getSupervisorStatusPromise()
         .then((status) => { displayState(JSON.stringify(status)); })
@@ -1487,9 +1469,6 @@ export async function renderSetup() {
     local_repo_name = '';
   }
   if (local_repo_name.length > 0) {
-    if (global.notes === undefined) {
-      kazglobal.notes = await buildFlatCache();
-    }
     local_repo_name_message = `Local repo name is ${colorize_repo(local_repo_name)}`;
     add_links = `
     ${MenuButton({icon: 'menu', action: 'gotoMenu()'})}
@@ -1515,7 +1494,7 @@ export async function renderSetup() {
   return [
     `<div style="margin: 10px">
        ${TextField({id: 'local_repo_name', file_name: LOCAL_REPO_NAME_FILE, rerender: 'renderSetup', value: local_repo_name, label: 'set local repo name'})}
-       ${TextAction({id: 'get_local_repo_name', label: lookupIcon('get repo'), value: '', action: 'restoreRepo'})}
+       ${TextAction({id: 'get_local_repo_name', label: lookupIcon('get repo'), value: '', action: 'restoreRepoAction'})}
        </div>
        <p>${local_repo_name_message}</p>
      ${splash}
@@ -1525,10 +1504,10 @@ export async function renderSetup() {
   ];
 }
 
-export async function restoreRepo(id) {
+export async function restoreRepoAction(id) {
   let text = document.getElementById(id).value;
-  await kazglobal.notes.restoreRepo(text);
-  await kazglobal.notes.gotoJournal();
+  await restoreRepo(text);
+  await gotoJournal();
 }
 
 export async function gotoSetup() {
@@ -1579,7 +1558,6 @@ export async function renderMenu() {
       ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
       ${MenuButton({icon: 'list', action: 'gotoList()'})}
       ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
-      ${await syncButton()}
       ${MenuButton({icon: 'setup', action: 'gotoSetup()'})}
       ${await ToggleButton({id: 'show_private_toggle', file: SHOW_PRIVATE_FILE, label: lookupIcon('private'), rerender: 'renderMenu'})}
     </div>`
@@ -1723,19 +1701,8 @@ async function getTagsFromMixedNote(uuid) {
 
 // MAIN
 
-async function getJournalUUID() {
-  console.log(kazglobal);
-  let notes = await kazglobal.notes.getNotesWithTitle(today(), kazglobal.notes.local_repo_name());
-  if (notes.length === 0) {
-    let uuid = await kazglobal.notes.newJournal(today(), getNow());
-    notes = [uuid];
-    // TODO maybe we only want to do a full update of the cache on sync, hmm.  nah, it seems like it should be on every database operation, for _consistency_'s (ACID) sake.
-  }
-  return notes[0];
-}
-
 export async function gotoJournal() {
-  let uuid = await getJournalUUID();
+  let uuid = await kazglobal.notes.get_or_create_current_journal();
   await gotoDisc(uuid);
 }
 

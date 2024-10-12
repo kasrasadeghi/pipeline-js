@@ -1,4 +1,4 @@
-import FileDB from '/filedb.js';
+import { File, FileDB } from '/filedb.js';
 import { cache, getNow } from '/state.js';
 import { readBooleanFile } from '/boolean-state.js';
 import { parseContent } from '/parse.js';
@@ -83,34 +83,38 @@ function parseMetadata(note_content) {
   return metadata;
 }
 
-async function getNoteMetadataMap(caller) {
+function constructNoteFromFile(file) {
+  console.assert(file instanceof File);
+  
+  let metadata = null;
+  try {
+    metadata = parseMetadata(file.content);
+  } catch (e) {
+    console.log('broken metadata', file.path, e);
+    metadata = {Title: "broken metadata", Date: `${getNow()}`};
+  }
+  if (metadata.Title === undefined) {
+    metadata.Title = "broken title";
+  }
+  if (metadata.Date === undefined) {
+    metadata.Date = `${getNow()}`;
+  }
+  return new Note({uuid: file.path, title: metadata.Title, date: metadata.Date, content: file.content, metadata});
+}
+
+async function getNoteList(caller) {
   if (caller === undefined) {
     console.log('raw note metadata used');
     throw new Error('raw note metadata used');
   } else {
-    console.log('getNoteMetadataMap from', caller);
+    console.log('getNoteList from', caller);
   }
-  console.time('read files');
   const readAllResult = await global_notes.readAllFiles();
   let current_version = readAllResult.current_version;
-  let blobs = readAllResult.result;
-  console.timeEnd('read files');
+  let files = readAllResult.result;
   console.time('parse metadata');
-  let result = blobs.map(blob => {
-    let metadata = null;
-    try {
-      metadata = parseMetadata(blob.content);
-    } catch (e) {
-      console.log('broken metadata', blob.path, e);
-      metadata = {Title: "broken metadata", Date: `${getNow()}`};
-    }
-    if (metadata.Title === undefined) {
-      metadata.Title = "broken title";
-    }
-    if (metadata.Date === undefined) {
-      metadata.Date = `${getNow()}`;
-    }
-    return new Note({uuid: blob.path, title: metadata.Title, date: metadata.Date, content: blob.content, metadata});
+  let result = files.map(file => {
+    return constructNoteFromFile(new File(file));
   });
   console.timeEnd('parse metadata');
   return {current_version, result};
@@ -173,10 +177,10 @@ class FlatCache {
   }
 
   async refresh_cache() {
-    console.log('building flat cache');
+    console.log('refreshing cache');
     this._local_repo = await get_local_repo_name();
 
-    let metadataMapResult = await getNoteMetadataMap('FlatRead');
+    let metadataMapResult = await getNoteList('FlatRead');
     this.metadata_map = metadataMapResult.result;
     this.version = metadataMapResult.current_version;
 
@@ -185,6 +189,7 @@ class FlatCache {
 
     this._messages_cacher = new IncrementalWorker(this.incrementally_gather_sorted_messages());
     this.scheduler.addWorker('sorted_messages', this._messages_cacher);
+    console.log('done flat cache');
   }
 
   // NOTE use this before read operations to ensure coherence
@@ -200,39 +205,57 @@ class FlatCache {
     let expected_version = this.version;
     let result = await global_notes.writeFile(uuid, content, expected_version);
     if (result.content === null) {
-      console.log('cache: expected version was stale, someone else updated before us, revalidate cache');
+      console.log('cache: writeFile: expected version was stale, someone else updated before us, revalidate cache');
       await this.ensure_valid_cache();
       return;
-    }
-    if (result.new_version === expected_version + 1) {
-      console.log('cache: our update was the only change');
-      await global_notes.writeFile(uuid, content);
-      if (this.get_note(uuid) !== null) {
-        this.get_note(uuid).content = content;
-      }
     } else {
-      console.log('cache: someone else updated before us, revalidate cache');
-      await this.ensure_valid_cache();
+      console.log('cache: writeFile: expected version was correct, our update was the only change and we received a valid result from updateFile')
+      if (this.get_note(uuid) !== null) {
+        this.overwrite_note(uuid, content);
+      } else {
+        // TODO we might be writing to a non-existant file, in which case we should create the file in our cache as well
+        await this.ensure_valid_cache();
+      }
     }
   }
 
   async updateFile(uuid, updater) {
     let expected_version = this.version;
+    
     let result = await global_notes.updateFile(uuid, updater, expected_version);
     if (result.content === null) {
-      console.log('cache: expected version was stale, someone else updated before us, revalidate cache');
+      console.log('cache: updateFile: expected version was stale, someone else updated before us, revalidate cache');
       await this.ensure_valid_cache();
-      return;
-    }
-    if (result.new_version === expected_version + 1) {
-      console.log('cache: our update was the only change');
-      await global_notes.writeFile(uuid, content);
-      if (this.get_note(uuid) !== null) {
-        this.get_note(uuid).content = content;
-      }
+
     } else {
-      console.log('cache: someone else updated before us, revalidate cache');
+      console.log('cache: updateFile: expected version was correct, our update was the only change and we received a valid result from updateFile', result);
+      if (this.get_note(uuid) !== null) {
+        this.overwrite_note(uuid, result.content);
+        this.version = result.new_version;
+      } else {
+        // TODO we might be updating a non-existant file, in which case we should create the file in our cache as well
+        await this.ensure_valid_cache();
+      }
+    }
+  }
+
+  async putFiles(files) {
+    // files is a mapping from uuid to file-content
+    let expected_version = this.version;
+    let result = await global_notes.putFiles(files, expected_version);
+    
+    if (result.files === null) {
+      console.log('cache: updateFile: expected version was stale, someone else updated before us, revalidate cache');
       await this.ensure_valid_cache();
+
+    } else {
+      console.log('cache: updateFile: expected version was correct, our update was the only change and we received a valid result from updateFile');
+      for (let uuid in files) {
+        if (this.get_note(uuid) !== null) {
+          this.overwrite_note(uuid, files[uuid]);
+        }
+        this.version = result.new_version;
+      }
     }
   }
 
@@ -262,23 +285,31 @@ class FlatCache {
     return this.metadata_map.find(note => note.uuid === uuid) || null;
   }
 
+  overwrite_note(uuid, content) {
+    let note = this.get_note(uuid);
+    console.assert(note instanceof Note);
+    note.content = content;
+    delete note.cache;
+  }
+
   rewrite(uuid) {
     let note = this.get_note(uuid);
     if (note === null) {
       console.assert(false, `could not find note ${uuid}`);
       return null;
     }
-    if (note.rewrite === undefined) {
+    note.cache = note.cache || {};
+    if (note.cache.rewrite === undefined) {
       let page = parseContent(note.content);
       let rewrite_result = rewrite(page, uuid);
-      note.rewrite = deepFreeze(rewrite_result);
+      note.cache.rewrite = deepFreeze(rewrite_result);
     }
 
     // without deepFreeze, it is dangerous to modify the result of .rewrite(), because it is passed by reference.
     // - this was the source of BUG search duplication, where messages were duplicated, but only for the past 2 days.
     // - the CAUSE was that we mixed the most recent page (adding the previous page into it) on the journal,
     //   but we did that on the passed-by-reference cached result of the page rewrite.
-    return note.rewrite;
+    return note.cache.rewrite;
   }
 
   // a non-async alternative that fails if the current_journal hasn't been made.
@@ -301,6 +332,42 @@ class FlatCache {
     return notes[0];
   }
 
+  async get_or_create_current_journal() {
+    let title = today();
+    if (this._cache_current_journal !== null && this._cache_current_journal.title === title) {
+      return this._cache_current_journal.uuid;
+    }
+
+    let local_repo = await this.local_repo_name();
+
+    const transaction = global_notes.db.transaction([global_notes.storeName, global_notes.versionStoreName], "readwrite");
+    const objectStore = transaction.objectStore(global_notes.storeName);
+
+    // TODO should we do anything with the transaction version here?
+    let {prior_version, new_version} = await global_notes.bumpVersion(transaction);
+
+    let files = await global_notes.promisify(objectStore.getAll());
+
+    // this is a pretty hefty amount of parsing, which will be slow, but eh.  maybe we can make it faster by storing the metadata in the database rows.
+    let notes = files.filter(note => note.path.startsWith(local_repo + "/") && note.content.split("\n--- METADATA ---\n")[1]?.includes(`Title: ${title}`)).map(note => note.path);
+    if (notes.length == 0) {
+      let content = `--- METADATA ---
+      Date: ${date}
+      Title: ${title}
+      Tags: Journal`;
+      let uuid = local_repo + '/' + crypto.randomUUID() + '.note';
+
+      // notice that this put/write is part of the same transaction as the getAll from above.
+      // that's how we can ensure that nobody has created the journal between the time we read all of the files and wrote/created this new one.
+      await this.promisify(objectStore.put({ path: uuid, content }));
+      this._cache_current_journal = {uuid, title};
+      return uuid;
+    }
+    console.assert(notes.length === 1, `expected 1 journal, got ${notes.length}`);
+    this._cache_current_journal = {uuid: notes[0], title};
+    return notes[0];
+  }
+
   local_repo_name() {
     return this._local_repo;
   }
@@ -314,18 +381,6 @@ class FlatCache {
     let content = `--- METADATA ---
 Date: ${date}
 Title: ${title}`;
-    // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
-    let uuid = (await this.local_repo_name()) + '/' + crypto.randomUUID() + '.note';
-    await this.writeFile(uuid, content);
-    await this.ensure_valid_cache();
-    return uuid;
-  }
-
-  async newJournal(title, date) {
-    let content = `--- METADATA ---
-Date: ${date}
-Title: ${title}
-Tags: Journal`;
     // https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
     let uuid = (await this.local_repo_name()) + '/' + crypto.randomUUID() + '.note';
     await this.writeFile(uuid, content);
@@ -353,10 +408,8 @@ Tags: Journal`;
 
     let messages = null;
     // if (this._messages_cacher === null || this._messages_cacher.is_done === false) {
-      console.log('no cached messages, using a shortcut');
       let notes_that_can_overlap = this.metadata_map
         .filter(note => can_overlap(note.date, origin_date));
-      console.log(notes_that_can_overlap);
       
       messages = notes_that_can_overlap.map(note => this.get_messages_in(note.uuid)).flat().sort((a, b) => dateComp(b, a));
     // } else {
@@ -364,8 +417,6 @@ Tags: Journal`;
     //   messages = this._messages_cacher.current_result;
     // }
 
-    console.log(messages.length);
-    
     // for now, we'll just do a linear search
     let msg_24h_before_idx = null;
     let msg_24h_after_idx = null;
@@ -395,10 +446,6 @@ Tags: Journal`;
 
     // the results are sorted most recent first, so we need to reverse the slice
     let result = messages.slice(msg_24h_after_idx, msg_24h_before_idx);
-    console.log('all_messages', messages);
-    console.log('messages around result', result);
-    console.log(msg_24h_before_idx, msg_24h_after_idx);
-    console.log('origin_date of note', origin_date, uuid);
     return result;
   }
 
@@ -406,7 +453,7 @@ Tags: Journal`;
 
   // generator
   *incrementally_gather_sorted_messages() {
-    console.log('gathering messages');
+    console.log('incrementally gathering messages');
 
     // rewriting all of the pages takes 500ms ish
     let sorted_notes = this.metadata_map.sort((a, b) => dateComp(b, a));
@@ -443,14 +490,6 @@ Tags: Journal`;
     const entry_sections = page.filter(s => s.title === 'entry');
     const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
     return messages;
-  }
-
-  async restoreRepo(repo) {
-    this._local_repo = repo;
-    await cache.writeFile(LOCAL_REPO_NAME_FILE, repo);
-
-    // get all notes from the server
-    
   }
 }
 
@@ -532,8 +571,10 @@ class IncrementalWorker {
   }
 }
 
-export async function buildFlatCache() {
+export async function buildFlatCache(refresh) {
   let flatCache = new FlatCache();
-  await flatCache.refresh_cache();
+  if (refresh) {
+    await flatCache.refresh_cache();
+  }
   return flatCache;
 }

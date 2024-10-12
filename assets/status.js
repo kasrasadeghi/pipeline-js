@@ -40,18 +40,18 @@ export function statusDiff(left, right) {
 }
 
 export async function getCombinedRemoteStatus() {
-  return await fetch((await getRemote()) + '/api/status').then(x => x.json());
+  console.time('combined remote status');
+  let result = await fetch((await getRemote()) + '/api/status').then(x => x.json());
+  console.timeEnd('combined remote status');
+  return result;
 }
 
 export async function getLocalStatus(repo) {
   const notes = await getLocalNotes(repo);
   let status = {};
-  console.time('get local status ' + repo);
   for (let note of notes) {
-
     status[note] = await sha256sum(await kazglobal.notes.readFile(note));
   }
-  console.timeEnd('get local status ' + repo);
   return status;
 }
 
