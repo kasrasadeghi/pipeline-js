@@ -910,29 +910,6 @@ window.addEventListener('load', () => {
 
 // SEARCH
 
-function detectDuplicates(messages) {
-  // detect duplicates
-  let found_duplicate = false;
-  let duplicate = null;
-  let msg_set = new Set();
-  let reprs = messages.map(x => x.repr());
-  for (let repr of reprs) {
-    if (msg_set.has(repr)) {
-      duplicate = repr;
-      found_duplicate = true;
-      break;
-    }
-    msg_set.add(repr);
-  }
-
-  if (found_duplicate) {
-    alert('error: found duplicates');
-    console.assert(false, 'should have no duplicates', duplicate);
-  } else {
-    console.log('no duplicates found', messages, reprs);
-  }
-}
-
 export function search(messages, text, is_case_sensitive=false) {
   console.log('searching');
   if (text === '' || text === null || text === undefined) {
