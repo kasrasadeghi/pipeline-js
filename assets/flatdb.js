@@ -68,29 +68,21 @@ class Note {
   }
 };
 
-function parseMetadata(note_content) {
-  const lines = note_content.slice(note_content.indexOf("--- METADATA ---") + 1).split('\n');
+function parseMetadata(file) {
   let metadata = {};
-  lines.forEach(line => {
-    let split_index = line.indexOf(": ");
-    if (split_index === -1) {
-      return;
-    }
-    let first = line.slice(0, split_index);
-    let rest = line.slice(split_index + 2); // ": ".length
-    metadata[first.trim()] = rest;
-  });
-  return metadata;
-}
-
-function constructNoteFromFile(file) {
-  console.assert(file instanceof File);
-  
-  let metadata = null;
   try {
-    metadata = parseMetadata(file.content);
+    const lines = file.content.slice(file.content.indexOf("--- METADATA ---") + 1).split('\n');
+    lines.forEach(line => {
+      let split_index = line.indexOf(": ");
+      if (split_index === -1) {
+        return;
+      }
+      let first = line.slice(0, split_index);
+      let rest = line.slice(split_index + 2); // ": ".length
+      metadata[first.trim()] = rest;
+    });
   } catch (e) {
-    console.log('broken metadata', file.path, e);
+    console.log("broken metadata", file.path, e);
     metadata = {Title: "broken metadata", Date: `${getNow()}`};
   }
   if (metadata.Title === undefined) {
@@ -99,6 +91,12 @@ function constructNoteFromFile(file) {
   if (metadata.Date === undefined) {
     metadata.Date = `${getNow()}`;
   }
+  return metadata;
+}
+
+function constructNoteFromFile(file) {
+  console.assert(file instanceof File);
+  let metadata = parseMetadata(file);
   return new Note({uuid: file.path, title: metadata.Title, date: metadata.Date, content: file.content, metadata});
 }
 

@@ -58,14 +58,6 @@ function today() {
 
 // PARSE
 
-async function parseFile(filepath) {
-  let content = await kazglobal.notes.readFile(filepath);
-  if (content === null) {
-    return null;
-  }
-  return parseContent(content);
-}
-
 //#endregion PARSE
 
 //#region REWRITE
@@ -157,21 +149,6 @@ const timestamp_day_format = new Intl.DateTimeFormat('en-us', { month: 'short', 
 
 // date timestamp with day and year, like Jan 15, 2024, hh:mm:ss in 24-hour clock
 const timestamp_year_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-
-// datetime format for "search" mode, like "Wed, Jan 15, hh:mm:ss" in 24-hour clock
-const datetime_format = new Intl.DateTimeFormat('en-us', { month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-
-// utc format
-const utc_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'UTC' });
-
-// datetime format for "search" mode with year, like "Wed, Jan 15 2024, hh:mm:ss" in 24-hour clock
-const datetime_year_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-
-// datetime format for "brief" mode, like "Wed Jan 15 hh:mm:ss PST" in 24-hour clock
-const datetime_brief_format = new Intl.DateTimeFormat('en-us', { month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short'});
-
-// the above format with the year added
-const datetime_brief_year_format = new Intl.DateTimeFormat('en-us', { year: "numeric", month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short'});
 
 
 function renderDatetime(date) {
@@ -582,7 +559,7 @@ function parseRef(ref) {
 
 async function retrieveMsg(ref) {
   let url_ref = parseRef(ref);
-  let r = rewrite(await parseFile(url_ref.uuid), url_ref.uuid);
+  let r = kazglobal.notes.rewrite(url_ref.uuid);
   let found_msg = r.filter(section => section.title === 'entry')
     .flatMap(s => s.blocks)
     .filter(x => x instanceof Msg && x.date === url_ref.datetime_id);
