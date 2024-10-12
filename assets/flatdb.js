@@ -350,14 +350,14 @@ class FlatCache {
     let notes = files.filter(note => note.path.startsWith(local_repo + "/") && note.content.split("\n--- METADATA ---\n")[1]?.includes(`Title: ${title}`)).map(note => note.path);
     if (notes.length == 0) {
       let content = `--- METADATA ---
-      Date: ${date}
+      Date: ${getNow()}
       Title: ${title}
       Tags: Journal`;
       let uuid = local_repo + '/' + crypto.randomUUID() + '.note';
 
       // notice that this put/write is part of the same transaction as the getAll from above.
       // that's how we can ensure that nobody has created the journal between the time we read all of the files and wrote/created this new one.
-      await this.promisify(objectStore.put({ path: uuid, content }));
+      await global_notes.promisify(objectStore.put({ path: uuid, content }));
       this._cache_current_journal = {uuid, title};
       return uuid;
     }
@@ -388,6 +388,11 @@ Title: ${title}`;
 
   get_messages_around(uuid) {
     let note = this.get_note(uuid);
+
+    if (note === null) {
+      console.assert(false, `could not find note ${uuid}`);
+      return [];
+    }
 
     // get date of the note
     let origin_date = new Date(note.metadata.Date);
@@ -449,24 +454,31 @@ Title: ${title}`;
 
   // message list
 
+  merge(L, R, comparator) {
+    let result = []; let left_i = 0; let right_i = 0;
+    while (left_i < L.length && right_i < R.length) {
+      if (comparator(L[left_i], R[right_i]) <= 0) {
+        result.push(L[left_i++]);
+      } else {
+        result.push(R[right_i++]);
+      }
+    }
+    return result.concat(L.slice(left_i)).concat(R.slice(right_i));
+  }
+
   // generator
   *incrementally_gather_sorted_messages() {
     console.log('incrementally gathering messages');
 
     // rewriting all of the pages takes 500ms ish
     let sorted_notes = this.metadata_map.sort((a, b) => dateComp(b, a));
+    let pages = [];
     for (let note of sorted_notes) {
-      this.rewrite(note.uuid);
+      pages.push(this.rewrite(note.uuid));
       // TODO gather messages here and merge them into the full result.
       yield;
     }
 
-    const pages = this.metadata_map.map(x => this.rewrite(x.uuid));
-    yield;
-
-    // each page is usually 2 sections, 'entry' and 'METADATA'
-    // a page is a list of sections
-    // a section is a list of blocks
     const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
     const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
     yield;
@@ -495,17 +507,21 @@ class IncrementalScheduler {
   constructor() {
     this.timer = null;
     this.workers = new Map();
+    this.worker_queue = [];
     this.quantum_length = 8; // in milliseconds
   }
   
-  // this doesn't exactly work.  we need it to cycle through all of the workers within one quantum, 
-  // but this gives an entire quantum to each worker
-  // TODO it's fine, because we only have one worker
   start() {
     this.timer = setInterval(() => {
-      this.workers.forEach(worker => {
-        this.quantum(worker);
-      });
+      // run one worker per quantum
+      if (this.worker_queue.length === 0) {
+        this.worker_queue = Array.from(this.workers.values());
+      }
+      if (this.worker_queue.length === 0) {
+        return;
+      }
+      const worker = this.worker_queue.pop();
+      this.quantum(worker);
     }, 2*this.quantum_length);  // give 8ms to other tasks
   }
   
