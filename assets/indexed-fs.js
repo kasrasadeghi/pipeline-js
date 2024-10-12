@@ -1454,20 +1454,6 @@ export async function handleRouting() {
   }
 }
 
-async function perf(func) {
-  console.time('perf');
-  await func();
-  console.timeEnd('perf');
-}
-
-async function perf100(func) {
-  console.time('perf100');
-  for (let i = 0; i < 100; ++i) {
-    await func();
-  }
-  console.timeEnd('perf100');
-}
-
 async function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
     try {
