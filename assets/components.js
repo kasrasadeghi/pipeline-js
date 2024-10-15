@@ -1,4 +1,5 @@
 import { readBooleanFile, toggleBooleanFile } from '/boolean-state.js';
+import { kazglobal } from '/global.js';
 
 export function MenuButton({icon, action}) {
   return `<button class='menu-button' id='${icon}_button' onclick="${action}">${lookupIcon(icon)}</button>`;
