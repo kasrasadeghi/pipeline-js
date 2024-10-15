@@ -346,9 +346,9 @@ class FlatCache {
 
     if (notes.length == 0) {
       let content = `--- METADATA ---
-      Date: ${getNow()}
-      Title: ${title}
-      Tags: Journal`;
+Date: ${getNow()}
+Title: ${title}
+Tags: Journal`;
       let uuid = local_repo + '/' + crypto.randomUUID() + '.note';
 
       // notice that this put/write is part of the same transaction as the getVersion and the possible getAll from above.
