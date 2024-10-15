@@ -173,7 +173,7 @@ class FlatCache {
     this.metadata_map = files.map(file => {
       return constructNoteFromFile(new File(file));
     });
-    this.current_version = current_version;
+    this.version = current_version;
   }
 
   async refresh_cache() {
@@ -340,7 +340,7 @@ class FlatCache {
       this.metadata_map = files.map(file => {
         return constructNoteFromFile(new File(file));
       });
-      this.current_version = current_version;
+      this.version = current_version;
     }
     let notes = this.metadata_map.filter(note => note.uuid.startsWith(local_repo + "/") && note.title === title).map(note => note.uuid);
 

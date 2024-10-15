@@ -172,18 +172,13 @@ export class FileDB {
     return result ? result.content : null;
   }
 
-  async exists(path) {
-    const transaction = this.db.transaction([this.storeName]);
-    const objectStore = transaction.objectStore(this.storeName);
-    const result = await this.promisify(objectStore.get(path));
-    return !!result;
-  }
-
   async listFiles() {
     const transaction = this.db.transaction([this.storeName]);
     const objectStore = transaction.objectStore(this.storeName);
     return this.promisify(objectStore.getAllKeys());
   }
+
+  // dangerous functions
 
   async deleteFile(path) {
     const transaction = this.db.transaction([this.storeName], "readwrite");
