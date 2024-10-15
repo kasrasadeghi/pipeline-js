@@ -21,7 +21,7 @@ export async function initFlatDB(reload) {
 
 export const LOCAL_REPO_NAME_FILE = "local_repo_name";
 async function get_local_repo_name() {
-  let repo = await cache.readFile(LOCAL_REPO_NAME_FILE)
+  let repo = await cache.readFile(LOCAL_REPO_NAME_FILE);
   if (repo === null || repo.trim() === '') {
     await gotoSetup();
     throw new Error('no local repo defined, redirecting to setup');
@@ -449,22 +449,6 @@ Title: ${title}`;
   }
 
   // message list
-
-  // merge(L, R, comparator) {
-  //   if (L.length > 1 && R.length > 1 && comparator(L[L.length - 1], R[0])) {
-  //     return L.concat(R);
-  //   }
-
-  //   let result = []; let left_i = 0; let right_i = 0;
-  //   while (left_i < L.length && right_i < R.length) {
-  //     if (comparator(L[left_i], R[right_i])) {
-  //       result.push(L[left_i++]);
-  //     } else {
-  //       result.push(R[right_i++]);
-  //     }
-  //   }
-  //   return result.concat(L.slice(left_i)).concat(R.slice(right_i));
-  // }
 
   // generator
   *incrementally_gather_sorted_messages() {
