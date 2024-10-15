@@ -1,4 +1,4 @@
-import { readBooleanFile } from '/boolean-state.js';
+import { readBooleanFile, toggleBooleanFile } from '/boolean-state.js';
 
 export function MenuButton({icon, action}) {
   return `<button class='menu-button' id='${icon}_button' onclick="${action}">${lookupIcon(icon)}</button>`;
