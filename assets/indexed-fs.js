@@ -248,16 +248,6 @@ function unparseLineContent(l) {
   return 'ERROR: ' + l;
 }
 
-export async function rewriteCurrentNote() {
-  // DEBUGGING
-  return rewrite(parseContent(await kazglobal.notes.readFile(getCurrentNoteUuid())), getCurrentNoteUuid());
-}
-
-export async function checkCurrentWellFormed() {
-  // DEBUGGING
-  return checkWellFormed(getCurrentNoteUuid(), await kazglobal.notes.readFile(getCurrentNoteUuid()));
-}
-
 function checkWellFormed(uuid, content) {
   let page = parseContent(content);
   let rewritten = rewrite(page, uuid);
