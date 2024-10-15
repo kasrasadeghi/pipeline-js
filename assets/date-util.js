@@ -1,4 +1,5 @@
 import { Msg } from '/rewrite.js';
+import { Note } from '/flatdb.js';
 
 export const COMPATIBILITY_TIMEZONES = {
   'PST': 'GMT-0800 (Pacific Standard Time)',
@@ -18,6 +19,15 @@ export const COMPATIBILITY_TIMEZONES = {
   'JDT': 'GMT+1000 (Japan Daylight Time)',
 };
 
+let compatibility_counter = 0;
+
+export function resetCompatibilityCounter() {
+  compatibility_counter = 0;
+}
+export function getCompatibilityCounter() {
+  return compatibility_counter;
+}
+
 export function timezoneCompatibility(datestring) {
   // old dates look like: Wed Jan 17 22:02:44 PST 2024
   // new dates look like: Thu Jan 17 2024 22:02:44 GMT-0800 (Pacific Standard Time)
@@ -30,6 +40,7 @@ export function timezoneCompatibility(datestring) {
     // TODO console.warn("datestring should have 6 chunks: weekday, month, monthday, time, timezone, year", chunks, datestring);
     return datestring;
   }
+  compatibility_counter++;
   let time = chunks[3];
   let timezone = chunks[4];
   console.assert(timezone in COMPATIBILITY_TIMEZONES, timezone, "timezone should be in compatibility_timezones, from", datestring, COMPATIBILITY_TIMEZONES);
@@ -40,11 +51,12 @@ export function timezoneCompatibility(datestring) {
 }
 
 export function dateComp(a, b) {
-  if (a instanceof Msg || Object.hasOwn(a, 'date')) {
-    a = a.date;
-  }
-  if (b instanceof Msg || Object.hasOwn(b, 'date')) {
-    b = b.date;
-  }
-  return new Date(timezoneCompatibility(a)) - new Date(timezoneCompatibility(b));
+  const date_obj = (x) => {
+    if (x instanceof Msg || x instanceof Note) {
+      return x.date_obj();
+    } else if (Object.hasOwn(x, 'date') || typeof x === 'string') {
+      console.assert(false, "can only dateComp Msg or Note objects", x);
+    }
+  };
+  return date_obj(a) - date_obj(b);
 }

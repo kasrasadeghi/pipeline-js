@@ -8,13 +8,16 @@ import { hasRemote } from '/remote.js';
 import { sync, restoreRepo } from '/sync.js';
 import { getGlobal, initializeKazGlobal, kazglobal } from '/global.js';
 import { paintList } from '/calendar.js';
+import { lookupIcon, MenuButton, ToggleButton } from '/components.js';
 
+export { handleToggleButton } from '/components.js';
 export { gotoList } from '/calendar.js';
 export { getGlobal };
 export { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
 export { rewrite } from '/rewrite.js';
 export { debugGlobalNotes } from '/flatdb.js';
 export { setNow, tomorrow, getNow } from '/state.js';
+export { dateComp, timezoneCompatibility } from '/date-util.js';
 
 // JAVASCRIPT UTIL
 
@@ -113,12 +116,6 @@ export function htmlTreeNode(thisNode) {
   </ul>
   </div>`;
 }
-
-// calendar format, just the weekday
-const weekday_format = new Intl.DateTimeFormat('en-us', { weekday: 'short', timeZone: 'UTC' });
-
-// calendar header format, just the month and year
-const calendar_header_format = new Intl.DateTimeFormat('en-us', { timeZone: 'UTC', month: 'long', year: 'numeric' });
 
 // date timestamp, like hh:mm:ss in 24-hour clock
 const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
@@ -630,7 +627,6 @@ function htmlLine(line) {
 // DISC
 
 const MENU_TOGGLE_FILE = 'disc menu toggle state';
-const LIST_NOTES_TOGGLE_FILE = 'list notes toggle state';
 const SEARCH_CASE_SENSITIVE_FILE = 'search case sensitive state';
 
 async function paintDisc(uuid, flag) {
@@ -1027,12 +1023,6 @@ export async function gotoSearch() {
   return false;
 }
 
-// COMPONENT MENU BUTTON
-
-function MenuButton({icon, action}) {
-  return `<button class='menu-button' id='${icon}_button' onclick="${action}">${lookupIcon(icon)}</button>`;
-}
-
 // COMPONENT TEXTFIELD
 
 // used for first time setup and setup configuration
@@ -1068,59 +1058,6 @@ function TextAction({id, label, value, action, everykey}) {
   return (
     `<input onkeyup="return handleTextAction(event, '${id}', ${action}, ${!!everykey})" type='text' id='${id}' value="${value}"></input>
     <button class='menu-button' id='${id}_button' onclick="return handleTextAction(true, '${id}', ${action})">${label}</button>`
-  );
-}
-
-// COMPONENT TOGGLE-BUTTON
-
-export async function handleToggle(event, id, file, query_param, default_value, rerender) {
-  let indexedDB_result = undefined;
-  if (file) {
-    indexedDB_result = await toggleBooleanFile(file, default_value);
-    kazglobal.notes.booleanFiles[file] = indexedDB_result;
-  }
-
-  if (query_param && indexedDB_result) {
-    setBooleanQueryParam(query_param, indexedDB_result);
-  } else if (query_param) {
-    toggleBooleanQueryParam(query_param, default_value);
-  }
-  if (rerender) {
-    let result = await rerender();
-    if (result && result.length === 2) {
-      paintSimple(result);
-    }
-  }
-
-  if (indexedDB_result === "true") {
-    event.target.classList.add('enabled');
-  } else {
-    event.target.classList.remove('enabled');
-  }
-
-  return false;
-}
-
-async function ToggleButton({id, label, file, query_param, default_value, rerender}) {
-  let status = undefined;
-  if (file) {
-    status = await readBooleanFile(file, default_value);
-  }
-  let quoted_query_param = 'undefined';
-  if (query_param) {
-    // NOTE it seems like a good idea to only use the indexedDB status, so the line below is commented out.
-    // - we might want to read the query param if we're loading a link.
-    // status = await readBooleanQueryParam(query_param, default_value);
-    quoted_query_param = `'${query_param}'`;
-  }
-
-  let enabled = "";
-  if (status === 'true') {
-    enabled = " enabled";
-  }
-  
-  return (
-    `<button id="${id}" onclick="return handleToggle(event, '${id}', '${file}', ${quoted_query_param}, '${default_value}', ${rerender})" class='menu-button${enabled}'>${label}</button>`
   );
 }
 
@@ -1231,33 +1168,6 @@ export async function renderMenu() {
       ${await ToggleButton({id: 'show_private_toggle', file: SHOW_PRIVATE_FILE, label: lookupIcon('private'), rerender: 'renderMenu'})}
     </div>`
   ];
-}
-
-// ICONS
-
-function lookupIcon(full_name) {
-  return {
-    'search': 'SRCH',
-    'sync': 'SYNC',
-    'setup': 'SETP',
-    'journal': 'JRNL',
-    'edit': 'EDIT',
-    'list': 'LIST',
-    'menu': 'MENU',
-    'mix': 'MIX_',
-    'focus': 'FOCS',
-    'next': 'NEXT',
-    'prev': 'PREV',
-    'all': 'ALL_',
-    'submit': 'SUBM',
-    'back': 'BACK',
-    'routine': 'RTNE',
-    'new note': 'NEW_',
-    'notes': "NOTE",
-    'case': "CASE",
-    'private': "PRIV",
-    'get repo': "GET_",
-  }[full_name];
 }
 
 // ROUTINE

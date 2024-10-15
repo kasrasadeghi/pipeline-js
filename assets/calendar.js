@@ -1,3 +1,14 @@
+import { kazglobal } from '/global.js';
+import { readBooleanFile } from '/boolean-state.js';
+import { lookupIcon, MenuButton, ToggleButton } from '/components.js';
+
+// calendar format, just the weekday
+const weekday_format = new Intl.DateTimeFormat('en-us', { weekday: 'short', timeZone: 'UTC' });
+
+// calendar header format, just the month and year
+const calendar_header_format = new Intl.DateTimeFormat('en-us', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+
+const LIST_NOTES_TOGGLE_FILE = 'list notes toggle state';
 
 // LIST
 

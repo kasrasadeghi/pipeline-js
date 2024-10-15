@@ -3,7 +3,7 @@ import { cache, getNow } from '/state.js';
 import { readBooleanFile } from '/boolean-state.js';
 import { parseContent } from '/parse.js';
 import { rewrite, Msg } from '/rewrite.js';
-import { dateComp, timezoneCompatibility } from '/date-util.js';
+import { dateComp, timezoneCompatibility, getCompatibilityCounter, resetCompatibilityCounter } from '/date-util.js';
 
 export const SHOW_PRIVATE_FILE = 'private mode state';
 
@@ -50,13 +50,15 @@ export function dateToJournalTitle(date) {
   return `${month} ${day}${day_suffix}, ${year}`;
 }
 
-class Note {
+export class Note {
   uuid;
   content;
   metadata;
   title;
   date;
   rewrite;
+  _compat_date;
+  _date_obj;
 
   constructor({uuid, content, title, date, metadata}) {
     this.uuid = uuid;
@@ -65,6 +67,16 @@ class Note {
     this.date = date;
     this.metadata = metadata;
     this.rewrite = undefined;
+    this._compat_date = timezoneCompatibility(date);
+    this._date_obj = new Date(this._compat_date);
+  }
+
+  compat_date() {
+    return this._compat_date;
+  }
+
+  date_obj() {
+    return this._date_obj;
   }
 };
 
@@ -454,36 +466,39 @@ Title: ${title}`;
 
   // message list
 
-  merge(L, R, comparator) {
-    let result = []; let left_i = 0; let right_i = 0;
-    while (left_i < L.length && right_i < R.length) {
-      if (comparator(L[left_i], R[right_i]) <= 0) {
-        result.push(L[left_i++]);
-      } else {
-        result.push(R[right_i++]);
-      }
-    }
-    return result.concat(L.slice(left_i)).concat(R.slice(right_i));
-  }
+  // merge(L, R, comparator) {
+  //   if (L.length > 1 && R.length > 1 && comparator(L[L.length - 1], R[0])) {
+  //     return L.concat(R);
+  //   }
+
+  //   let result = []; let left_i = 0; let right_i = 0;
+  //   while (left_i < L.length && right_i < R.length) {
+  //     if (comparator(L[left_i], R[right_i])) {
+  //       result.push(L[left_i++]);
+  //     } else {
+  //       result.push(R[right_i++]);
+  //     }
+  //   }
+  //   return result.concat(L.slice(left_i)).concat(R.slice(right_i));
+  // }
 
   // generator
   *incrementally_gather_sorted_messages() {
     console.log('incrementally gathering messages');
 
-    // rewriting all of the pages takes 500ms ish
     let sorted_notes = this.metadata_map.sort((a, b) => dateComp(b, a));
-    let pages = [];
+    let messages = [];
     for (let note of sorted_notes) {
-      pages.push(this.rewrite(note.uuid));
       // TODO gather messages here and merge them into the full result.
+      // messages = this.merge(messages, this.get_messages_in(note.uuid), (a, b) => { return dateComp(a, b) } );
+      messages.push(...this.get_messages_in(note.uuid));
+      console.log(messages.length, 'so far');
       yield;
     }
 
-    const entry_sections = pages.flatMap(p => p.filter(s => s.title === 'entry'));
-    const messages = entry_sections.flatMap(s => s.blocks ? s.blocks.filter(m => m instanceof Msg) : []);
-    yield;
-    const sorted_messages = messages.sort((a, b) => dateComp(b, a));
-    return sorted_messages;
+    messages.sort((a, b) => dateComp(b, a));
+
+    return messages;
   }
 
   subscribe_to_messages_cacher(user) {

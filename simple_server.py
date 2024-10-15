@@ -160,6 +160,7 @@ def handle_request(request):
         "style.css",
         "boolean-state.js",
         "calendar.js",
+        "components.js",
         "date-util.js",
         "filedb.js",
         "flatdb.js",

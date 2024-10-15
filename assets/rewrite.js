@@ -1,4 +1,5 @@
 import { EmptyLine, TreeNode } from "/parse.js";
+import { timezoneCompatibility } from "/date-util.js";
 
 export function rewrite(page, note) {
   return page.map(x => rewriteSection(x, note));
@@ -70,9 +71,13 @@ export class Msg {
   blocks;
   gobbled_newline;  // how many newlines came from after this message (and its blocks)
   msg;
+  _compat_date;
+  _date_obj;
   constructor(properties) {
-    console.assert(['content', 'date', 'msg', 'origin'].every(x => Object.keys(properties).includes(x)), properties, 'huh');
+    console.assert(['content', 'date', 'msg', 'origin'].every(x => Object.keys(properties).includes(x)), properties, 'Msg properties should have content, date, msg, and origin');
     Object.assign(this, properties);
+    this._compat_date = timezoneCompatibility(this.date);
+    this._date_obj = new Date(this._compat_date);
     this.blocks = [];
   }
 
@@ -82,6 +87,14 @@ export class Msg {
 
   repr() {
     return JSON.stringify([this.date, this.content, this.origin]);
+  }
+
+  compat_date() {
+    return this._compat_date;
+  }
+
+  date_obj() {
+    return this._date_obj;
   }
 }
 
@@ -227,7 +240,7 @@ function tagParse(line) {
     line = line.slice(first_space);
     acc.push(cmd);
   }
-  const isUpperCase = (string) => /^[A-Z]*$/.test(string);
+  const isUpperCase = (char) => char >= 'A' && char <= 'Z';
 
   let i = 0;
   while(i < line.length) {
