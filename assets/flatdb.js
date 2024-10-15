@@ -112,24 +112,6 @@ function constructNoteFromFile(file) {
   return new Note({uuid: file.path, title: metadata.Title, date: metadata.Date, content: file.content, metadata});
 }
 
-async function getNoteList(caller) {
-  if (caller === undefined) {
-    console.log('raw note metadata used');
-    throw new Error('raw note metadata used');
-  } else {
-    console.log('getNoteList from', caller);
-  }
-  const readAllResult = await global_notes.readAllFiles();
-  let current_version = readAllResult.current_version;
-  let files = readAllResult.result;
-  console.time('parse metadata');
-  let result = files.map(file => {
-    return constructNoteFromFile(new File(file));
-  });
-  console.timeEnd('parse metadata');
-  return {current_version, result};
-}
-
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze
 // ORIGINAL NOTES from mozilla:
 // To make an object immutable, recursively freeze each non-primitive property (deep freeze).
@@ -186,13 +168,19 @@ class FlatCache {
     this.scheduler.start();
   }
 
+  async load_metadata_map() {
+    const {current_version, result: files} = await global_notes.readAllFiles();
+    this.metadata_map = files.map(file => {
+      return constructNoteFromFile(new File(file));
+    });
+    this.current_version = current_version;
+  }
+
   async refresh_cache() {
     console.log('refreshing cache');
     this._local_repo = await get_local_repo_name();
 
-    let metadataMapResult = await getNoteList('FlatRead');
-    this.metadata_map = metadataMapResult.result;
-    this.version = metadataMapResult.current_version;
+    await this.load_metadata_map();
 
     this.booleanFiles = {};
     this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");
@@ -278,19 +266,6 @@ class FlatCache {
     return this.booleanFiles[SHOW_PRIVATE_FILE];
   }
 
-  async getNotesWithTitle(title, repo) {
-    await this.ensure_valid_cache();
-    if (repo === undefined) {
-      return this.metadata_map.filter(note => note.title === title);
-    }
-    return this.metadata_map.filter(note => note.uuid.startsWith(repo + "/") && note.title === title).map(note => note.uuid);
-  }
-
-  getAllNotesWithSameTitleAs(uuid) {
-    let title = this.get_note(uuid).title;
-    return this.metadata_map.filter(note => note.title === title);
-  }
-
   get_note(uuid) {
     return this.metadata_map.find(note => note.uuid === uuid) || null;
   }
@@ -354,12 +329,21 @@ class FlatCache {
     const objectStore = transaction.objectStore(global_notes.storeName);
 
     // TODO should we do anything with the transaction version here?
-    let {prior_version, new_version} = await global_notes.bumpVersion(transaction);
+    let current_version = await global_notes.getVersion(transaction);
 
-    let files = await global_notes.promisify(objectStore.getAll());
+    if (current_version !== this.version) {
+      // if the version has changed, we need to re-read all of the files to ensure that we have the most up-to-date list of notes.
+      let files = await global_notes.promisify(objectStore.getAll());
 
-    // this is a pretty hefty amount of parsing, which will be slow, but eh.  maybe we can make it faster by storing the metadata in the database rows.
-    let notes = files.filter(note => note.path.startsWith(local_repo + "/") && note.content.split("\n--- METADATA ---\n")[1]?.includes(`Title: ${title}`)).map(note => note.path);
+      // TODO we only need to re-parse the ones that have changed, which maybe we can compute with status somehow.  hmm
+      // this is a pretty hefty amount of parsing, which will be slow, but eh.  maybe we can make it faster by storing the metadata in the database rows.
+      this.metadata_map = files.map(file => {
+        return constructNoteFromFile(new File(file));
+      });
+      this.current_version = current_version;
+    }
+    let notes = this.metadata_map.filter(note => note.uuid.startsWith(local_repo + "/") && note.title === title).map(note => note.uuid);
+
     if (notes.length == 0) {
       let content = `--- METADATA ---
       Date: ${getNow()}
@@ -367,7 +351,7 @@ class FlatCache {
       Tags: Journal`;
       let uuid = local_repo + '/' + crypto.randomUUID() + '.note';
 
-      // notice that this put/write is part of the same transaction as the getAll from above.
+      // notice that this put/write is part of the same transaction as the getVersion and the possible getAll from above.
       // that's how we can ensure that nobody has created the journal between the time we read all of the files and wrote/created this new one.
       await global_notes.promisify(objectStore.put({ path: uuid, content }));
       this._cache_current_journal = {uuid, title};
@@ -492,7 +476,6 @@ Title: ${title}`;
       // TODO gather messages here and merge them into the full result.
       // messages = this.merge(messages, this.get_messages_in(note.uuid), (a, b) => { return dateComp(a, b) } );
       messages.push(...this.get_messages_in(note.uuid));
-      console.log(messages.length, 'so far');
       yield;
     }
 

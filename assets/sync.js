@@ -172,10 +172,3 @@ async function putNotes(repo, uuids) {
   }
   return failures;
 }
-
-export async function putAllNotes(repo) {
-  let files = await global_notes.listFiles();
-  repo_files = files.filter(file => file.startsWith(repo + "/"));
-  uuids = repo_files.map(x => x.slice((repo + '/').length));
-  return putNotes(repo, uuids);
-}
