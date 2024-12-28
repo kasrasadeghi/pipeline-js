@@ -173,8 +173,8 @@ def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse])
                     
                     if context:
                         try:
-                            client_connection = context.wrap_socket(client_connection, server_side=True, do_handshake_on_connect=False)
-                            client_connection.do_handshake()
+                            client_connection = context.wrap_socket(client_connection, server_side=True, do_handshake_on_connect=True)
+                            client_connection.do_handshake()  # delete this if above already does handshake?
                             log(f"SSL handshake successful with {client_address}")
                         except ssl.SSLError as ssl_err:
                             log(f"SSL handshake failed with {client_address}: {ssl_err}")
