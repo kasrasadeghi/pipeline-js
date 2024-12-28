@@ -57,10 +57,10 @@ function unparseMessageBlocks(message) {
 export function unparseMsg(msg) {
   if (msg.blocks.length !== 0) {
     let trail = msg.gobbled_newline ? "\n".repeat(msg.gobbled_newline) : "";
-    return ["- " + msg.content, '\n  - Date: ' + msg.date, "\n\n", unparseMessageBlocks(msg), trail].join("");
+    return ["- " + msg.content, '\n  - Date: ' + msg.compat_date(), "\n\n", unparseMessageBlocks(msg), trail].join("");
   } else {
     let trail = msg.gobbled_newline ? "\n".repeat(msg.gobbled_newline) : "";
-    return ["- " + msg.content, '\n  - Date: ' + msg.date, "\n", trail].join("");
+    return ["- " + msg.content, '\n  - Date: ' + msg.compat_date(), "\n", trail].join("");
   }  
 }
 
