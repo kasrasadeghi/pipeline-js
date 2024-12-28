@@ -176,6 +176,20 @@ class FlatCache {
     this.version = current_version;
   }
 
+  async insert_note(content, uuid) {
+    // notice that this put/write is part of the same transaction as the getVersion and the possible getAll from above.
+    // that's how we can ensure that nobody has created the journal between the time we read all of the files and wrote/created this new one.
+    await global_notes.promisify(objectStore.put({ path: uuid, content }));
+    this.update_current_journal_cached(uuid, title);
+    
+    // we should update this.metadata_map with the new entry from above.
+    const new_version = await global_notes.getVersion(transaction);
+
+    // from load_metadata_map, but we already have `files`
+    this.metadata_map.push(constructNoteFromFile(new File({ path: uuid, content })));
+    this.version = new_version;
+  }
+
   async refresh_cache() {
     console.log('refreshing cache');
     this._local_repo = await get_local_repo_name();
@@ -297,12 +311,25 @@ class FlatCache {
     return note.cache.rewrite;
   }
 
+  has_current_journal_cached() {
+    let title = today();
+    if (this._cache_current_journal !== null && this._cache_current_journal.title === title) {
+      return this._cache_current_journal.uuid;
+    }
+    return false;
+  }
+
+  update_current_journal_cached(uuid, title) {
+    this._cache_current_journal = {uuid, title};
+  }
+ 
   // a non-async alternative that fails if the current_journal hasn't been made.
   // returns null for a quick check, EXAMPLE if search needs to check if a message is on the current page to render it green or pink
   maybe_current_journal() {
     let title = today();
-    if (this._cache_current_journal !== null && this._cache_current_journal.title === title) {
-      return this._cache_current_journal.uuid;
+    let journal_result = this.has_current_journal_cached();
+    if (journal_result !== false) {
+      return journal_result;
     }
     console.log('getting current journal', title);
     let repo = this.local_repo_name();
@@ -313,14 +340,15 @@ class FlatCache {
       // - reasoning: writes and updates can be slow, but the user doesn't expect any read to be slow
     }
     console.assert(notes.length === 1, `expected 1 journal, got ${notes.length}`);
-    this._cache_current_journal = {uuid: notes[0], title};
+    this.update_current_journal_cached(notes[0], title);
     return notes[0];
   }
 
   async get_or_create_current_journal() {
     let title = today();
-    if (this._cache_current_journal !== null && this._cache_current_journal.title === title) {
-      return this._cache_current_journal.uuid;
+    let journal_result = this.has_current_journal_cached();
+    if (journal_result !== false) {
+      return journal_result;
     }
 
     let local_repo = await this.local_repo_name();
@@ -328,9 +356,7 @@ class FlatCache {
     const transaction = global_notes.db.transaction([global_notes.storeName, global_notes.versionStoreName], "readwrite");
     const objectStore = transaction.objectStore(global_notes.storeName);
 
-    // TODO should we do anything with the transaction version here?
     let current_version = await global_notes.getVersion(transaction);
-
     if (current_version !== this.version) {
       // if the version has changed, we need to re-read all of the files to ensure that we have the most up-to-date list of notes.
       let files = await global_notes.promisify(objectStore.getAll());
@@ -351,14 +377,11 @@ Title: ${title}
 Tags: Journal`;
       let uuid = local_repo + '/' + crypto.randomUUID() + '.note';
 
-      // notice that this put/write is part of the same transaction as the getVersion and the possible getAll from above.
-      // that's how we can ensure that nobody has created the journal between the time we read all of the files and wrote/created this new one.
-      await global_notes.promisify(objectStore.put({ path: uuid, content }));
-      this._cache_current_journal = {uuid, title};
+      await this.insert_note(content, uuid);
       return uuid;
     }
     console.assert(notes.length === 1, `expected 1 journal, got ${notes.length}`);
-    this._cache_current_journal = {uuid: notes[0], title};
+    this.update_current_journal_cached(notes[0], title);
     return notes[0];
   }
 
