@@ -886,7 +886,7 @@ export function search(messages, text, is_case_sensitive=false) {
   let includes = (is_case_sensitive) ? case_sensitive : case_insensitive;
 
   console.time('search gather msgs');
-  let show_private_messages = kazglobal.notes.booleanFiles['show_private_messages'];
+  let show_private_messages = kazglobal.notes.show_private_messages();
   if (show_private_messages === "true") {
     messages = messages.filter(m => includes(m.content, text));
   } else {

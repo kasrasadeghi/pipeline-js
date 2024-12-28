@@ -1,5 +1,6 @@
 import { readBooleanFile, toggleBooleanFile } from '/boolean-state.js';
 import { kazglobal } from '/global.js';
+import { setBooleanQueryParam, toggleBooleanQueryParam } from '/boolean-state.js';
 
 export function MenuButton({icon, action}) {
   return `<button class='menu-button' id='${icon}_button' onclick="${action}">${lookupIcon(icon)}</button>`;

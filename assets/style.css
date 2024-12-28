@@ -283,21 +283,22 @@ blockquote {
 #footer-button-container {
   display: flex;
   flex-direction: row;
+  justify-content: center;
   gap: 5px;
   padding-top: 3px;
   padding-left: 5px;
   padding-right: 5px;
 }
 
-@media screen and (max-width: 430px) {
-  #footer-button-container {
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    gap: 5px;
-    padding-top: 3px;
-  }
+/* @media (max-width: 1000px) { */
+#footer-button-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 5px;
+  padding-top: 3px;
 }
+/* } */
 
 .msgblock {
   margin-top: 10px;
@@ -397,7 +398,7 @@ p.msgblock {
   margin-right: 7px;
 }
 
-@media screen and (max-width: 430px) {
+@media screen and (max-width: 600px) {
   #footer_menu_container {
     width: -webkit-fill-available;
     width: -moz-available;
