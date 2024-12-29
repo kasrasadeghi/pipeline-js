@@ -176,7 +176,7 @@ class FlatCache {
     this.version = current_version;
   }
 
-  async insert_note(content, uuid) {
+  async insert_note(objectStore, content, uuid) {
     // notice that this put/write is part of the same transaction as the getVersion and the possible getAll from above.
     // that's how we can ensure that nobody has created the journal between the time we read all of the files and wrote/created this new one.
     await global_notes.promisify(objectStore.put({ path: uuid, content }));
@@ -377,7 +377,7 @@ Title: ${title}
 Tags: Journal`;
       let uuid = local_repo + '/' + crypto.randomUUID() + '.note';
 
-      await this.insert_note(content, uuid);
+      await this.insert_note(objectStore, content, uuid);
       return uuid;
     }
     console.assert(notes.length === 1, `expected 1 journal, got ${notes.length}`);
