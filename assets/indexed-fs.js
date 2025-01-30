@@ -570,9 +570,12 @@ export async function expandSearch(obj, search_query) {
   let urlParams = new URLSearchParams(search_query);
   const text = urlParams.get('q');
   const case_sensitive = urlParams.get('case') === 'true';
-  search(text, case_sensitive).then(all_messages => {
-    let result = renderSearchMain(urlParams, all_messages);
-    insertHtmlBeforeMessage(obj, result);
+
+  kazglobal.notes.subscribe_to_messages_cacher(messages => {
+    let search_results = search(messages, text, case_sensitive);
+    let painted_search_results = renderSearchMain(urlParams, search_results);
+    insertHtmlBeforeMessage(obj, painted_search_results);
+    obj.scrollIntoView();
   });
 }
 
