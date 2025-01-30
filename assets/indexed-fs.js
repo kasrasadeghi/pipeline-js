@@ -141,8 +141,13 @@ function renderDatetime(date) {
     time_format = timestamp_year_format;
   }
   
-  return time_format
-    .format(date).replaceAll(",", "");  // "Wed, Jan 15, hh:mm:ss" -> "Wed Jan 15 hh:mm:ss"
+  try {
+    return time_format
+      .format(date).replaceAll(",", "");  // "Wed, Jan 15, hh:mm:ss" -> "Wed Jan 15 hh:mm:ss"
+  } catch (e) {
+    console.log('error rendering datetime', date, e);
+    return 'datetime error';
+  }
 }
 
 function trimTrailingRenderedBreak(content) {
@@ -519,12 +524,19 @@ function parseRef(ref) {
   let s = ref.split('#');  // a ref looks like: "uuid#datetime_id" 
   // EXAMPLE bigmac-js/f726c89e-7473-4079-bd3f-0e7c57b871f9.note#Sun Jun 02 2024 20:45:46 GMT-0700 (Pacific Daylight Time)
   console.assert(s.length == 2);
+  if (s.length !== 2) {
+    return {uuid: '', datetime_id: ''};
+  }
   let [uuid, datetime_id] = s;
   return {uuid, datetime_id};
 }
 
 async function retrieveMsg(ref) {
   let url_ref = parseRef(ref);
+  if (url_ref.uuid === '') {
+    console.log('ERROR 3: could not parse ref', ref);
+    return [];
+  }
   let r = kazglobal.notes.rewrite(url_ref.uuid);
   let found_msg = r.filter(section => section.title === 'entry')
     .flatMap(s => s.blocks)
@@ -591,7 +603,14 @@ function htmlLine(line) {
         }
         if (x.type === 'internal_ref') {
           let ref = parseRef(x.display);
+          if (ref.uuid === '') {
+            return x;
+          }
           let shorter_datetime = renderDatetime(new Date(ref.datetime_id));
+          if (shorter_datetime === 'datetime error') {
+            // invalid datetime value
+            return x;
+          }
           return `<div style="display:inline">
             <button onclick="return expandRef(this, '${x.display}')">get</button>
             <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${shorter_datetime}</a>
@@ -914,8 +933,7 @@ function clamp(value, lower, upper) {
 
 const SEARCH_RESULTS_PER_PAGE = 100;
 
-function renderSearchMain(urlParams) {
-  let all_messages = kazglobal.search.results;
+function renderSearchMain(urlParams, all_messages) {
   let page = urlParams.get('page');
   if (page === 'all') {
     return `<h3>render all ${all_messages.length} results</h3><div class='msglist'>${all_messages.reverse().map((x) => htmlMsg(x, 'search')).join("")}</div>`;
@@ -927,7 +945,7 @@ function renderSearchMain(urlParams) {
 
 function paintSearchMain(urlParams) {
   let main = document.getElementsByTagName('main')[0];
-  main.innerHTML = renderSearchMain(urlParams);
+  main.innerHTML = renderSearchMain(urlParams, kazglobal.search.results);
   main.scrollTop = main.scrollHeight;
 }
 
