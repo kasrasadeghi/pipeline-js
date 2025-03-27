@@ -26,11 +26,6 @@ const cacheable_assets = [
   'manifest.json',
 ];
 
-// Strategy: we fetch-fallback the basefile, but then cache-fallback the assets.
-// This speeds up loading every file that's up-to-date, which basically every file should be for all users, after the first load.
-// The first load also bundles the assets, so there aren't even that many network requests to become up-to-date.
-// If the cache-fallback fails, then we'll fetch-fallback the asset again.  This may actually never happen.
-
 function LOG(...data) {
   // ignore nonresults
   if (! data.map(x => `${x}`).join(" ").startsWith("RESULT")) {
@@ -38,6 +33,19 @@ function LOG(...data) {
   }
   
   console.log('SERVICE WORKER', ...data);
+}
+
+async function sha256sum(input_string) {
+  const encoder = new TextEncoder('utf-8');
+  const bytes = encoder.encode(input_string);
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  let result = hashToString(hash);
+  return result;
+}
+
+async function hashToString(arraybuffer) {
+  const bytes = new Uint8Array(arraybuffer);
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 async function fillServiceWorkerCache() {
@@ -109,32 +117,6 @@ function headersToObj(headers) {
   });
 }
 
-async function fetchWithFallbackToCache(request, cache) {
-  // fetch
-  try {
-    LOG(`attempting fetch ${request.url}`);
-    const fetchedResponse = await fetch(request, { signal: AbortSignal.timeout(2000) }); // 2 second timeout
-    if (!fetchedResponse.ok) {
-      throw new Error(`response status is not ok: ${fetchedResponse.status} ${fetchedResponse.statusText}`);
-    } else {
-      LOG(`RESULT fetch succeeded! ${request.url}`, "cache keys", await cache.keys(), fetchedResponse, headersToObj(fetchedResponse.headers));
-      cache.put(request.url, fetchedResponse.clone());
-      return fetchedResponse;
-    }
-
-  // use cache if fetch fails
-  } catch (e) {
-    LOG("network failed, loading from cache:", request.url, e);
-    // fetch timeout and other errors
-    let cachedResponse = await cache.match(request.url);
-    if (cachedResponse) {
-      LOG(`RESULT network failed, but found in cache! ${request.url} (${cachedResponse.headers.get("Content-Length")} bytes)`);
-      return cachedResponse;
-    }
-    throw new Error(`cache miss '${request.url}' for file '${request.url}' after network failure`);
-  }
-}
-
 // the service worker fails on /api/ subpaths and
 // returns either a cached file if it exists
 //         or just index.html if it doesn't
@@ -152,7 +134,32 @@ self.addEventListener('fetch', (event) => {
         let filepath = urlToCachedFilePath(event.request.url);
 
         if (filepath === baseFile) {
-          return fetchWithFallbackToCache(event.request, cache);
+          // fetch
+          try {
+            LOG(`attempting fetch ${event.request.url}`);
+            const fetchedResponse = await fetch(event.request, { signal: AbortSignal.timeout(2000) }); // 2 second timeout
+            if (!fetchedResponse.ok) {
+              throw new Error(`response status is not ok: ${fetchedResponse.status} ${fetchedResponse.statusText}`);
+            } else {
+              LOG(`RESULT fetch succeeded! ${event.request.url}`)
+              cache.put(baseFile, fetchedResponse.clone());
+
+              // TODO this is where we should fetch the bundle and update the cache
+
+              return fetchedResponse;
+            }
+
+          // use cache if fetch fails
+          } catch (e) {
+            LOG("network failed, loading from cache:", event.request.url, e);
+            // fetch timeout and other errors
+            let cachedResponse = await cache.match(baseFile);
+            if (cachedResponse) {
+              LOG(`RESULT network failed, but found in cache! ${event.request.url} -> ${baseFile} (${cachedResponse.headers.get("content-length")} bytes)`);
+              return cachedResponse;
+            }
+            throw new Error(`cache miss '${event.request.url}' for file '${file_to_find}' after network failure`);
+          }
         }
 
         LOG(`checking cache for asset ${event.request.url} -> ${filepath}`);
@@ -177,6 +184,8 @@ self.addEventListener('fetch', (event) => {
               LOG("found cached response for filepath with version hash in index.html", filepath, response, headersToObj(response.headers));
               // the x-hash is now run on the server and stored in every request, mostly because hashing the images in javascript doesn't work
               // - for some reason, png requests don't have a .bytes() method, and the .text() method doesn't return the same hash as the server
+              // const cached_response = await response.clone().text();
+              // const cached_hash = await sha256sum(cached_response);
               const cached_hash = response.headers.get('x-hash');
               // theoretically, we can just assume that contents of the cache are correct as long as we fetch a bundle every time the version hashes in the index.html changes, and then just do edge-detection for the versions changing
               // - comparing hashes allows us to have a little more certainty that what we've cached actually matches the index.html on the server, but i need to think through this a bit more to make sure it's actually necessary, or even correct.
@@ -200,7 +209,30 @@ self.addEventListener('fetch', (event) => {
 
         LOG(`asset not cached, loading ${event.request.url} -> ${filepath}`, asset_cache_log);
 
-        fetchWithFallbackToCache(event.request, cache);
+        // fetch
+        try {
+          LOG(`attempting fetch ${event.request.url}`);
+          const fetchedResponse = await fetch(event.request, { signal: AbortSignal.timeout(2000) }); // 2 second timeout
+          if (!fetchedResponse.ok) {
+            throw new Error(`response status is not ok: ${fetchedResponse.status} ${fetchedResponse.statusText}`);
+          } else {
+            LOG(`RESULT fetch succeeded! ${event.request.url}`, "cache keys", await cache.keys(), fetchedResponse, headersToObj(fetchedResponse.headers));
+            cache.put(event.request.url, fetchedResponse.clone());
+            return fetchedResponse;
+          }
+
+        // use cache if fetch fails
+        } catch (e) {
+          LOG("network failed, loading from cache:", event.request.url, e);
+          // fetch timeout and other errors
+          let cachedResponse = await cache.match(event.request.url);
+          let file_to_find = event.request.url;
+          if (cachedResponse) {
+            LOG(`RESULT network failed, but found in cache! ${event.request.url} (${cachedResponse.headers.get("Content-Length")} bytes)`);
+            return cachedResponse;
+          }
+          throw new Error(`cache miss '${event.request.url}' for file '${file_to_find}' after network failure`);
+        }
       })()
     );
   }
