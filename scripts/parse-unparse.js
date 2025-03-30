@@ -17,8 +17,8 @@ async function notesList() {
 }
 
 async function main() {
-
   let notes = [];
+  `Usage: ${Bun.argv[0]} [note1] [note2] ...`;
   if (Bun.argv.length > 2) {
     notes = Bun.argv.slice(2);
   } else {
