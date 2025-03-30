@@ -4,6 +4,9 @@ import threading
 import time
 import datetime
 import argparse
+import platform
+import re
+import sys
 
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--application-port', type=str, default="8000")
@@ -12,8 +15,78 @@ argparser.add_argument('--supervisor-port', type=str, default="8002")
 argparser.add_argument('--host', type=str)
 args = argparser.parse_args()
 
+
+def get_wireguard_address():
+    system = platform.system()
+    
+    if system == "Linux":
+        try:
+            return subprocess.check_output('ip -br addr show type wireguard', shell=True, text=True)
+        except subprocess.CalledProcessError:
+            raise Exception("Error getting wireguard address on Linux")
+    
+    elif system == "Darwin":  # macOS
+        try:
+            # macOS approach - first get interface names
+            interfaces = subprocess.check_output('ifconfig -l', shell=True, text=True).split()
+            
+            # Look for wireguard interfaces (typically named utun*)
+            wireguard_interfaces = [iface for iface in interfaces if iface.startswith('utun')]
+            
+            for iface in wireguard_interfaces:
+                # Get details for each potential wireguard interface
+                iface_details = subprocess.check_output(f'ifconfig {iface}', shell=True, text=True)
+                
+                # Check if this is actually a wireguard interface (look for inet address)
+                if 'inet ' in iface_details:
+                    # Extract the IP address using regex, looks like inet 10.50.50.2 --> 10.50.50.2 netmask 0xffffffff
+                    # so we want to extract the 10.50.50.2 part
+                    match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', iface_details)
+                    if match:
+                        return f"{iface}\tUP\t{match.group(1)}/24"
+            
+            raise Exception("No wireguard interfaces found on macOS")
+        
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Error getting wireguard address on macOS: {e}")
+    
+    else:
+        raise Exception(f"Unsupported operating system: {system}")
+
+def kill_process_on_port(port):
+    port_str = str(port)
+    port_with_tcp = f"{port_str}/tcp"
+    
+    try:
+        # Check the operating system
+        os_name = platform.system().lower()
+        
+        if os_name == 'darwin':  # macOS
+            # Use lsof on macOS
+            find_pid_cmd = ['lsof', f'-ti:{port_str}']
+            result = subprocess.run(find_pid_cmd, text=True, capture_output=True)
+            
+            if result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    subprocess.run(['kill', '-9', pid])
+                print(f"Killed processes using {port_with_tcp}")
+            else:
+                print(f"No processes found using {port_with_tcp}")
+                
+        elif os_name == 'linux':
+            # Use fuser on Linux
+            subprocess.run(['fuser', '-k', port_with_tcp])
+            print(f"Killed processes using {port_with_tcp}")
+            
+        else:
+            print(f"Unsupported operating system: {os_name}")
+            
+    except subprocess.SubprocessError as e:
+        print(f"Error killing process on port {port_str}: {e}", file=sys.stderr)
+
 if args.host is None:
-    wireguard_addr = subprocess.check_output('ip -br addr show type wireguard', shell=True, text=True)
+    wireguard_addr = get_wireguard_address()
     assert len(wireguard_addr.strip().split("\n")) == 1, (
         "cannot automatically determine host address of wireguard interface, as more than one exists:\n" +
         f" $ ip -br addr show type wireguard\n{wireguard_addr}\n" +
@@ -68,9 +141,10 @@ def stop_subprocesses():
     if simple_server_process is not None:
         simple_server_process.terminate()
 
-    # Use fuser -k to kill 8000/tcp and 8001/tcp
-    subprocess.run(['fuser', '-k', args.application_port + '/tcp'])
-    subprocess.run(['fuser', '-k', args.proxy_port + '/tcp'])
+    # kill 8000/tcp and 8001/tcp
+    kill_process_on_port(args.application_port)
+    kill_process_on_port(args.proxy_port)
+    kill_process_on_port(args.supervisor_port)
 
 def restart_subprocesses():
     stop_subprocesses()
@@ -104,18 +178,18 @@ def restart_process(process_name):
         if process_name == 'pipeline_proxy':
             if pipeline_proxy_process is not None:
                 pipeline_proxy_process.terminate()
-            subprocess.run(['fuser', '-k', args.application_port + '/tcp'])
+            kill_process_on_port(args.application_port)
             pipeline_proxy_process = subprocess.Popen(pipeline_proxy_command, stdout=open('logs/proxy', 'w'), stderr=subprocess.STDOUT)
         elif process_name == 'simple_server':
             if simple_server_process is not None:
                 simple_server_process.terminate()
-            subprocess.run(['fuser', '-k', args.proxy_port + '/tcp'])
+            kill_process_on_port(args.proxy_port)
             simple_server_process = subprocess.Popen(simple_server_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
     else:
         if process_name == 'simple_server':
             if simple_server_process is not None:
                 simple_server_process.terminate()
-            subprocess.run(['fuser', '-k', args.application_port + '/tcp'])
+            kill_process_on_port(args.application_port)
             simple_server_process = subprocess.Popen(simple_server_direct_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
 
 def liveness_check():
