@@ -856,7 +856,7 @@ function updateSelected() {
   // select from hash
   if (window.location.hash) {
     const selected = document.getElementById(decodeURI(window.location.hash.slice(1)));
-    selected.classList.add('selected');
+    if (selected) selected.classList.add('selected');
     return selected;
   } else {
     return null;
@@ -1350,6 +1350,12 @@ async function registerServiceWorker() {
     } catch (error) {
       console.error(`Registration failed with ${error}`);
     }
+
+    // navigator.serviceWorker.getRegistrations().then(registrations => {
+    //   for (let registration of registrations) {
+    //     registration.unregister();
+    //   }
+    // });
   }
 }
 
