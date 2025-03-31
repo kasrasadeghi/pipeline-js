@@ -689,18 +689,10 @@ export async function handleMsg(event) {
     console.log('msg', msg);
     msg_input.innerText = '';
   
-    await kazglobal.notes.ensure_valid_cache(); // should do this in `rewrite()` below.  and `get_note()` honestly
-    // TODO but i can't because rewrite and get_note are not async.  hmmm
-
-    let is_journal = pageIsJournal(kazglobal.notes.rewrite(current_uuid));
-
-    // if we're in a journal and we're not on the current one, redirect to the current journal
-    if (is_journal) {
-      let today_uuid = await kazglobal.notes.get_or_create_current_journal();
-      if (current_uuid !== today_uuid) {
-        current_uuid = today_uuid;
-        window.history.pushState({}, "", `/disc/${current_uuid}`);
-      }
+    let today_uuid = await kazglobal.notes.get_or_create_current_journal();
+    if (current_uuid !== today_uuid) {
+      current_uuid = today_uuid;
+      window.history.pushState({}, "", `/disc/${current_uuid}`);
     }
 
     await kazglobal.notes.updateFile(current_uuid, (content) => {
@@ -735,6 +727,36 @@ export async function toggleMenu () {
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 }
 
+export function gatherSelectedMessage() {
+  const selectedMessage = getSelectedMessage();
+  
+  if (!selectedMessage) {
+    console.log('No message selected');
+    return false;
+  }
+  
+  const messageId = selectedMessage.id;
+  const currentUuid = getCurrentNoteUuid();
+  const referenceLink = `${currentUuid}#${messageId}`;
+  const msgInput = document.getElementById('msg_input');
+  
+  if (msgInput) {
+    if (msgInput.innerHTML === '' || msgInput.innerHTML === '<br>') {
+      msgInput.innerHTML = '';
+    }
+    
+    const currentText = msgInput.innerText;
+    if (currentText.length > 0 && !currentText.endsWith(' ')) {
+      msgInput.innerText += ' ';
+    }
+    
+    msgInput.innerText += referenceLink + ' ';
+    msgInput.focus();
+  }
+  
+  return false;
+}
+
 async function paintDiscFooter(uuid) {
   setTimeout(() => {
     if (kazglobal.notes.get_note(uuid) === null) {
@@ -744,11 +766,7 @@ async function paintDiscFooter(uuid) {
     document.getElementById('well_formed_display').innerHTML = well_formed;
   }, 100);
 
-  let msg_form = "";
-  let edit_button = "";
-  let gather_button = "";
-  if (uuid.startsWith(kazglobal.notes.local_repo_name())) {
-    msg_form = `<div
+  let msg_form = `<div
       onkeydown="return handleMsg(event);"
       id="msg_input"
       class="msg_input"
@@ -758,12 +776,11 @@ async function paintDiscFooter(uuid) {
       role="textbox"
       tabindex="0"
       style="user-select: text; white-space: pre-wrap; word-break: break-word;"
-      data-lexical-editor="true"><br></div>`
+      data-lexical-editor="true"><br></div>`;
 
-      edit_button = MenuButton({icon: 'edit', action: `gotoEdit('${uuid}')`});
-      gather_button = MenuButton({icon: 'gather', action: 'gatherSelectedMessage()'});
-  }
-
+  let edit_button = MenuButton({icon: 'edit', action: `gotoEdit('${uuid}')`});
+  let gather_button = MenuButton({icon: 'gather', action: 'gatherSelectedMessage()'});
+      
   let menu_state = await readBooleanFile(MENU_TOGGLE_FILE, "false");
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 
@@ -1392,32 +1409,3 @@ export async function run() {
   await handleRouting();
 }
 
-export function gatherSelectedMessage() {
-  const selectedMessage = getSelectedMessage();
-  
-  if (!selectedMessage) {
-    console.log('No message selected');
-    return false;
-  }
-  
-  const messageId = selectedMessage.id;
-  const currentUuid = getCurrentNoteUuid();
-  const referenceLink = `${currentUuid}#${messageId}`;
-  const msgInput = document.getElementById('msg_input');
-  
-  if (msgInput) {
-    if (msgInput.innerHTML === '' || msgInput.innerHTML === '<br>') {
-      msgInput.innerHTML = '';
-    }
-    
-    const currentText = msgInput.innerText;
-    if (currentText.length > 0 && !currentText.endsWith(' ')) {
-      msgInput.innerText += ' ';
-    }
-    
-    msgInput.innerText += referenceLink + ' ';
-    msgInput.focus();
-  }
-  
-  return false;
-}
