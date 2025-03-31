@@ -746,6 +746,7 @@ async function paintDiscFooter(uuid) {
 
   let msg_form = "";
   let edit_button = "";
+  let gather_button = "";
   if (uuid.startsWith(kazglobal.notes.local_repo_name())) {
     msg_form = `<div
       onkeydown="return handleMsg(event);"
@@ -760,6 +761,7 @@ async function paintDiscFooter(uuid) {
       data-lexical-editor="true"><br></div>`
 
       edit_button = MenuButton({icon: 'edit', action: `gotoEdit('${uuid}')`});
+      gather_button = MenuButton({icon: 'gather', action: 'gatherSelectedMessage()'});
   }
 
   let menu_state = await readBooleanFile(MENU_TOGGLE_FILE, "false");
@@ -779,6 +781,7 @@ async function paintDiscFooter(uuid) {
         ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
         ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
         ${MenuButton({icon: 'routine', action: 'return toggleMenu()'})}
+        ${gather_button}
       </div>
       <div id="footer_message_container">
         <div id='state_display'></div>
@@ -862,6 +865,22 @@ function updateSelected() {
     return null;
   }
 };
+
+export function getSelectedMessage() {
+  const selectedElements = document.getElementsByClassName('selected');
+  if (selectedElements.length > 0) {
+    return selectedElements[0];
+  }
+  
+  if (window.location.hash) {
+    const selected = document.getElementById(decodeURI(window.location.hash.slice(1)));
+    if (selected) {
+      return selected;
+    }
+  }
+  
+  return null;
+}
 
 window.addEventListener('load', () => {
   window.addEventListener('hashchange', () => {
@@ -1350,12 +1369,6 @@ async function registerServiceWorker() {
     } catch (error) {
       console.error(`Registration failed with ${error}`);
     }
-
-    // navigator.serviceWorker.getRegistrations().then(registrations => {
-    //   for (let registration of registrations) {
-    //     registration.unregister();
-    //   }
-    // });
   }
 }
 
@@ -1377,4 +1390,34 @@ export async function run() {
   console.log('global is', kazglobal);  
 
   await handleRouting();
+}
+
+export function gatherSelectedMessage() {
+  const selectedMessage = getSelectedMessage();
+  
+  if (!selectedMessage) {
+    console.log('No message selected');
+    return false;
+  }
+  
+  const messageId = selectedMessage.id;
+  const currentUuid = getCurrentNoteUuid();
+  const referenceLink = `${currentUuid}#${messageId}`;
+  const msgInput = document.getElementById('msg_input');
+  
+  if (msgInput) {
+    if (msgInput.innerHTML === '' || msgInput.innerHTML === '<br>') {
+      msgInput.innerHTML = '';
+    }
+    
+    const currentText = msgInput.innerText;
+    if (currentText.length > 0 && !currentText.endsWith(' ')) {
+      msgInput.innerText += ' ';
+    }
+    
+    msgInput.innerText += referenceLink + ' ';
+    msgInput.focus();
+  }
+  
+  return false;
 }

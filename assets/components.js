@@ -80,5 +80,6 @@ export function lookupIcon(full_name) {
     'case': "CASE",
     'private': "PRIV",
     'get repo': "GET_",
+    'gather': "GTHR",
   }[full_name];
 }
