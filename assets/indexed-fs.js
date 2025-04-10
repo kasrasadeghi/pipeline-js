@@ -38,10 +38,6 @@ function paintSimple(render_result) {
   return {main, footer};
 }
 
-// PARSE
-
-//#endregion PARSE
-
 //#region REWRITE
 
 // page -> *section
@@ -128,6 +124,11 @@ const timestamp_year_format = new Intl.DateTimeFormat('en-us', { year: "numeric"
 
 
 function renderDatetime(date) {
+  // check if date is invalid
+  if (isNaN(date)) {
+    return 'invalid date';
+  }
+
   let now = getNow();
 
   let time_format = timestamp_format;
@@ -140,7 +141,7 @@ function renderDatetime(date) {
   if (now.getFullYear() !== new Date(date).getFullYear()) {
     time_format = timestamp_year_format;
   }
-  
+
   return time_format
     .format(date).replaceAll(",", "");  // "Wed, Jan 15, hh:mm:ss" -> "Wed Jan 15 hh:mm:ss"
 }
@@ -523,7 +524,7 @@ function parseRef(ref) {
   return {uuid, datetime_id};
 }
 
-async function retrieveMsg(ref) {
+function retrieveMsg(ref) {
   let url_ref = parseRef(ref);
   let r = kazglobal.notes.rewrite(url_ref.uuid);
   let found_msg = r.filter(section => section.title === 'entry')
@@ -537,7 +538,7 @@ export function clickInternalLink(url) {
   return false;
 }
 
-function insertHtmlBeforeMessage(obj, html_content) {
+function insertHtmlBeforeMessage(obj, html_content, name) {
   console.log(obj);
   let parent = obj.parentElement;
   while (! parent.classList.contains('msg')) {
@@ -546,20 +547,28 @@ function insertHtmlBeforeMessage(obj, html_content) {
 
   // TODO persist quotes to cache so they work on refresh
   // TODO UI to remove/toggle quotes
+  console.log('insert into', parent, parent.kaz_quotes);
   if (parent.previousElementSibling && parent.previousElementSibling.classList && parent.previousElementSibling.classList.contains('quotes')) {
-    parent.previousElementSibling.innerHTML += html_content;
+    parent.kaz_quotes[name] = html_content;
+    let rendered_quotes = "";
+    for (let key in parent.kaz_quotes) {
+      rendered_quotes += parent.kaz_quotes[key];
+    }
+    parent.previousElementSibling.innerHTML = rendered_quotes;
     // TODO make sure to replace the element with the same id if it exists
   } else {
     parent.insertAdjacentHTML('beforebegin', "<div class='quotes'>" + html_content + "</div>");
+    parent.kaz_quotes = {[name]: html_content};
   }
+  parent.scrollIntoView();
 }
 
 export async function expandRef(obj, url) {
-  let found_msg = await retrieveMsg(url);
+  let found_msg = retrieveMsg(url);
   let result = htmlMsg(found_msg[0]);
   if (found_msg.length > 0) {
     console.log(found_msg);
-    insertHtmlBeforeMessage(obj, result);
+    insertHtmlBeforeMessage(obj, result, 'ref' + url);
   } else {
     console.log(`ERROR 4: couldn't find ${url_ref.datetime_id} in ${url_ref.uuid}`);
     // TODO error messaging
@@ -572,13 +581,13 @@ export async function expandSearch(obj, search_query) {
   const case_sensitive = urlParams.get('case') === 'true';
   search(text, case_sensitive).then(all_messages => {
     let result = renderSearchMain(urlParams, all_messages);
-    insertHtmlBeforeMessage(obj, result);
+    insertHtmlBeforeMessage(obj, result, 'search');
   });
 }
 
 function htmlLine(line) {
   if (line instanceof Line) {
-    return line.parts.map(x => {
+    let result = line.parts.map(x => {
       if (x instanceof Tag) {
         return "<emph class='tag'>" + x.tag + "</emph>";
       }
@@ -588,10 +597,23 @@ function htmlLine(line) {
         }
         if (x.type === 'internal_ref') {
           let ref = parseRef(x.display);
+
           let shorter_datetime = renderDatetime(new Date(ref.datetime_id));
-          return `<div style="display:inline">
+          if (shorter_datetime === 'invalid date') {
+            shorter_datetime = ref.datetime_id;
+          }
+
+          let ref_snippet = '';
+          let found_msg = retrieveMsg(x.display);
+          console.log('found_msg', found_msg);
+          if (found_msg.length > 0) {
+            ref_snippet = htmlLine(found_msg[0].msg);
+          }
+
+          return `<div class="ref_snippet">
             <button onclick="return expandRef(this, '${x.display}')">get</button>
             <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${shorter_datetime}</a>
+            ${ref_snippet}
           </div>`;
         }
         if (x.type === 'internal_search') {
@@ -607,6 +629,8 @@ function htmlLine(line) {
       }
       return x;
     }).join("");
+
+    return result;
   }
 
   // TODO actually render these lines by parsing them.  for some reason they're not parsed.
@@ -664,16 +688,19 @@ export function getSupervisorStatusPromise() {
   return fetch(`https://${hostname}:8002/api/status`, {method: 'GET'}).then(response => response.json());
 }
 
-export async function handleMsg(event) {
-  const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
-
-  // console.log(event);  // print out keyboard events 
-
+export function resizeFooterMenu() {
   // yield to the UI thread with settimeout 0, so the msg_input clientHeight uses the post-keyboardEvent UI state.
   setTimeout(() => {
     let footer_menu_size = (document.getElementById('msg_input').clientHeight) + 80; // for one line, client height is 31px
     document.documentElement.style.setProperty("--footer_menu_size", footer_menu_size + "px");
   }, 0);
+}
+
+export async function handleMsg(event) {
+  const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
+
+  // console.log(event);  // print out keyboard events 
+  resizeFooterMenu();
 
   const should_submit = (event.key === 'Enter');
   if (! should_submit) {
@@ -721,7 +748,7 @@ export async function handleMsg(event) {
   return false;
 };
 
-export async function toggleMenu () {
+export async function toggleMenu() {
   let menu_state = await toggleBooleanFile(MENU_TOGGLE_FILE, "false");
   kazglobal.notes.booleanFiles[MENU_TOGGLE_FILE] = menu_state;
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
@@ -735,9 +762,10 @@ export function gatherSelectedMessage() {
     return false;
   }
   
-  const messageId = selectedMessage.id;
+  const messageId = encodeURI(selectedMessage.id);
   const currentUuid = getCurrentNoteUuid();
-  const referenceLink = `${currentUuid}#${messageId}`;
+  const host = window.location.host;
+  const referenceLink = `https://${host}/disc/${currentUuid}#${messageId}`;
   const msgInput = document.getElementById('msg_input');
   
   if (msgInput) {
@@ -750,7 +778,8 @@ export function gatherSelectedMessage() {
       msgInput.innerText += ' ';
     }
     
-    msgInput.innerText += referenceLink + ' ';
+    msgInput.innerText += referenceLink;
+    resizeFooterMenu();
     msgInput.focus();
   }
   
@@ -951,11 +980,17 @@ function renderSearchMain(urlParams) {
   let all_messages = kazglobal.search.results;
   let page = urlParams.get('page');
   if (page === 'all') {
-    return `<h3>render all ${all_messages.length} results</h3><div class='msglist'>${all_messages.reverse().map((x) => htmlMsg(x, 'search')).join("")}</div>`;
+    return `<div class='search-main'>
+      <h3>render all ${all_messages.length} results</h3>
+      <div class='msglist'>${all_messages.reverse().map((x) => htmlMsg(x, 'search')).join("")}</div>
+    </div>`;
   }
   page = (page === null ? 0 : parseInt(page));
   let messages = all_messages.slice(page * SEARCH_RESULTS_PER_PAGE, (page + 1) * SEARCH_RESULTS_PER_PAGE);
-  return `<h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3><div class='msglist'>${messages.reverse().map((x) => htmlMsg(x, 'search')).join("")}</div>`;
+  return `<div class='search-main'>
+      <h3>${page * SEARCH_RESULTS_PER_PAGE} to ${(page) * SEARCH_RESULTS_PER_PAGE + messages.length} of ${all_messages.length} results</h3>
+      <div class='msglist'>${messages.reverse().map((x) => htmlMsg(x, 'search')).join("")}</div>
+    </div>`;
 }
 
 function paintSearchMain(urlParams) {
