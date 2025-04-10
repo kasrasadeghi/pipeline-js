@@ -520,12 +520,19 @@ function parseRef(ref) {
   let s = ref.split('#');  // a ref looks like: "uuid#datetime_id" 
   // EXAMPLE bigmac-js/f726c89e-7473-4079-bd3f-0e7c57b871f9.note#Sun Jun 02 2024 20:45:46 GMT-0700 (Pacific Daylight Time)
   console.assert(s.length == 2);
+  if (s.length !== 2) {
+    return {uuid: '', datetime_id: ''};
+  }
   let [uuid, datetime_id] = s;
   return {uuid, datetime_id};
 }
 
 function retrieveMsg(ref) {
   let url_ref = parseRef(ref);
+  if (url_ref.uuid === '') {
+    console.log('ERROR 3: could not parse ref', ref);
+    return [];
+  }
   let r = kazglobal.notes.rewrite(url_ref.uuid);
   let found_msg = r.filter(section => section.title === 'entry')
     .flatMap(s => s.blocks)
@@ -579,9 +586,12 @@ export async function expandSearch(obj, search_query) {
   let urlParams = new URLSearchParams(search_query);
   const text = urlParams.get('q');
   const case_sensitive = urlParams.get('case') === 'true';
-  search(text, case_sensitive).then(all_messages => {
-    let result = renderSearchMain(urlParams, all_messages);
-    insertHtmlBeforeMessage(obj, result, 'search');
+
+  kazglobal.notes.subscribe_to_messages_cacher(messages => {
+    let search_results = search(messages, text, case_sensitive);
+    let painted_search_results = renderSearchMain(urlParams, search_results);
+    insertHtmlBeforeMessage(obj, painted_search_results, 'search');
+    obj.scrollIntoView();
   });
 }
 
@@ -597,6 +607,9 @@ function htmlLine(line) {
         }
         if (x.type === 'internal_ref') {
           let ref = parseRef(x.display);
+          if (ref.uuid === '') {
+            return x;
+          }
 
           let shorter_datetime = renderDatetime(new Date(ref.datetime_id));
           if (shorter_datetime === 'invalid date') {
@@ -610,6 +623,10 @@ function htmlLine(line) {
             ref_snippet = htmlLine(found_msg[0].msg);
           }
 
+          if (shorter_datetime === 'datetime error') {
+            // invalid datetime value
+            return x;
+          }
           return `<div class="ref_snippet">
             <button onclick="return expandRef(this, '${x.display}')">get</button>
             <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${shorter_datetime}</a>
@@ -976,8 +993,7 @@ function clamp(value, lower, upper) {
 
 const SEARCH_RESULTS_PER_PAGE = 100;
 
-function renderSearchMain(urlParams) {
-  let all_messages = kazglobal.search.results;
+function renderSearchMain(urlParams, all_messages) {
   let page = urlParams.get('page');
   if (page === 'all') {
     return `<div class='search-main'>
@@ -995,7 +1011,7 @@ function renderSearchMain(urlParams) {
 
 function paintSearchMain(urlParams) {
   let main = document.getElementsByTagName('main')[0];
-  main.innerHTML = renderSearchMain(urlParams);
+  main.innerHTML = renderSearchMain(urlParams, kazglobal.search.results);
   main.scrollTop = main.scrollHeight;
 }
 
