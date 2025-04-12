@@ -75,11 +75,11 @@ input[type=checkbox] { width: 18px; height: 18px; margin: 1px 3px 1px 3px; paddi
   border-radius: 18px;
   background: var(--msg_color); color: rgb(250, 250, 250);
 }
-/* 
-.msg_content:has(.ref_snippet:last-child) {
-  padding-right: 0;
-  padding-bottom: 0;
-} */
+ 
+.msg_content:has(.ref_snippet) {
+  max-width: calc(100vw - 40px);
+  box-sizing: border-box;
+}
 
 .ref_snippet {
   display: block;
@@ -92,9 +92,17 @@ input[type=checkbox] { width: 18px; height: 18px; margin: 1px 3px 1px 3px; paddi
   padding-right: 12px;
   margin-right: -12px;
   padding-bottom: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ref_snippet:first-child {
+  margin-top: -9px;
+}
+
+.ref_snippet:last-child {
   margin-bottom: -9px;
-  overflow-x: clip;
-  overflow-wrap: revert;
 }
 
 pre { font-family: Courier; margin: 0px; color: var(--base_text_color); }

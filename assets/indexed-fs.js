@@ -644,6 +644,9 @@ function htmlLine(line) {
         }
         return `<a href="${x.url}">${x.display}</a>`;
       }
+      if (typeof x === 'string') {
+        return `<span class="string_line_part">${x}</span>`;
+      }
       return x;
     }).join("");
 
