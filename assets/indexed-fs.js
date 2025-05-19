@@ -470,8 +470,8 @@ export function htmlMsg(item, mode, origin_content) {
 
   let edit_link = '';
   let editable = '';
-  // can only edit messages on the current note, so we `=== getCurrentNoteUuid()`
-  if (origin_content !== undefined && item.origin === getCurrentNoteUuid()) {
+  // can only edit messages on the current device and on the current note
+  if (origin_content !== undefined && item.origin === getCurrentNoteUuid() && item.origin.split('/')[0] === kazglobal.notes.local_repo_name()) {
     if (!checkWellFormed(item.origin, origin_content)) {
       console.warn(item.origin, "should be well-formed");
     } else {
