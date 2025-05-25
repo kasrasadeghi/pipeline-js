@@ -49,8 +49,8 @@ def HTTP_OK(body: bytes, mimetype: bytes, keep_alive: bool = False, extra_header
 def HTTP_OK_JSON(obj: Any, extra_header=b"", keep_alive: bool = False) -> bytes:
     return KazHttpResponse(b"200 OK", json.dumps(obj).encode('utf-8'), mimetype=b"application/json", keep_alive=keep_alive, extra_headers=extra_header)
 
-def HTTP_NOT_FOUND(msg, keep_alive: bool = False) -> bytes:
-    return KazHttpResponse(b"400 NOT_FOUND", "HTTP 400:" + msg + b"\n", keep_alive=keep_alive, mimetype=b"text/plain")
+def HTTP_NOT_FOUND(msg: bytes, keep_alive: bool = False) -> bytes:
+    return KazHttpResponse(b"404 NOT_FOUND", b"HTTP 404: " + msg + b"\n", keep_alive=keep_alive, mimetype=b"text/plain")
 
 def allow_cors_for_localhost(headers: Dict[str, str]):
     if 'Origin' in headers:
