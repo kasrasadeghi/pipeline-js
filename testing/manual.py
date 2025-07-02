@@ -37,11 +37,11 @@ def create_folders():
 
 def run_server(log_file):
     server_process = subprocess.Popen(
-        ['python', '../simple_server.py', '--port', str(PORT), '--notes-root', 'testing/notes'],
+        ['python', 'simple_server.py', '--port', str(PORT), '--notes-root', 'testing/notes', '--cert-folder', 'testing/cert'],
+        cwd='..',  # Set working directory to parent where assets are located
         stdout=log_file,
         stderr=subprocess.STDOUT,
         text=True,
-        cwd='..'  # Set working directory to parent where assets are located
     )
     return server_process
 

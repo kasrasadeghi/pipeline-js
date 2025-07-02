@@ -63,7 +63,10 @@ docker:
 	docker-compose up --build --force-recreate
 
 test:
-	cd testing && python test.py
+	cd testing && python manual.py
+
+clean_test:
+	rm -r testing/logs/*.log
 
 test_client_db:
 	python -m pdb -c c test_client.py 10.50.50.2 8000
