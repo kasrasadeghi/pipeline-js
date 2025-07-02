@@ -135,13 +135,14 @@ def receive_headers_and_content(client_connection: socket.socket) -> Dict[str, A
         log(f'{len(body)=} {content_length=}')
     return {'method': method, 'path': path, 'httpver': httpver, 'headers': headers, 'body': body, "connection": connection}
 
-def create_server_socket(host, port) -> Tuple[socket.socket, ssl.SSLContext]:
+def create_server_socket(host, port, cert_folder) -> Tuple[socket.socket, ssl.SSLContext]:
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
     context = None
-    if os.path.exists('cert/cert.pem'):
+    cert_path = os.path.join(cert_folder, 'cert.pem')
+    key_path = os.path.join(cert_folder, 'key.pem')
+    if os.path.exists(cert_path) and os.path.exists(key_path):
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(certfile="cert/cert.pem", keyfile="cert/key.pem")
+        context.load_cert_chain(certfile=cert_path, keyfile=key_path)
 
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listen_socket.bind((host, port))
@@ -150,9 +151,9 @@ def create_server_socket(host, port) -> Tuple[socket.socket, ssl.SSLContext]:
     return listen_socket, context
 
 
-def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse]) -> None:
+def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse], cert_folder: str) -> None:
     import select
-    listen_socket, context = create_server_socket(host, port)
+    listen_socket, context = create_server_socket(host, port, cert_folder)
     listen_socket.setblocking(False)
     inputs = [listen_socket]
     
@@ -176,16 +177,8 @@ def run(host: str, port: int, handle_request: Callable[[dict], KazHttpResponse])
                             client_connection = context.wrap_socket(client_connection, server_side=True, do_handshake_on_connect=True)
                             client_connection.do_handshake()  # delete this if above already does handshake?
                             log(f"SSL handshake successful with {client_address}")
-                        except ssl.SSLError as ssl_err:
-                            log(f"SSL handshake failed with {client_address}: {ssl_err}")
-                            client_connection.close()
-                            continue
-                        except ConnectionResetError as conn_err:
-                            log(f"SSL handshake failed with {client_address}: {conn_err}")
-                            client_connection.close()
-                            continue
-                        except Exception as e:
-                            log(f"SSL handshake failed with {client_address}, general error: {e}")
+                        except (ssl.SSLError, ConnectionResetError, Exception) as e:
+                            log(f"SSL handshake failed with {client_address}: {e}")
                             client_connection.close()
                             continue
                     

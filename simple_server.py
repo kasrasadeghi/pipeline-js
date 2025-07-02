@@ -16,6 +16,7 @@ argparser.add_argument("--port", type=int, required=True, help="Port to host the
 argparser.add_argument("--notes-root", type=str, help="Root directory for notes", default=os.path.join(os.path.expanduser('~'), "notes"))
 argparser.add_argument("--host", type=str, help="Host to bind to", default="")
 argparser.add_argument("--no-api", action="store_true", help="Disable the api server.  Used for debugging service worker failures and caching failures by providing fresh new assets from a wireguard config that has the same IP.")
+argparser.add_argument("--cert-folder", type=str, help="Folder containing cert.pem and key.pem", default="cert")
 args = argparser.parse_args()
 
 NOTES_ROOT = args.notes_root
@@ -241,7 +242,7 @@ def main():
         log(f"no notes root, because this is a non-api server")
     else:
         log(f"notes root '{NOTES_ROOT}' in home folder '{os.path.expanduser('~')}'")
-    run(host=HOST, port=PORT, handle_request=handle_request)
+    run(host=HOST, port=PORT, handle_request=handle_request, cert_folder=args.cert_folder)
 
 
 if __name__ == '__main__':
