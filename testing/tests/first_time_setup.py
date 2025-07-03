@@ -31,9 +31,6 @@ def first_time_setup(page, repo_name="playwright_test_local"):
     assert "Pipeline" in title, f"Expected 'Pipeline' in title, but got '{title}'"
     print(f"Page title is: {title}")
     
-    # Wait a bit for JavaScript to load and initialize
-    time.sleep(2)
-
     print(f"Test: Creating new repo '{repo_name}' locally.")
     
     notes_dir = os.path.join('notes', repo_name)
@@ -47,7 +44,6 @@ def first_time_setup(page, repo_name="playwright_test_local"):
 
     # Wait for kazglobal to be initialized before proceeding
     print("Waiting for kazglobal to be ready...")
-    time.sleep(2)
     
     # Debug: Check what's available on window
     kazglobal_status = page.evaluate("() => ({ kazglobal: !!window.kazglobal, kazglobalReady: !!window.kazglobalReady, kazglobalNotes: !!(window.kazglobal && window.kazglobal.notes) })")

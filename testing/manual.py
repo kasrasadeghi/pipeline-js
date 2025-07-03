@@ -4,17 +4,24 @@ import subprocess
 from datetime import datetime
 import time
 import sys
+from test_util import get_pipeline_url
+
 from tests.first_time_setup import first_time_setup
 from tests.first_time_interaction import test_first_time_interaction
-from test_util import get_pipeline_url
+from tests.sync_on_network_failure import test_sync_on_network_failure
 
 PORT = 8100
 
 class Server:
+    """
+    Manages the server process and log file.
+    The server should be able to be restarted after being stopped.
+    """
     def __init__(self, port):
         self.port = port
         self.process = None
         self.log_file = None
+        self.log_file_path = None
     
     def create_folders(self):
         assert os.getcwd().rsplit("/", 1)[-1] == "testing", "Current working directory is not 'testing', it's " + os.getcwd()
@@ -45,10 +52,13 @@ class Server:
 
         # Create a log file with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.log_file = open(f'logs/server_{timestamp}.log', 'w')
+        self.log_file_path = f'logs/server_{timestamp}.log'
 
     
     def run(self):
+        assert self.log_file_path is not None, "Log file is not initialized"
+        self.log_file = open(self.log_file_path, 'w')
+        assert self.process is None, "Server is already running"
         self.process = subprocess.Popen(
             ['python', 'simple_server.py', '--port', str(self.port), '--notes-root', 'testing/notes', '--cert-folder', 'testing/cert'],
             cwd='..',  # Set working directory to parent where assets are located
@@ -56,6 +66,7 @@ class Server:
             stderr=subprocess.STDOUT,
             text=True,
         )
+        time.sleep(1)  # give it a second to start
     
     def terminate(self):
         if self.process:
@@ -115,6 +126,7 @@ def run(playwright: Playwright):
     """)
     
     page.goto(get_pipeline_url(), wait_until="domcontentloaded")
+
     # open playwright browser and bring to front
     page.bring_to_front()
 
@@ -133,7 +145,8 @@ def main():
         with sync_playwright() as playwright:
             browser, page = run(playwright)
             repo_name = first_time_setup(page)
-            test_first_time_interaction(page, repo_name)
+            # test_first_time_interaction(page, repo_name)
+            test_sync_on_network_failure(server, page, repo_name)
             browser.close()
     finally:
         server.terminate()
