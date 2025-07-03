@@ -1,5 +1,5 @@
 import { getRemote } from '/remote.js';
-import { kazglobal } from '/global.js';
+import { getGlobal } from '/global.js';
 
 async function sha256sum(input_string) {
   // console.time('sha256sum');
@@ -50,13 +50,13 @@ export async function getLocalStatus(repo) {
   const notes = await getLocalNotes(repo);
   let status = {};
   for (let note of notes) {
-    status[note] = await sha256sum(await kazglobal.notes.readFile(note));
+    status[note] = await sha256sum(await getGlobal().notes.readFile(note));
   }
   return status;
 }
 
 async function getLocalNotes(repo) {
-  const notes = await kazglobal.notes.listFiles();
+  const notes = await getGlobal().notes.listFiles();
   return notes.filter(note => note.startsWith(repo + "/"));
 }
 

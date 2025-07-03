@@ -2,16 +2,16 @@ import { buildFlatCache } from '/flatdb.js';
 
 export async function initializeKazGlobal(refresh=true) {
   console.log('initializing global');
-  if (kazglobal !== null) {
+  if (window.kazglobal !== undefined && window.kazglobal !== null && window.kazglobalReady) {
     console.log('already initialized');
     return;
   }
-  kazglobal = {notes: await buildFlatCache(refresh)};
+  window.kazglobal = {notes: await buildFlatCache(refresh)};
+  window.kazglobalReady = true;
   console.log('initialized global');
   return;
 }
 
-export let kazglobal = null;  // the only global variable.
 export function getGlobal() {
-  return kazglobal;
+  return window.kazglobal;
 }

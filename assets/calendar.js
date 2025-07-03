@@ -1,4 +1,4 @@
-import { kazglobal } from '/global.js';
+import { getGlobal } from '/global.js';
 import { readBooleanFile } from '/boolean-state.js';
 import { lookupIcon, MenuButton, ToggleButton } from '/components.js';
 
@@ -87,7 +87,7 @@ export async function paintList() {
 
   // gather notes to days
   console.time('paintList get days');
-  let notes_by_day = kazglobal.notes.metadata_map.reduce((acc, note) => {
+  let notes_by_day = getGlobal().notes.metadata_map.reduce((acc, note) => {
     let date = new Date(timezoneCompatibility(note.date));
     let key = date_into_ymd(date);
     if (acc[key] === undefined) {
@@ -146,7 +146,7 @@ export async function paintList() {
   console.timeEnd('paintList fill in days');
 
   console.time('paintList compute day features');
-  let local_repo_name = kazglobal.notes.local_repo_name();
+  let local_repo_name = getGlobal().notes.local_repo_name();
   let grid = Object.entries(notes_by_day).sort().reverse().map(([date, notes]) => {
     let date_obj = new Date(date);
     let color = compute_seasonal_color(date_obj);
@@ -264,7 +264,7 @@ export async function paintList() {
   // elements seem faster than strings and innerHtml
   let main = document.getElementsByTagName('main')[0];
   main.replaceChildren(...weeks);
-  // let rows = kazglobal.notes.metadata_map.sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
+  // let rows = getGlobal().notes.metadata_map.sort((a, b) => dateComp(b, a)).map(x => `<tr><td>${x.uuid.split('/')[0]}</td><td><a href="/disc/${x.uuid}">${x.title}</a></td></tr>`).join("\n");
   // let table = "<table><tr><th>repo</th><th>title</th></tr>" + rows + "</table>";
   let footer = document.getElementsByTagName('footer')[0];
   footer.innerHTML = `

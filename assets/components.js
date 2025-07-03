@@ -1,5 +1,5 @@
 import { readBooleanFile, toggleBooleanFile } from '/boolean-state.js';
-import { kazglobal } from '/global.js';
+import { getGlobal } from '/global.js';
 import { setBooleanQueryParam, toggleBooleanQueryParam } from '/boolean-state.js';
 
 export function MenuButton({icon, action}) {
@@ -10,7 +10,7 @@ export async function handleToggleButton(event, id, file, query_param, default_v
   let indexedDB_result = undefined;
   if (file) {
     indexedDB_result = await toggleBooleanFile(file, default_value);
-    kazglobal.notes.booleanFiles[file] = indexedDB_result;
+    getGlobal().notes.booleanFiles[file] = indexedDB_result;
   }
 
   if (query_param && indexedDB_result) {

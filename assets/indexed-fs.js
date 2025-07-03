@@ -6,7 +6,7 @@ import { rewrite, rewriteLine, rewriteBlock, Msg, Line, Tag, Link } from '/rewri
 import { dateComp, timezoneCompatibility } from '/date-util.js';
 import { hasRemote } from '/remote.js';
 import { sync, restoreRepo } from '/sync.js';
-import { getGlobal, initializeKazGlobal, kazglobal } from '/global.js';
+import { getGlobal, initializeKazGlobal } from '/global.js';
 import { paintList } from '/calendar.js';
 import { lookupIcon, MenuButton, ToggleButton } from '/components.js';
 
@@ -62,10 +62,10 @@ function pageIsJournal(page) {
 
 function htmlNote(uuid) {
   console.log('rendering note for', uuid);
-  let messages = kazglobal.notes.get_messages_around(uuid);
+  let messages = getGlobal().notes.get_messages_around(uuid);
   messages.reverse();
   // let messages = [];
-  let content = kazglobal.notes.get_note(uuid).content;
+  let content = getGlobal().notes.get_note(uuid).content;
   let rendered_messages = messages.map(msg => htmlMsg(msg, /*mode*/undefined, content));
   return rendered_messages.join("");
 }
@@ -269,7 +269,7 @@ class Deleted {
 
 export async function getMessageFromElement(element) {
   let msg_id = element.id;
-  let page = kazglobal.notes.rewrite(getCurrentNoteUuid());
+  let page = getGlobal().notes.rewrite(getCurrentNoteUuid());
   let msg = page.filter(section => section.title === 'entry').flatMap(x => x.blocks).find(block => block.date === msg_id);
   return msg;
 }
@@ -292,7 +292,7 @@ export async function editMessage(item_origin, msg_id) {
     return;
   }
 
-  let item_origin_content = await kazglobal.notes.readFile(item_origin);
+  let item_origin_content = await getGlobal().notes.readFile(item_origin);
 
   let well_formed = checkWellFormed(item_origin, item_origin_content);
   if (! well_formed) {
@@ -369,7 +369,7 @@ export async function editMessage(item_origin, msg_id) {
     }
 
     let new_content = unparseContent(page);
-    await kazglobal.notes.writeFile(item_origin, new_content);
+    await getGlobal().notes.writeFile(item_origin, new_content);
     console.log('rendering inner html from submitted individual message edit', msg_content, htmlLine(msg_content.innerHTML));
     msg_content.innerHTML = htmlLine(rewriteLine(new_msg_content));
 
@@ -452,7 +452,7 @@ export function htmlMsg(item, mode, origin_content) {
   let href_id = `/disc/${item.origin}#${item.date}`;
   let msg_timestamp_link = shortcircuitLink(href_id, timestamp_content, 'msg_timestamp');
 
-  let show_private_messages = kazglobal.notes.show_private_messages();
+  let show_private_messages = getGlobal().notes.show_private_messages();
   if (show_private_messages === "false") {
     if (item.content.includes("PRIVATE")) {
       return "";
@@ -460,7 +460,7 @@ export function htmlMsg(item, mode, origin_content) {
   }
 
   let line = htmlLine(item.msg);
-  let style_option = item.origin !== kazglobal.notes.maybe_current_journal() ? " style='background: #5f193f'": "";
+  let style_option = item.origin !== getGlobal().notes.maybe_current_journal() ? " style='background: #5f193f'": "";
 
   let block_content = htmlMsgBlockContent(item, origin_content);
   let has_block_content = '';
@@ -533,7 +533,7 @@ function retrieveMsg(ref) {
     console.log('ERROR 3: could not parse ref', ref);
     return [];
   }
-  let r = kazglobal.notes.rewrite(url_ref.uuid);
+  let r = getGlobal().notes.rewrite(url_ref.uuid);
   let found_msg = r.filter(section => section.title === 'entry')
     .flatMap(s => s.blocks)
     .filter(x => x instanceof Msg && x.date === url_ref.datetime_id);
@@ -587,7 +587,7 @@ export async function expandSearch(obj, search_query) {
   const text = urlParams.get('q');
   const case_sensitive = urlParams.get('case') === 'true';
 
-  kazglobal.notes.subscribe_to_messages_cacher(messages => {
+  getGlobal().notes.subscribe_to_messages_cacher(messages => {
     let search_results = search(messages, text, case_sensitive);
     let painted_search_results = renderSearchMain(urlParams, search_results);
     insertHtmlBeforeMessage(obj, painted_search_results, 'search');
@@ -664,7 +664,7 @@ const MENU_TOGGLE_FILE = 'disc menu toggle state';
 const SEARCH_CASE_SENSITIVE_FILE = 'search case sensitive state';
 
 async function paintDisc(uuid, flag) {
-  document.title = `${kazglobal.notes.get_note(uuid)?.title || "illegal: " + uuid} - Pipeline Notes`;
+  document.title = `${getGlobal().notes.get_note(uuid)?.title || "illegal: " + uuid} - Pipeline Notes`;
   if (flag !== 'only main') {
     await paintDiscFooter(uuid);
 
@@ -675,7 +675,7 @@ async function paintDisc(uuid, flag) {
   }
 
   let main = document.getElementsByTagName('main')[0];
-  if (kazglobal.notes.get_note(uuid) === null) {
+  if (getGlobal().notes.get_note(uuid) === null) {
     main.innerHTML = `ERROR 5: couldn't find file '${uuid}'`;
     console.error('ERROR 5: couldn\'t find file', uuid);
     return;
@@ -736,13 +736,13 @@ export async function handleMsg(event) {
     console.log('msg', msg);
     msg_input.innerText = '';
   
-    let today_uuid = await kazglobal.notes.get_or_create_current_journal();
+    let today_uuid = await getGlobal().notes.get_or_create_current_journal();
     if (current_uuid !== today_uuid) {
       current_uuid = today_uuid;
       window.history.pushState({}, "", `/disc/${current_uuid}`);
     }
 
-    await kazglobal.notes.updateFile(current_uuid, (content) => {
+    await getGlobal().notes.updateFile(current_uuid, (content) => {
       let lines = content.split("\n");
       const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
       const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
@@ -753,7 +753,7 @@ export async function handleMsg(event) {
       return new_content + metadata;
     });
   }
-  await kazglobal.notes.ensure_valid_cache();
+  await getGlobal().notes.ensure_valid_cache();
   await paintDisc(current_uuid, 'only main');
   await paintDiscRoutine();
 
@@ -770,7 +770,7 @@ export async function handleMsg(event) {
 
 export async function toggleMenu() {
   let menu_state = await toggleBooleanFile(MENU_TOGGLE_FILE, "false");
-  kazglobal.notes.booleanFiles[MENU_TOGGLE_FILE] = menu_state;
+  getGlobal().notes.booleanFiles[MENU_TOGGLE_FILE] = menu_state;
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 }
 
@@ -808,10 +808,10 @@ export function gatherSelectedMessage() {
 
 async function paintDiscFooter(uuid) {
   setTimeout(() => {
-    if (kazglobal.notes.get_note(uuid) === null) {
+    if (getGlobal().notes.get_note(uuid) === null) {
       return;
     }
-    const well_formed = checkWellFormed(uuid, kazglobal.notes.get_note(uuid).content) ? 'well-formed' : 'not well-formed';
+    const well_formed = checkWellFormed(uuid, getGlobal().notes.get_note(uuid).content) ? 'well-formed' : 'not well-formed';
     document.getElementById('well_formed_display').innerHTML = well_formed;
   }, 100);
 
@@ -871,7 +871,7 @@ export async function gotoDisc(uuid) {
 // EDIT
 
 async function paintEdit(uuid) {
-  document.title = `editing "${kazglobal.notes.get_note(uuid).title}" - Pipeline Notes`;
+  document.title = `editing "${getGlobal().notes.get_note(uuid).title}" - Pipeline Notes`;
   let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
   [main.innerHTML, footer.innerHTML] = await renderEdit(uuid);
@@ -890,13 +890,13 @@ export async function submitEdit() {
   let content = textarea.value;  // textareas are not dos newlined, http requests are.  i think?
   // TODO consider using .replace instead of .split and .join
   const uuid = getCurrentNoteUuid();
-  await kazglobal.notes.writeFile(uuid, content);
+  await getGlobal().notes.writeFile(uuid, content);
   gotoDisc(uuid);
 };
 
 async function renderEdit(uuid) {
   console.log('rendering /edit/ for ', uuid);
-  let content = await kazglobal.notes.readFile(uuid);
+  let content = await getGlobal().notes.readFile(uuid);
   if (content === null) {
     return `ERROR 2: couldn't find file '${uuid}'`;
   }
@@ -971,7 +971,7 @@ export function search(messages, text, is_case_sensitive=false) {
   let includes = (is_case_sensitive) ? case_sensitive : case_insensitive;
 
   console.time('search gather msgs');
-  let show_private_messages = kazglobal.notes.show_private_messages();
+  let show_private_messages = getGlobal().notes.show_private_messages();
   if (show_private_messages === "true") {
     messages = messages.filter(m => includes(m.content, text));
   } else {
@@ -1014,7 +1014,7 @@ function renderSearchMain(urlParams, all_messages) {
 
 function paintSearchMain(urlParams) {
   let main = document.getElementsByTagName('main')[0];
-  main.innerHTML = renderSearchMain(urlParams, kazglobal.search.results);
+  main.innerHTML = renderSearchMain(urlParams, getGlobal().search.results);
   main.scrollTop = main.scrollHeight;
 }
 
@@ -1031,7 +1031,7 @@ export function searchPagination(delta) {
   const urlParams = new URLSearchParams(window.location.search);
   let page = urlParams.get('page');
   page = (page === null ? 0 : parseInt(page));
-  page = clamp(page + delta, /*bottom*/0, /*top*/Math.floor(kazglobal.search.results.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
+  page = clamp(page + delta, /*bottom*/0, /*top*/Math.floor(getGlobal().search.results.length / SEARCH_RESULTS_PER_PAGE)); // round down to get the number of pages
   urlParams.set('page', page);
   window.history.pushState({}, "", "/search/?" + urlParams.toString());
   paintSearchMain(urlParams);
@@ -1055,10 +1055,10 @@ function runSearch() {
 
   const has_text = !(text === null || text === undefined || text === '');
   // search footer should already be rendered
-  kazglobal.notes.subscribe_to_messages_cacher(messages => {
+  getGlobal().notes.subscribe_to_messages_cacher(messages => {
     let search_results = search(messages, text, case_sensitive);
-    kazglobal.search = kazglobal.search || {};
-    kazglobal.search.results = search_results;
+    getGlobal().search = getGlobal().search || {};
+    getGlobal().search.results = search_results;
     paintSearchMain(urlParams);
     paintSearchPagination();
   });
@@ -1210,7 +1210,7 @@ export async function gotoMenu() {
 
 export async function gotoNewNote(id) {
   let text = document.getElementById(id).value;
-  let uuid = await kazglobal.notes.newNote(text, getNow());
+  let uuid = await getGlobal().notes.newNote(text, getNow());
   await gotoDisc(uuid);
 }
 
@@ -1258,8 +1258,8 @@ export async function gotoRoutine() {
 }
 
 async function routineContent() {
-  const local_repo_name = kazglobal.notes.local_repo_name();
-  const notes = kazglobal.notes.metadata_map;
+  const local_repo_name = getGlobal().notes.local_repo_name();
+  const notes = getGlobal().notes.metadata_map;
   const routine_notes = notes.filter(note => note.title === "ROUTINE");
 
   let content = "no routine notes found";
@@ -1270,7 +1270,7 @@ async function routineContent() {
 
     let page = parseContent(most_recent_routine_note.content);
     page = rewrite(page, most_recent_routine_note.uuid);
-    let current_journal = kazglobal.notes.maybe_current_journal();
+    let current_journal = getGlobal().notes.maybe_current_journal();
     if (current_journal === null) {
       return "no journal found for today";
     }
@@ -1353,14 +1353,14 @@ async function renderRoutine() {
 }
 
 async function getTagsFromMixedNote(uuid) {
-  let msgs = await kazglobal.notes.get_messages_around(uuid);
+  let msgs = await getGlobal().notes.get_messages_around(uuid);
   return msgs.flatMap(x => x.msg.parts.filter(p => p instanceof Tag));  // get all tags from every message
 }
 
 // MAIN
 
 export async function gotoJournal() {
-  let uuid = await kazglobal.notes.get_or_create_current_journal();
+  let uuid = await getGlobal().notes.get_or_create_current_journal();
   await gotoDisc(uuid);
 }
 
@@ -1458,7 +1458,7 @@ export async function run() {
 
   await initializeKazGlobal();
   console.log('today is', getNow());
-  console.log('global is', kazglobal);  
+  console.log('global is', getGlobal());  
 
   await handleRouting();
 }

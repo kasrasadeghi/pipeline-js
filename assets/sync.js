@@ -1,6 +1,6 @@
 import { getRemote } from '/remote.js';
 import { cache } from '/state.js';
-import { initializeKazGlobal, getGlobal, kazglobal } from '/global.js';
+import { initializeKazGlobal, getGlobal } from '/global.js';
 import { getCombinedRemoteStatus, getLocalStatus, statusDiff } from '/status.js';
 import { LOCAL_REPO_NAME_FILE } from '/flatdb.js';
 
@@ -70,7 +70,7 @@ export async function getAllNotes(repo) {
 }
 
 export async function pullRemoteSimple(combined_remote_status) {
-  let remotes = Object.keys(combined_remote_status).filter(x => x !== kazglobal.notes.local_repo_name());
+  let remotes = Object.keys(combined_remote_status).filter(x => x !== getGlobal().notes.local_repo_name());
   console.time('pull remote simple');
   await Promise.all(remotes.map(async subscribed_remote =>
     await pullRemoteNotes(subscribed_remote, /*dry run*/false, combined_remote_status)));
@@ -78,7 +78,7 @@ export async function pullRemoteSimple(combined_remote_status) {
 }
 
 export async function pushLocalSimple(combined_remote_status) {
-  let local = await kazglobal.notes.local_repo_name();
+  let local = await getGlobal().notes.local_repo_name();
   console.time('push local simple');
   await pushLocalNotes(local, /*dry run*/false, combined_remote_status);
   console.timeEnd('push local simple');
@@ -138,7 +138,7 @@ async function putNote(note) {
     headers: {
       "Content-Type": "text/plain",
     },
-    body: await kazglobal.notes.readFile(note), // body data type must match "Content-Type" header
+    body: await getGlobal().notes.readFile(note), // body data type must match "Content-Type" header
   });
   return response.text();
 }
