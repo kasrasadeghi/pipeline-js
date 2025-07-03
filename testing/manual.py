@@ -4,8 +4,7 @@ import subprocess
 from datetime import datetime
 import time
 import sys
-sys.path.append('..')  # Add parent directory to path for gen-certs import
-from first_time_setup import first_time_setup
+from tests.first_time_setup import first_time_setup
 from test_util import get_pipeline_url
 
 PORT = 8100
