@@ -16,9 +16,12 @@
 </body>
 <script type="module">
   import { run } from '/indexed-fs.js';
-  run();
-
   import * as IndexedFS from '/indexed-fs.js';
+  
+  // Assign global functions to window before running
   Object.assign(window, IndexedFS);
+  
+  // Now run the application
+  run();
 </script>
 </html>
