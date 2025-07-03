@@ -10,6 +10,88 @@ from test_util import get_pipeline_url
 
 PORT = 8100
 
+class Server:
+    def __init__(self, port):
+        self.port = port
+        self.process = None
+        self.log_file = None
+    
+    def create_folders(self):
+        assert os.getcwd().rsplit("/", 1)[-1] == "testing", "Current working directory is not 'testing', it's " + os.getcwd()
+        
+        if not os.path.exists('notes'):
+            os.makedirs('notes')
+            print("Created local 'notes' directory.")
+
+        # Create logs directory if it doesn't exist
+        if not os.path.exists('logs'):
+            os.makedirs('logs')
+            print("Created 'logs' directory.")
+
+        # Create cert directory if it doesn't exist
+        if not os.path.exists('cert'):
+            os.makedirs('cert')
+            print("Created 'cert' directory.")
+
+        # Generate certificates if they don't exist
+        cert_file = 'cert/cert.pem'
+        key_file = 'cert/key.pem'
+        if not os.path.exists(cert_file) or not os.path.exists(key_file):
+            print("Generating SSL certificates...")
+            subprocess.run([
+                sys.executable, '../gen-certs.py', '--server-ip', '127.0.0.1'
+            ], cwd='.', check=True)
+            print("SSL certificates generated.")
+
+        # Create a log file with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.log_file = open(f'logs/server_{timestamp}.log', 'w')
+
+    
+    def run(self):
+        self.process = subprocess.Popen(
+            ['python', 'simple_server.py', '--port', str(self.port), '--notes-root', 'testing/notes', '--cert-folder', 'testing/cert'],
+            cwd='..',  # Set working directory to parent where assets are located
+            stdout=self.log_file,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    
+    def terminate(self):
+        if self.process:
+            self.process.terminate()
+            self.process.wait()
+            self.process = None
+        if self.log_file:
+            self.log_file.close()
+            self.log_file = None
+    
+    def check(self):
+        max_retries = 5
+        retry_delay = 1  # seconds
+        
+        for i in range(max_retries):
+            try:
+                result = subprocess.run(
+                    ['curl', '-k', f'https://127.0.0.1:{self.port}'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    print("Server is responding")
+                    return True
+            except subprocess.TimeoutExpired:
+                pass
+            
+            if i < max_retries - 1:
+                print(f"Server not ready, retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+        
+        print("Server failed to respond after multiple attempts")
+        return False
+
+
 def run(playwright: Playwright):
     chromium = playwright.chromium # or "firefox" or "webkit".
     browser = chromium.launch(headless=False)
@@ -38,76 +120,13 @@ def run(playwright: Playwright):
 
     return browser, page
 
-def create_folders():
-    if not os.path.exists('notes'):
-        os.makedirs('notes')
-        print("Created local 'notes' directory.")
-
-    # Create logs directory if it doesn't exist
-    if not os.path.exists('logs'):
-        os.makedirs('logs')
-        print("Created 'logs' directory.")
-
-    # Create cert directory if it doesn't exist
-    if not os.path.exists('cert'):
-        os.makedirs('cert')
-        print("Created 'cert' directory.")
-
-    # Generate certificates if they don't exist
-    cert_file = 'cert/cert.pem'
-    key_file = 'cert/key.pem'
-    if not os.path.exists(cert_file) or not os.path.exists(key_file):
-        print("Generating SSL certificates...")
-        subprocess.run([
-            sys.executable, '../gen-certs.py', '--server-ip', '127.0.0.1'
-        ], cwd='.', check=True)
-        print("SSL certificates generated.")
-
-    # Create a log file with timestamp
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    log_file = f'logs/server_{timestamp}.log'
-    return open(log_file, 'w')
-
-def run_server(log_file):
-    server_process = subprocess.Popen(
-        ['python', 'simple_server.py', '--port', str(PORT), '--notes-root', 'testing/notes', '--cert-folder', 'testing/cert'],
-        cwd='..',  # Set working directory to parent where assets are located
-        stdout=log_file,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    return server_process
-
-def check_server():
-    max_retries = 5
-    retry_delay = 1  # seconds
-    
-    for i in range(max_retries):
-        try:
-            result = subprocess.run(
-                ['curl', '-k', f'https://127.0.0.1:{PORT}'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode == 0:
-                print("Server is responding")
-                return True
-        except subprocess.TimeoutExpired:
-            pass
-        
-        if i < max_retries - 1:
-            print(f"Server not ready, retrying in {retry_delay} seconds...")
-            time.sleep(retry_delay)
-    
-    print("Server failed to respond after multiple attempts")
-    return False
 
 def main():
-    log_file = create_folders()
-    server_process = run_server(log_file)
+    server = Server(PORT)
+    server.create_folders()
+    server.run()
     try:
-        if not check_server():
+        if not server.check():
             print("Exiting due to server unavailability")
             return
             
@@ -117,7 +136,7 @@ def main():
             test_first_time_interaction(page, repo_name)
             browser.close()
     finally:
-        server_process.terminate()
+        server.terminate()
 
 if __name__ == "__main__":
     main()
