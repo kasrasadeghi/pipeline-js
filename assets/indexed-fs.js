@@ -1111,6 +1111,13 @@ export async function handleTextField(event, id, file_name, rerender) {
     let text = document.getElementById(id).value;
     await cache.writeFile(file_name, text);
 
+    // Re-initialize global state if setting the local repo name
+    if (file_name === LOCAL_REPO_NAME_FILE) {
+      await initializeKazGlobal(true);
+      await handleRouting();
+      return false;
+    }
+
     paintSimple(await rerender());
     return false;
   }

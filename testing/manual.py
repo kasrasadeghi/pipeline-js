@@ -3,6 +3,10 @@ import os
 import subprocess
 from datetime import datetime
 import time
+import sys
+sys.path.append('..')  # Add parent directory to path for gen-certs import
+from first_time_setup import first_time_setup
+from test_util import get_pipeline_url
 
 PORT = 8100
 
@@ -10,15 +14,29 @@ def run(playwright: Playwright):
     chromium = playwright.chromium # or "firefox" or "webkit".
     browser = chromium.launch(headless=False)
     context = browser.new_context(
-        ignore_https_errors=True  # Ignore HTTPS errors since we're using a self-signed cert
+        ignore_https_errors=True,  # Ignore HTTPS errors since we're using a self-signed cert
+        bypass_csp=True,  # Bypass Content Security Policy
+        extra_http_headers={
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+        }
     )
     page = context.new_page()
-    page.goto("https://127.0.0.1:8100", wait_until="domcontentloaded")
+    
+    # Disable service worker for testing
+    page.add_init_script("""
+        Object.defineProperty(navigator, 'serviceWorker', {
+            get: () => undefined
+        });
+    """)
+    
+    page.goto(get_pipeline_url(), wait_until="domcontentloaded")
     # open playwright browser and bring to front
     page.bring_to_front()
 
-    time.sleep(1000000)
-    browser.close()
+    return browser, page
 
 def create_folders():
     if not os.path.exists('notes'):
@@ -29,6 +47,21 @@ def create_folders():
     if not os.path.exists('logs'):
         os.makedirs('logs')
         print("Created 'logs' directory.")
+
+    # Create cert directory if it doesn't exist
+    if not os.path.exists('cert'):
+        os.makedirs('cert')
+        print("Created 'cert' directory.")
+
+    # Generate certificates if they don't exist
+    cert_file = 'cert/cert.pem'
+    key_file = 'cert/key.pem'
+    if not os.path.exists(cert_file) or not os.path.exists(key_file):
+        print("Generating SSL certificates...")
+        subprocess.run([
+            sys.executable, '../gen-certs.py', '--server-ip', '127.0.0.1'
+        ], cwd='.', check=True)
+        print("SSL certificates generated.")
 
     # Create a log file with timestamp
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -79,7 +112,9 @@ def main():
             return
             
         with sync_playwright() as playwright:
-            run(playwright)
+            browser, page = run(playwright)
+            first_time_setup(page)
+            browser.close()
     finally:
         server_process.terminate()
 
