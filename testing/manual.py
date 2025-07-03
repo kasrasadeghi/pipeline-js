@@ -5,6 +5,7 @@ from datetime import datetime
 import time
 import sys
 from tests.first_time_setup import first_time_setup
+from tests.first_time_interaction import test_first_time_interaction
 from test_util import get_pipeline_url
 
 PORT = 8100
@@ -112,7 +113,8 @@ def main():
             
         with sync_playwright() as playwright:
             browser, page = run(playwright)
-            first_time_setup(page)
+            repo_name = first_time_setup(page)
+            test_first_time_interaction(page, repo_name)
             browser.close()
     finally:
         server_process.terminate()

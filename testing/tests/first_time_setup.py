@@ -83,6 +83,6 @@ def first_time_setup(page, repo_name="playwright_test_local"):
     for line in all_messages:
         print(line)
 
-    input("Press Enter to continue...")
+    return repo_name
     
 
