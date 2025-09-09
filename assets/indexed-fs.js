@@ -735,27 +735,44 @@ export async function handleMsg(event) {
   if (msg.trim().length > 0) {
     console.log('msg', msg);
     msg_input.innerText = '';
-  
-    let today_uuid = await getGlobal().notes.get_or_create_current_journal();
+    
+    let today_uuid = null;
+    try {
+      today_uuid = await getGlobal().notes.get_or_create_current_journal();
+    } catch (e) {
+      displayState('ERROR 6: couldn\'t get or create current journal\n' + e.message);
+      return false;
+    }
+
     if (current_uuid !== today_uuid) {
       current_uuid = today_uuid;
       window.history.pushState({}, "", `/disc/${current_uuid}`);
     }
 
-    await getGlobal().notes.updateFile(current_uuid, (content) => {
-      let lines = content.split("\n");
-      const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
-      const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
-      const old_content = content_lines.join("\n");
-      const metadata = metadata_lines.join("\n");
+    try {
+      await getGlobal().notes.updateFile(current_uuid, (content) => {
+        let lines = content.split("\n");
+        const content_lines = lines.slice(0, lines.indexOf("--- METADATA ---"));
+        const metadata_lines = lines.slice(lines.indexOf("--- METADATA ---"));
+        const old_content = content_lines.join("\n");
+        const metadata = metadata_lines.join("\n");
 
-      const new_content = old_content + `\n- msg: ${msg.trim()}\n  - Date: ${getNow()}\n\n`;
-      return new_content + metadata;
-    });
+        const new_content = old_content + `\n- msg: ${msg.trim()}\n  - Date: ${getNow()}\n\n`;
+        return new_content + metadata;
+      });
+    } catch (e) {
+      displayState('ERROR 7: couldn\'t update file\n' + e.message);
+      return false;
+    }
   }
-  await getGlobal().notes.ensure_valid_cache();
-  await paintDisc(current_uuid, 'only main');
-  await paintDiscRoutine();
+  try {
+    await getGlobal().notes.ensure_valid_cache();
+    await paintDisc(current_uuid, 'only main');
+    await paintDiscRoutine();
+  } catch (e) {
+    displayState('ERROR 8: couldn\'t paint disc\n' + e.message);
+    return false;
+  }
 
   if (hasRemote()) {
     const sync_success = sync(displayState);

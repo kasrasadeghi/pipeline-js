@@ -351,7 +351,7 @@ class FlatCache {
       return journal_result;
     }
 
-    let local_repo = await this.local_repo_name();
+    let local_repo = this.local_repo_name();
 
     const transaction = global_notes.db.transaction([global_notes.storeName, global_notes.versionStoreName], "readwrite");
     const objectStore = transaction.objectStore(global_notes.storeName);
