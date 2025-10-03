@@ -51,13 +51,6 @@ function paintSimple(render_result) {
 // line_part -> str | Tag | cmd | Link
 // link -> note | root-link | internal-link | simple-link
 
-function pageIsJournal(page) {
-  return page
-    .find(s => s.title === 'METADATA').lines
-    .find(l => l.startsWith("Tags: "))?.slice("Tags: ".length)
-    .split(",").map(x => x.trim()).includes("Journal") !== undefined;
-}
-
 // RENDER
 
 function htmlNote(uuid) {
@@ -249,9 +242,9 @@ function unparseLineContent(l) {
   return 'ERROR: ' + l;
 }
 
-function checkWellFormed(uuid, content) {
-  let page = parseContent(content);
-  let rewritten = rewrite(page, uuid);
+function checkWellFormed(uuid) {
+  let rewritten = getGlobal().notes.rewrite(uuid);
+  let content = getGlobal().notes.get_note(uuid).content;
   
   let result = (unparseContent(rewritten) === content);
   if (! result) {
@@ -274,7 +267,7 @@ export async function getMessageFromElement(element) {
   return msg;
 }
 
-export async function editMessage(item_origin, msg_id) {
+export async function editMessage(item_origin_uuid, msg_id) {
   // 1. only allow editing if msg is from local repo and if the page is well-formed
   //    - a page is well formed if unparse(parse(page)) === page
   // 2. only allow editing a single message at a time
@@ -287,14 +280,14 @@ export async function editMessage(item_origin, msg_id) {
 
   // TODO could do split, could do `getLocalRepo()`
   console.log('edit link button');
-  if (item_origin.split('/')[0] !== getCurrentNoteUuid().split('/')[0]) {
+  if (item_origin_uuid.split('/')[0] !== getCurrentNoteUuid().split('/')[0]) {
     console.log('not from local repo');
     return;
   }
 
-  let item_origin_content = await getGlobal().notes.readFile(item_origin);
+  let item_origin_note = await getGlobal().get_note(item_origin_uuid);
 
-  let well_formed = checkWellFormed(item_origin, item_origin_content);
+  let well_formed = checkWellFormed(item_origin_uuid);
   if (! well_formed) {
     console.log('not well formed');
     return;
@@ -472,7 +465,7 @@ export function htmlMsg(item, mode, origin_content) {
   let editable = '';
   // can only edit messages on the current device and on the current note
   if (origin_content !== undefined && item.origin === getCurrentNoteUuid() && item.origin.split('/')[0] === kazglobal.notes.local_repo_name()) {
-    if (!checkWellFormed(item.origin, origin_content)) {
+    if (!checkWellFormed(item.origin)) {
       console.warn(item.origin, "should be well-formed");
     } else {
       // get 'editmsg' query param
@@ -828,7 +821,7 @@ async function paintDiscFooter(uuid) {
     if (getGlobal().notes.get_note(uuid) === null) {
       return;
     }
-    const well_formed = checkWellFormed(uuid, getGlobal().notes.get_note(uuid).content) ? 'well-formed' : 'not well-formed';
+    const well_formed = checkWellFormed(uuid) ? 'well-formed' : 'not well-formed';
     document.getElementById('well_formed_display').innerHTML = well_formed;
   }, 100);
 
