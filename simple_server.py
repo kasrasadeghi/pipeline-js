@@ -168,6 +168,7 @@ def handle_request(request):
         "global.js",
         "indexed-fs.js",
         "parse.js",
+        "render.js",
         "remote.js",
         "rewrite.js",
         "state.js",
