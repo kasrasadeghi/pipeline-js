@@ -1,1 +1,5 @@
 .venv/
+
+# Visual test artifacts
+visual/visual_tests/current/
+visual/visual_tests/diffs/

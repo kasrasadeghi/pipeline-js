@@ -26,43 +26,49 @@ class Server:
         self.log_file_path = None
     
     def create_folders(self):
-        assert os.getcwd().rsplit("/", 1)[-1] == "testing", "Current working directory is not 'testing', it's " + os.getcwd()
+        # Allow running from either 'testing' or 'testing/visual' directory
+        cwd = os.getcwd()
+        is_testing_dir = cwd.endswith("testing") or cwd.endswith("testing/visual")
+        assert is_testing_dir, f"Current working directory must be 'testing' or 'testing/visual', it's {cwd}"
         
-        if not os.path.exists('notes'):
-            os.makedirs('notes')
-            print("Created local 'notes' directory.")
-
-        # Create logs directory if it doesn't exist
-        if not os.path.exists('logs'):
-            os.makedirs('logs')
-            print("Created 'logs' directory.")
-
-        # Create cert directory if it doesn't exist
-        if not os.path.exists('cert'):
-            os.makedirs('cert')
-            print("Created 'cert' directory.")
+        # Determine the testing directory path
+        if cwd.endswith("testing/visual"):
+            testing_dir = ".."
+        else:
+            testing_dir = "."
+        
+        os.makedirs(os.path.join(testing_dir, 'notes'), exist_ok=True)
+        os.makedirs(os.path.join(testing_dir, 'logs'), exist_ok=True)
+        os.makedirs(os.path.join(testing_dir, 'cert'), exist_ok=True)
 
         # Generate certificates if they don't exist
-        cert_file = 'cert/cert.pem'
-        key_file = 'cert/key.pem'
+        cert_file = os.path.join(testing_dir, 'cert/cert.pem')
+        key_file = os.path.join(testing_dir, 'cert/key.pem')
         if not os.path.exists(cert_file) or not os.path.exists(key_file):
             print("Generating SSL certificates...")
             subprocess.run([
                 sys.executable, '../gen-certs.py', '--server-ip', '127.0.0.1'
-            ], cwd='.', check=True)
+            ], cwd=testing_dir, check=True)
             print("SSL certificates generated.")
 
         # Create a log file with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.log_file_path = f'logs/server_{timestamp}.log'
+        self.log_file_path = os.path.join(testing_dir, f'logs/server_{timestamp}.log')
 
     def run(self):
         assert self.log_file_path is not None, "Log file is not initialized"
         self.log_file = open(self.log_file_path, 'w')
         assert self.process is None, "Server is already running"
+        
+        # Determine the correct working directory and paths based on where we're running from
+        cwd = os.getcwd()
+        working_dir = '../..' if cwd.endswith("testing/visual") else '..'
+        notes_root = 'testing/notes'
+        cert_folder = 'testing/cert'
+        
         self.process = subprocess.Popen(
-            ['python', 'simple_server.py', '--port', str(self.port), '--notes-root', 'testing/notes', '--cert-folder', 'testing/cert'],
-            cwd='..',  # Set working directory to parent where assets are located
+            ['python', 'simple_server.py', '--port', str(self.port), '--notes-root', notes_root, '--cert-folder', cert_folder],
+            cwd=working_dir,  # Set working directory to parent where assets are located
             stdout=self.log_file,
             stderr=subprocess.STDOUT,
             text=True,

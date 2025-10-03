@@ -39,7 +39,11 @@ TEST_SCENARIOS = {
         "description": "Setup page with repo name",
         "wait_for": "#local_repo_name",
         "viewport": {"width": 1280, "height": 720},
-        "setup_action": lambda page: page.fill("#local_repo_name", "visual_test_repo")
+        "setup_action": lambda page: (
+            page.fill("#local_repo_name", "visual_test_repo"),
+            page.click("#local_repo_name_button"),
+            page.wait_for_timeout(2000)  # Wait for setup to complete
+        )
     },
     "journal_page": {
         "url": "/today",
@@ -227,6 +231,42 @@ class VisualTester:
             print(f"Error comparing images: {e}")
             return {"match": False, "error": str(e)}
     
+    def resolve_dependencies(self, scenarios: Dict) -> List[str]:
+        """Resolve test dependencies and return scenarios in execution order using topological sort."""
+        post_order = []
+        visited = set()
+        visiting = set()  # For cycle detection
+        
+        def visit(scenario_name):
+            if scenario_name in visiting:
+                raise ValueError(f"Circular dependency detected involving '{scenario_name}'")
+            if scenario_name in visited:
+                return
+            if scenario_name not in scenarios:
+                return
+                
+            visiting.add(scenario_name)
+            scenario = scenarios[scenario_name]
+            
+            # First visit all prerequisites
+            if 'prerequisites' in scenario:
+                for prereq in scenario['prerequisites']:
+                    visit(prereq)
+            
+            visiting.remove(scenario_name)
+            visited.add(scenario_name)
+            # Add to post-order (after visiting all children)
+            post_order.append(scenario_name)
+        
+        # Visit all scenarios
+        for scenario_name in scenarios:
+            visit(scenario_name)
+            
+        # A topologicla sort is the reverse of the post-order of a DFS.
+        # For our use case, we want prerequisites first, so we use post-order directly
+        # (not reversed, since we want dependencies before dependents)
+        return post_order
+
     def run_tests(self, scenarios: Dict, update_baselines: bool = False) -> Dict:
         """Run visual regression tests for all scenarios."""
         results = {
@@ -238,9 +278,12 @@ class VisualTester:
             "tests": {}
         }
         
-        print(f"Running {len(scenarios)} visual tests...")
+        # Resolve dependencies to get correct execution order
+        execution_order = self.resolve_dependencies(scenarios)
+        print(f"Running {len(scenarios)} visual tests in order: {execution_order}")
         
-        for scenario_name, scenario in scenarios.items():
+        for scenario_name in execution_order:
+            scenario = scenarios[scenario_name]
             print(f"\n--- Testing {scenario_name}: {scenario['description']} ---")
             
             # Take screenshot

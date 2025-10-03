@@ -2,7 +2,7 @@
 
 # openssl command
 # openssl req -x509 -newkey rsa:4096 -nodes -out ${public_certificate} -keyout ${private_key} -days 365 \
-# 	-subj "/C=US/ST=Washington/L=Seattle/O=kazematics/OU=PipelineSecurity/CN=Pipeline" \
+# 	-subj "/C=US/ST=NewYork/L=NewYork/O=kazematics/OU=PipelineSecurity/CN=Pipeline" \
 # 	-addext "subjectAltName=IP:${SERVER_IP}"
 
 
@@ -35,6 +35,6 @@ else:
 		"openssl", "req", "-x509", "-newkey", "rsa:4096", "-nodes", 
 		"-out", public_certificate,
 		"-keyout", private_key, "-days", "365",
-		"-subj", "/C=US/ST=Washington/L=Seattle/O=kazematics/OU=PipelineSecurity/CN=Pipeline",
+		"-subj", "/C=US/ST=NewYork/L=NewYork/O=kazematics/OU=PipelineSecurity/CN=Pipeline",
 		"-addext", subjectAltName,
 	])
