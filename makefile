@@ -65,8 +65,22 @@ docker:
 test:
 	cd testing && python manual.py
 
+visual-test:
+	cd testing/visual && make test
+
+visual-update:
+	cd testing/visual && make update
+
+visual-clean:
+	cd testing/visual && make clean
+
+test-all:
+	cd testing && python manual.py
+	cd testing/visual && make test
+
 clean_test:
 	rm -r testing/logs/*.log
+	cd testing/visual && make clean
 
 test_client_db:
 	python -m pdb -c c test_client.py 10.50.50.2 8000

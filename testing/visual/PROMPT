@@ -1,0 +1,3 @@
+how should i test the rendering of the pages?
+i want to try taking a screenshot automatically 
+and then ensuring that the screenshot is exactly the same before and after.
