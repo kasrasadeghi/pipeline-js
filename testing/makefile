@@ -12,6 +12,9 @@ help:
 	@echo "Usage examples:"
 	@echo "  make clean  # Clean up test logs, cache files, and temporary data"
 
+manual:
+	python test_manual.py
+
 message:
 	python test_message_rendering.py
 

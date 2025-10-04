@@ -8,10 +8,11 @@ import { hasRemote } from '/remote.js';
 import { sync, restoreRepo } from '/sync.js';
 import { getGlobal, initializeKazGlobal } from '/global.js';
 import { paintList } from '/calendar.js';
-import { lookupIcon, MenuButton, ToggleButton } from '/components.js';
+import { lookupIcon, MenuButton, ToggleButton, TextField, TextAction } from '/components.js';
 import { parseRef, htmlNote, htmlLine, htmlMsg } from '/render.js';
 
 export { handleToggleButton } from '/components.js';
+export { handleTextField, handleTextAction } from '/components.js';
 export { gotoList } from '/calendar.js';
 export { getGlobal };
 export { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
@@ -34,7 +35,7 @@ if (!Array.prototype.back) {
 
 // GENERAL UTIL
 
-function paintSimple(render_result) {
+export function paintSimple(render_result) {
   document.title = "Pipeline Notes";
   let main = document.getElementsByTagName('main')[0];
   let footer = document.getElementsByTagName('footer')[0];
@@ -715,51 +716,6 @@ export async function gotoSearch() {
   document.getElementById('search_query')?.focus();
   runSearch();
   return false;
-}
-
-// COMPONENT TEXTFIELD
-
-// used for first time setup and setup configuration
-export async function handleTextField(event, id, file_name, rerender) {
-  if (event === true || event.key === 'Enter') {
-    let text = document.getElementById(id).value;
-    await cache.writeFile(file_name, text);
-
-    // Re-initialize global state if setting the local repo name
-    if (file_name === LOCAL_REPO_NAME_FILE) {
-      await initializeKazGlobal(true);
-      await handleRouting();
-      return false;
-    }
-
-    paintSimple(await rerender());
-    return false;
-  }
-};
-
-function TextField({id, file_name, label, value, rerender}) {
-  return (
-    `<input onkeydown="return handleTextField(event, '${id}', '${file_name}', ${rerender})" type='text' id='${id}' value="${value}"></input>
-    <button class='menu-button' id='${id}_button' onclick="return handleTextField(true, '${id}', '${file_name}', ${rerender})">${label}</button>`
-  );
-}
-
-export async function handleTextAction(event, source_id, action, everykey) {
-  if (everykey) {
-    await action(source_id);
-    return true;
-  }
-  if (event === true || event.key === 'Enter') {
-    await action(source_id);
-    return false;
-  }
-};
-
-function TextAction({id, label, value, action, everykey}) {
-  return (
-    `<input onkeyup="return handleTextAction(event, '${id}', ${action}, ${!!everykey})" type='text' id='${id}' value="${value}"></input>
-    <button class='menu-button' id='${id}_button' onclick="return handleTextAction(true, '${id}', ${action})">${label}</button>`
-  );
 }
 
 // SETUP

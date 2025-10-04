@@ -1,6 +1,9 @@
 import { readBooleanFile, toggleBooleanFile } from '/boolean-state.js';
-import { getGlobal } from '/global.js';
+import { getGlobal, initializeKazGlobal } from '/global.js';
 import { setBooleanQueryParam, toggleBooleanQueryParam } from '/boolean-state.js';
+import { cache } from '/state.js';
+import { LOCAL_REPO_NAME_FILE } from '/flatdb.js';
+import { handleRouting, paintSimple } from '/indexed-fs.js';
 
 export function MenuButton({icon, action}) {
   return `<button class='menu-button' id='${icon}_button' onclick="${action}">${lookupIcon(icon)}</button>`;
@@ -82,4 +85,50 @@ export function lookupIcon(full_name) {
     'get repo': "GET_",
     'gather': "GTHR",
   }[full_name];
+}
+
+
+// COMPONENT TEXTFIELD
+
+// used for first time setup and setup configuration
+export async function handleTextField(event, id, file_name, rerender) {
+  if (event === true || event.key === 'Enter') {
+    let text = document.getElementById(id).value;
+    await cache.writeFile(file_name, text);
+
+    // Re-initialize global state if setting the local repo name
+    if (file_name === LOCAL_REPO_NAME_FILE) {
+      await initializeKazGlobal(true);
+      await handleRouting();
+      return false;
+    }
+
+    paintSimple(await rerender());
+    return false;
+  }
+};
+
+export function TextField({id, file_name, label, value, rerender}) {
+  return (
+    `<input onkeydown="return handleTextField(event, '${id}', '${file_name}', ${rerender})" type='text' id='${id}' value="${value}"></input>
+    <button class='menu-button' id='${id}_button' onclick="return handleTextField(true, '${id}', '${file_name}', ${rerender})">${label}</button>`
+  );
+}
+
+export async function handleTextAction(event, source_id, action, everykey) {
+  if (everykey) {
+    await action(source_id);
+    return true;
+  }
+  if (event === true || event.key === 'Enter') {
+    await action(source_id);
+    return false;
+  }
+};
+
+export function TextAction({id, label, value, action, everykey}) {
+  return (
+    `<input onkeyup="return handleTextAction(event, '${id}', ${action}, ${!!everykey})" type='text' id='${id}' value="${value}"></input>
+    <button class='menu-button' id='${id}_button' onclick="return handleTextAction(true, '${id}', ${action})">${label}</button>`
+  );
 }
