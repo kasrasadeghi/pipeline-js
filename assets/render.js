@@ -58,7 +58,7 @@ function trimTrailingRenderedBreak(content) {
   return content;
 }
 
-function parseRef(ref) {
+export function parseRef(ref) {
   let s = ref.split('#');  // a ref looks like: "uuid#datetime_id" 
   // EXAMPLE bigmac-js/f726c89e-7473-4079-bd3f-0e7c57b871f9.note#Sun Jun 02 2024 20:45:46 GMT-0700 (Pacific Daylight Time)
   console.assert(s.length == 2);
@@ -107,7 +107,7 @@ function htmlMsgBlock(block, content) {
   console.assert(false, block, 'unexpected block type');
 }
 
-function htmlNote(uuid) {
+export function htmlNote(uuid) {
   console.log('rendering note for', uuid);
   let messages = getGlobal().notes.get_messages_around(uuid);
   messages.reverse();
@@ -117,7 +117,7 @@ function htmlNote(uuid) {
   return rendered_messages.join("");
 }
 
-function htmlLine(line) {
+export function htmlLine(line) {
   if (line instanceof Line) {
     let result = line.parts.map(x => {
       if (x instanceof Tag) {
@@ -180,7 +180,7 @@ function htmlLine(line) {
   return line;
 }
 
-function htmlMsg(item, mode, origin_content) {
+export function htmlMsg(item, mode, origin_content) {
   let date = Date.parse(timezoneCompatibility(item.date));
   
   let timestamp_content = renderDatetime(date);
@@ -249,7 +249,7 @@ function htmlMsgBlockContent(msg, origin_content) {
   return block_content;
 }
 
-async function editMessage(item_origin_uuid, msg_id) {
+export async function editMessage(item_origin_uuid, msg_id) {
   // 1. only allow editing if msg is from local repo and if the page is well-formed
   //    - a page is well formed if unparse(parse(page)) === page
   // 2. only allow editing a single message at a time
@@ -391,7 +391,7 @@ function insertHtmlBeforeMessage(obj, html_content, name) {
   parent.scrollIntoView();
 }
 
-async function expandRef(obj, url) {
+export async function expandRef(obj, url) {
   let found_msg = retrieveMsg(url);
   let result = htmlMsg(found_msg[0]);
   if (found_msg.length > 0) {
@@ -403,7 +403,7 @@ async function expandRef(obj, url) {
   }
 }
 
-async function expandSearch(obj, search_query) {
+export async function expandSearch(obj, search_query) {
   let urlParams = new URLSearchParams(search_query);
   const text = urlParams.get('q');
   const case_sensitive = urlParams.get('case') === 'true';
@@ -415,6 +415,3 @@ async function expandSearch(obj, search_query) {
     obj.scrollIntoView();
   });
 }
-
-// Export the functions
-export { parseRef, htmlNote, htmlLine, htmlMsg };
