@@ -402,6 +402,11 @@ Tags: Journal`;
     return this.metadata_map.map(note => note.uuid);
   }
 
+  async readAllFiles() {
+    await this.ensure_valid_cache();
+    return this.metadata_map.map(note => ({path: note.uuid, content: note.content}));
+  }
+
   async newNote(title, date) {
     let content = `--- METADATA ---
 Date: ${date}

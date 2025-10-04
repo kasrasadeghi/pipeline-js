@@ -51,12 +51,12 @@ export async function getRemotes(combined_remote_status) {
 }
 
 export async function getCombinedLocalStatus() {
-  const notes = await getGlobal().notes.listFiles();
+  const notes = await getGlobal().notes.readAllFiles();
   let repos = {};
   for (let note of notes) {
-    let repo = note.split('/')[0];
+    let repo = note.path.split('/')[0];
     repos[repo] = repos[repo] || {};
-    repos[repo][note] = await sha256sum(await getGlobal().notes.readFile(note));
+    repos[repo][note.path] = await sha256sum(note.content);
   }
   return repos;
 }
