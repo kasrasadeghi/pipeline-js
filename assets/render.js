@@ -496,10 +496,11 @@ export function elemNote(uuid) {
   let content = getGlobal().notes.get_note(uuid).content;
   
   const fragment = document.createDocumentFragment();
-  messages.forEach(msg => {
+  const msgElements = messages.map(msg => {
     const msgElem = elemMsg(msg, /*mode*/undefined, content);
-    fragment.appendChild(msgElem.toElement());
+    return msgElem.toElement();
   });
+  fragment.append(...msgElements);
   
   return fragment;
 }
@@ -688,14 +689,15 @@ export function elemMsg(item, mode, origin_content) {
 
 function elemMsgBlockContent(msg, origin_content) {
   const fragment = document.createDocumentFragment();
-  msg.blocks.forEach(block => {
+  const blockElements = msg.blocks.map(block => {
     const blockElem = elemMsgBlock(block, origin_content);
-    fragment.appendChild(blockElem.toElement());
+    return blockElem.toElement();
   });
+  fragment.append(...blockElements);
   
   // Trim trailing breaks
   const tempDiv = document.createElement('div');
-  tempDiv.appendChild(fragment);
+  tempDiv.append(fragment);
   let content = tempDiv.innerHTML;
   if (content.endsWith("<br/>")) {
     content = content.slice(0, -("<br/>".length));

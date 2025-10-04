@@ -485,7 +485,7 @@ function renderDiscBody(uuid) {
   // return `<div class="msglist">` + rendered_note + `</div>`;
   let rendered_note = elemNote(uuid);
   let msglist = new DivElem('msglist');
-  msglist.element.appendChild(rendered_note);
+  msglist.element.append(rendered_note);
   return msglist;
 }
 

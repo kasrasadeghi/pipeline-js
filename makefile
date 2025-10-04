@@ -62,8 +62,11 @@ sup:
 docker:
 	docker-compose up --build --force-recreate
 
-test:
+test-manual:
 	cd testing && python test_manual.py
+
+test-message:
+	cd testing && python test_message_rendering.py
 
 test-render:
 	cd testing && python test_render.py
@@ -85,6 +88,7 @@ visual-clean:
 
 test-all:
 	cd testing && python test_manual.py
+	cd testing && python test_message_rendering.py
 	cd testing && python test_render.py
 	cd testing/visual && make test
 

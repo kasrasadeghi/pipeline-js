@@ -43,15 +43,18 @@ export class Elem {
   
   addChild(child) {
     if (child instanceof Elem) {
-      this.element.appendChild(child.element);
+      this.element.append(child.element);
     } else {
-      this.element.appendChild(child);
+      this.element.append(child);
     }
     return this;
   }
   
   addChildren(children) {
-    children.forEach(child => this.addChild(child));
+    const elements = children.map(child => 
+      child instanceof Elem ? child.element : child
+    );
+    this.element.append(...elements);
     return this;
   }
   
@@ -133,12 +136,9 @@ export class UnorderedListElem extends Elem {
 // Utility function for creating document fragments
 export function createFragment(children) {
   const fragment = document.createDocumentFragment();
-  children.forEach(child => {
-    if (child instanceof Elem) {
-      fragment.appendChild(child.element);
-    } else {
-      fragment.appendChild(child);
-    }
-  });
+  const elements = children.map(child => 
+    child instanceof Elem ? child.element : child
+  );
+  fragment.append(...elements);
   return fragment;
 }

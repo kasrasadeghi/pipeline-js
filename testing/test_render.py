@@ -232,18 +232,8 @@ class RenderFunctionTestWithData(AsyncBrowserTest):
         # Set up test data first
         await self.setup_test_data()
         
-        # Pause here so you can inspect the page
-        print("PAUSED: Check the browser window to see the page state")
-        print("Waiting 30 seconds for you to inspect the page...")
-        await self.page.wait_for_timeout(30000)  # Wait 30 seconds
-        
         # Test expandRef
         expand_ref_success = await self.test_expand_ref()
-        
-        # Refresh the page to ensure search index is loaded
-        print("Refreshing page to ensure search index is loaded...")
-        await self.page.reload()
-        await self.page.wait_for_timeout(2000)
         
         # Test expandSearch
         expand_search_success = await self.test_expand_search()
