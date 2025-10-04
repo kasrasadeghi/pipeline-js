@@ -267,16 +267,16 @@ async function editMessage(item_origin_uuid, msg_id) {
     return;
   }
 
-  let item_origin_note = await getGlobal().get_note(item_origin_uuid);
-
   let well_formed = checkWellFormed(item_origin_uuid);
   if (! well_formed) {
     console.log('not well formed');
     return;
   }
 
-  let parsed = parseContent(item_origin_content);
-  let page = rewrite(parsed, item_origin);
+  // we need a mutable copy of the page in order to modify it and unparse it later.
+  let parsed = parseContent(getGlobal().notes.get_note(item_origin_uuid).content);
+  let page = rewrite(parsed, item_origin_uuid);
+
   let msg = page.filter(section => section.title === 'entry').flatMap(x => x.blocks).find(block => block.date === msg_id);
   console.assert(msg !== undefined, 'could not find message with id', msg_id, 'in', page);
 
@@ -344,7 +344,7 @@ async function editMessage(item_origin_uuid, msg_id) {
     }
 
     let new_content = unparseContent(page);
-    await getGlobal().notes.writeFile(item_origin, new_content);
+    await getGlobal().notes.writeFile(item_origin_uuid, new_content);
     console.log('rendering inner html from submitted individual message edit', msg_content, htmlLine(msg_content.innerHTML));
     msg_content.innerHTML = htmlLine(rewriteLine(new_msg_content));
 

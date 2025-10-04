@@ -19,6 +19,7 @@ export { rewrite } from '/rewrite.js';
 export { debugGlobalNotes } from '/flatdb.js';
 export { setNow, tomorrow, getNow } from '/state.js';
 export { dateComp, timezoneCompatibility } from '/date-util.js';
+export { editMessage } from '/render.js';
 
 // JAVASCRIPT UTIL
 
