@@ -4,7 +4,7 @@ This directory contains all testing infrastructure for Pipeline Notes.
 
 ## Structure
 
-- **`manual.py`** - Main functional tests using Playwright
+- **`test_manual.py`** - Main functional tests using Playwright
 - **`visual/`** - Visual regression testing suite
   - `visual_tests.py` - Core visual testing framework
   - `run_visual_tests.py` - Convenience script for visual tests
@@ -18,7 +18,7 @@ This directory contains all testing infrastructure for Pipeline Notes.
 ### Functional Tests
 ```bash
 # Run functional tests
-python manual.py
+python test_manual.py
 
 # Or from project root
 make test
@@ -46,6 +46,6 @@ make test-all
 
 ## Documentation
 
-- **Functional Tests**: See `manual.py` for test details
+- **Functional Tests**: See `test_manual.py` for test details
 - **Visual Tests**: See `visual/README_visual_tests.md` for comprehensive documentation
 

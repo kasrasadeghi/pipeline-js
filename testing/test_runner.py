@@ -16,7 +16,7 @@ def run_render_tests(headless=True, timeout=10000):
 
 def run_manual_tests(headless=False, timeout=10000):
     """Run manual tests"""
-    from manual import ManualTest
+    from test_manual import ManualTest
     return create_sync_test_runner(ManualTest, headless, timeout)
 
 def main():
