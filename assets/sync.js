@@ -86,7 +86,6 @@ export async function pushLocalSimple(combined_remote_status, combined_local_sta
 }
 
 async function pullRemoteNotes(repo, dry_run, combined_remote_status, combined_local_status) {
-  console.time('computing status for local notes ' + repo);
   console.assert(combined_remote_status !== undefined, 'must used combined remote status');
   console.assert(combined_local_status !== undefined, 'must used combined local status');
   let local_status = combined_local_status[repo] || {};
@@ -94,7 +93,6 @@ async function pullRemoteNotes(repo, dry_run, combined_remote_status, combined_l
   let updated = statusDiff(local_status, remote_status);
   let updated_notes = Object.keys(updated);
   console.assert(updated_notes.every(x => x.startsWith(repo + '/')));
-  console.timeEnd('computing status for local notes ' + repo);
 
   let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
 
@@ -109,16 +107,15 @@ async function pullRemoteNotes(repo, dry_run, combined_remote_status, combined_l
   }
 }
 
-async function pushLocalNotes(repo, dry_run, combined_remote_status) {
-  console.time('computing status for local notes ' + repo);
+async function pushLocalNotes(repo, dry_run, combined_remote_status, combined_local_status) {
   console.assert(combined_remote_status !== undefined, 'must used combined remote status');
+  console.assert(combined_local_status !== undefined, 'must used combined local status');
   let remote_status = combined_remote_status[repo] || {};
-  let local_status = await getLocalStatus(repo);
+  let local_status = combined_local_status[repo] || {};
   let updated = statusDiff(remote_status, local_status);  // flipped, so it is what things in local aren't yet in the remote.
   // local is the new state, remote is the old state, this computes the diff to get from the old state to the new.
   let updated_notes = Object.keys(updated);
   console.assert(updated_notes.every(x => x.startsWith(repo + '/')));  
-  console.timeEnd('computing status for local notes ' + repo);
 
   let updated_uuids = updated_notes.map(x => x.slice((repo + '/').length));
 

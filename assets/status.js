@@ -51,6 +51,7 @@ export function getRemotes(combined_remote_status) {
 }
 
 export async function getCombinedLocalStatus() {
+  console.time('combined local status');
   const notes = await getGlobal().notes.readAllFiles();
   let repos = {};
   for (let note of notes) {
@@ -58,6 +59,7 @@ export async function getCombinedLocalStatus() {
     repos[repo] = repos[repo] || {};
     repos[repo][note.path] = await sha256sum(note.content);
   }
+  console.timeEnd('combined local status');
   return repos;
 }
 
