@@ -420,6 +420,8 @@ export async function expandSearch(obj, search_query) {
 // ============================================================================
 // ELEMENT-BASED RENDERING FUNCTIONS (using Elem class)
 // ============================================================================
+// For some reason, this rendering strategy is much slower.
+// On a particularly complicated day, this takes 65ms rather than 45ms.
 
 function elemTreeNode(thisNode) {
   const div = new DivElem(`treenode indent${thisNode.indent}`);
@@ -432,8 +434,7 @@ function elemTreeNode(thisNode) {
     ul.addChild(li);
   });
   
-  div.addChild(span);
-  div.addChild(ul);
+  div.addChildren([span, ul]);
   return div;
 }
 
