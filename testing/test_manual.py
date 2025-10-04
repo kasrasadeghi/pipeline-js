@@ -24,8 +24,7 @@ class ManualTest(SyncBrowserTest):
         # Run the first time setup
         repo_name = first_time_setup(self.page)
         
-        # Run additional tests (commented out for now)
-        # test_first_time_interaction(self.page, repo_name)
+        test_first_time_interaction(self.page, repo_name)
         test_sync_on_network_failure(self.server, self.page, repo_name)
         
         print("Manual test suite completed!")

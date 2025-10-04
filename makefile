@@ -71,6 +71,9 @@ test-render:
 test-render-visible:
 	cd testing && python test_render.py --visible
 
+server-test:
+	python simple_server.py --port 8100 --cert-folder testing/cert --notes-root testing/notes
+
 visual-test:
 	cd testing/visual && make test
 

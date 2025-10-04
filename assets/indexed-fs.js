@@ -9,7 +9,8 @@ import { sync, restoreRepo } from '/sync.js';
 import { getGlobal, initializeKazGlobal } from '/global.js';
 import { paintList } from '/calendar.js';
 import { lookupIcon, MenuButton, ToggleButton } from '/components.js';
-import { parseRef, htmlNote, htmlLine, htmlMsg } from '/render.js';
+import { parseRef, htmlNote, htmlLine, htmlMsg, elemNote, elemLine, elemMsg } from '/render.js';
+import { DivElem } from '/elem.js';
 
 export { handleToggleButton } from '/components.js';
 export { gotoList } from '/calendar.js';
@@ -21,6 +22,7 @@ export { setNow, tomorrow, getNow } from '/state.js';
 export { dateComp, timezoneCompatibility } from '/date-util.js';
 export { expandRef, expandSearch } from '/render.js';
 export { editMessage } from '/render.js';
+export { elemNote, elemLine, elemMsg, htmlNote, htmlLine, htmlMsg } from '/render.js';
 
 // JAVASCRIPT UTIL
 
@@ -274,7 +276,16 @@ async function paintDisc(uuid, flag) {
     console.error('ERROR 5: couldn\'t find file', uuid);
     return;
   }
-  main.innerHTML = await renderDiscBody(uuid);
+  console.time('paintDiscBody');
+  try {
+    const rendered = renderDiscBody(uuid);
+    main.replaceChildren(rendered.element);
+  } catch (error) {
+    console.error('paintDisc: error in renderDiscBody', error);
+    // Fall back to string-based rendering
+    const htmlRendered = htmlNote(uuid);
+    main.innerHTML = `<div class="msglist">${htmlRendered}</div>`;
+  }
   
   const selected = updateSelected();
   if (selected === null) {
@@ -282,6 +293,7 @@ async function paintDisc(uuid, flag) {
   } else {
     selected.scrollIntoView();
   }
+  console.timeEnd('paintDiscBody');
 }
 
 async function paintDiscRoutine() {
@@ -468,9 +480,13 @@ async function paintDiscFooter(uuid) {
   await paintDiscRoutine();
 }
 
-async function renderDiscBody(uuid) {
-  let rendered_note = htmlNote(uuid);
-  return `<div class="msglist">` + rendered_note + `</div>`;
+function renderDiscBody(uuid) {
+  // let rendered_note = htmlNote(uuid);
+  // return `<div class="msglist">` + rendered_note + `</div>`;
+  let rendered_note = elemNote(uuid);
+  let msglist = new DivElem('msglist');
+  msglist.element.appendChild(rendered_note);
+  return msglist;
 }
 
 export async function gotoDisc(uuid) {

@@ -18,13 +18,13 @@ def test_sync_on_network_failure(server, page, repo_name):
     # Stop the server
     server.terminate()
     
-    time.sleep(10)
-    
+    time.sleep(1)
+
     # Send a message
     el_id(page, "msg_input").fill(f"{repo_name} sync on network failure 2")
     el_id(page, "msg_input").press("Enter")
 
-    time.sleep(10)
+    time.sleep(1)
 
     # Start the server
     server.run()

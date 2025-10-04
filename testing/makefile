@@ -12,6 +12,12 @@ help:
 	@echo "Usage examples:"
 	@echo "  make clean  # Clean up test logs, cache files, and temporary data"
 
+message:
+	python test_message_rendering.py
+
+visual:
+	cd visual && make test
+
 clean:
 	@echo "Cleaning up test artifacts..."
 	@if [ -d "logs" ]; then \
