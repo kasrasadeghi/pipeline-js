@@ -65,6 +65,12 @@ docker:
 test:
 	cd testing && python manual.py
 
+test-render:
+	cd testing && python test_render.py
+
+test-render-visible:
+	cd testing && python test_render.py --visible
+
 visual-test:
 	cd testing/visual && make test
 
@@ -76,6 +82,7 @@ visual-clean:
 
 test-all:
 	cd testing && python manual.py
+	cd testing && python test_render.py
 	cd testing/visual && make test
 
 clean_test:
