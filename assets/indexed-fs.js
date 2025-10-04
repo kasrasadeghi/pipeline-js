@@ -1,9 +1,9 @@
-import { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
+import { parseContent, TreeNode, EmptyLine } from '/parse.js';
 import { initFlatDB, SHOW_PRIVATE_FILE, LOCAL_REPO_NAME_FILE } from '/flatdb.js';
 import { initState, cache, getNow } from '/state.js';
-import { readBooleanFile, toggleBooleanFile, readBooleanQueryParam, toggleBooleanQueryParam, setBooleanQueryParam } from '/boolean-state.js';
-import { rewrite, rewriteLine, rewriteBlock, Msg, Line, Tag, Link } from '/rewrite.js';
-import { dateComp, timezoneCompatibility } from '/date-util.js';
+import { readBooleanFile, toggleBooleanFile } from '/boolean-state.js';
+import { rewrite, Msg, Line, Tag } from '/rewrite.js';
+import { dateComp } from '/date-util.js';
 import { hasRemote } from '/remote.js';
 import { sync, restoreRepo } from '/sync.js';
 import { getGlobal, initializeKazGlobal } from '/global.js';
