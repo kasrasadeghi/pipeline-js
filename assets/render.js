@@ -140,7 +140,6 @@ export function htmlLine(line) {
 
           let ref_snippet = '';
           let found_msg = retrieveMsg(x.display);
-          console.log('found_msg', found_msg);
           if (found_msg.length > 0) {
             ref_snippet = htmlLine(found_msg[0].msg);
           }

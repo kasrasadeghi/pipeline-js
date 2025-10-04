@@ -661,7 +661,7 @@ function paintSearchPagination() {
   `;
 }
 
-function runSearch() {
+async function runSearch() {
   console.assert(window.location.pathname.startsWith("/search/"));
   const urlParams = new URLSearchParams(window.location.search);
   const text = urlParams.get('q');
@@ -670,6 +670,16 @@ function runSearch() {
 
   const has_text = !(text === null || text === undefined || text === '');
   // search footer should already be rendered
+  
+  // FIX: Ensure cache is valid before subscribing to get fresh data
+  console.log('🔍 SEARCH RUNNING - ensuring cache is valid before subscribing');
+  try {
+    await getGlobal().notes.ensure_valid_cache();
+    console.log('🔍 SEARCH RUNNING - cache validation completed');
+  } catch (error) {
+    console.error('🔍 SEARCH ERROR - cache validation failed:', error);
+  }
+  
   console.log('🔍 SEARCH RUNNING - subscribing to messages cacher');
   getGlobal().notes.subscribe_to_messages_cacher(messages => {
     console.log('🟢 SEARCH CALLBACK - received', messages?.length || 0, 'messages');
@@ -692,7 +702,7 @@ export async function searchAction(id) {
   urlParams.set('page', '0');
   window.history.pushState({}, "", "/search/?" + urlParams.toString());
 
-  runSearch();
+  await runSearch();
 }
 
 async function renderSearchFooter() {
@@ -718,7 +728,7 @@ export async function gotoSearch() {
   window.history.pushState({}, "", "/search/?" + urlParams.toString());
   footer.innerHTML = await renderSearchFooter();
   document.getElementById('search_query')?.focus();
-  runSearch();
+  await runSearch();
   return false;
 }
 
@@ -983,7 +993,7 @@ export async function handleRouting() {
 
   } else if (window.location.pathname.startsWith('/search')) {
     document.getElementsByTagName("footer")[0].innerHTML = await renderSearchFooter();
-    runSearch();
+    await runSearch();
   } else if (window.location.pathname.startsWith('/setup')) {
     paintSimple(await renderSetup());
 

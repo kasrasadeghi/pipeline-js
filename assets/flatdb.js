@@ -202,9 +202,9 @@ class FlatCache {
     this._messages_cacher = new IncrementalWorker(this.incrementally_gather_sorted_messages());
     this.scheduler.addWorker('sorted_messages', this._messages_cacher);
     
-    // FIX COMMENTED OUT - testing if worker eventually finishes and updates search
-    // this._messages_cacher.step();
-    // this._messages_cacher.propagate();
+    // FIX: Immediately process and propagate to ensure search gets fresh data
+    this._messages_cacher.step();
+    this._messages_cacher.propagate();
     
     console.log('done flat cache');
   }
@@ -212,9 +212,12 @@ class FlatCache {
   // NOTE use this before read operations to ensure coherence
   async ensure_valid_cache() {
     let idb_version = await global_notes.getVersion();
+    console.log(`🔍 CACHE CHECK - cache version: ${this.version}, db version: ${idb_version}`);
     if (this.version !== idb_version) {
-      console.log(`cache: versions ${this.version} != ${idb_version} don't match, refreshing cache`);
+      console.log(`🔍 CACHE REFRESH - versions ${this.version} != ${idb_version} don't match, refreshing cache`);
       await this.refresh_cache();
+    } else {
+      console.log(`🔍 CACHE VALID - versions match, no refresh needed`);
     }
   }
 
@@ -487,8 +490,14 @@ Title: ${title}`;
     for (let note of sorted_notes) {
       // TODO gather messages here and merge them into the full result.
       // messages = this.merge(messages, this.get_messages_in(note.uuid), (a, b) => { return dateComp(a, b) } );
-      messages.push(...this.get_messages_in(note.uuid));
-      yield;
+      const note_messages = this.get_messages_in(note.uuid);
+      messages.push(...note_messages);
+      
+      
+      // Yield the current messages array so search gets immediate results
+      // Sort messages by timestamp (most recent first) before yielding
+      const sorted_messages = [...messages].sort((a, b) => dateComp(b, a));
+      yield sorted_messages;
     }
 
     messages.sort((a, b) => dateComp(b, a));
