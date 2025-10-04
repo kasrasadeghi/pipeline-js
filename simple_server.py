@@ -163,7 +163,6 @@ def handle_request(request):
         "calendar.js",
         "components.js",
         "date-util.js",
-        "elem.js",
         "filedb.js",
         "flatdb.js",
         "global.js",
