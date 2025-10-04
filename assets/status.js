@@ -46,7 +46,7 @@ export async function getCombinedRemoteStatus() {
   return result;
 }
 
-export async function getRemotes(combined_remote_status) {
+export function getRemotes(combined_remote_status) {
   return Object.keys(combined_remote_status).filter(x => x !== getGlobal().notes.local_repo_name());
 }
 
