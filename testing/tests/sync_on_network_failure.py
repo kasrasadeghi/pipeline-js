@@ -34,4 +34,3 @@ def test_sync_on_network_failure(server, page, repo_name):
     el_id(page, "msg_input").press("Enter")
 
     print("--- test_sync_on_network_failure completed ---")
-    input("Press Enter to continue...")

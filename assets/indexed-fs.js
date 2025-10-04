@@ -9,7 +9,7 @@ import { sync, restoreRepo } from '/sync.js';
 import { getGlobal, initializeKazGlobal } from '/global.js';
 import { paintList } from '/calendar.js';
 import { lookupIcon, MenuButton, ToggleButton } from '/components.js';
-import { renderDatetime, htmlTreeNode, trimTrailingRenderedBreak, parseRef, htmlMsgBlockContent, htmlEditableMsgBlockContent, htmlNote, htmlMsgBlock, htmlBlockPart, htmlLine, htmlMsg, editMessage, insertHtmlBeforeMessage, expandRef, expandSearch } from '/render.js';
+import { parseRef, htmlNote, htmlLine, htmlMsg } from '/render.js';
 
 export { handleToggleButton } from '/components.js';
 export { gotoList } from '/calendar.js';

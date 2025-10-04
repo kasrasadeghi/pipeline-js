@@ -417,4 +417,4 @@ async function expandSearch(obj, search_query) {
 }
 
 // Export the functions
-export { renderDatetime, htmlTreeNode, trimTrailingRenderedBreak, parseRef, htmlMsgBlockContent, htmlEditableMsgBlockContent, htmlNote, htmlMsgBlock, htmlBlockPart, htmlLine, htmlMsg, editMessage, insertHtmlBeforeMessage, expandRef, expandSearch };
+export { parseRef, htmlNote, htmlLine, htmlMsg };
