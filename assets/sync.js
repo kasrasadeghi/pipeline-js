@@ -1,7 +1,7 @@
 import { getRemote } from '/remote.js';
 import { cache } from '/state.js';
 import { initializeKazGlobal, getGlobal } from '/global.js';
-import { getCombinedRemoteStatus, getLocalStatus, statusDiff } from '/status.js';
+import { getCombinedRemoteStatus, getLocalStatus, statusDiff, getRemotes, getCombinedLocalStatus } from '/status.js';
 import { LOCAL_REPO_NAME_FILE } from '/flatdb.js';
 
 export async function restoreRepo(repo) {
@@ -17,14 +17,15 @@ export async function restoreRepo(repo) {
 export async function sync(displayState) {
   try {
     let combined_remote_status = await getCombinedRemoteStatus();
+    let combined_local_status = await getCombinedLocalStatus();
     displayState("syncing...");
-    await pullRemoteSimple(combined_remote_status);
+    await pullRemoteSimple(combined_remote_status, combined_local_status);
     
     // don't paint after syncing.  it's jarring/disruptive as sync is sometimes slow (500ms)
     // await paintDisc(uuid, 'only main'); 
 
     displayState("done");
-    await pushLocalSimple(combined_remote_status);
+    await pushLocalSimple(combined_remote_status, combined_local_status);
     return true;
   } catch (e) {
     console.log('sync failed', e);
@@ -69,25 +70,26 @@ export async function getAllNotes(repo) {
   }
 }
 
-export async function pullRemoteSimple(combined_remote_status) {
-  let remotes = Object.keys(combined_remote_status).filter(x => x !== getGlobal().notes.local_repo_name());
+export async function pullRemoteSimple(combined_remote_status, combined_local_status) {
+  let remotes = getRemotes(combined_remote_status);
   console.time('pull remote simple');
   await Promise.all(remotes.map(async subscribed_remote =>
-    await pullRemoteNotes(subscribed_remote, /*dry run*/false, combined_remote_status)));
+    await pullRemoteNotes(subscribed_remote, /*dry run*/false, combined_remote_status, combined_local_status)));
   console.timeEnd('pull remote simple');
 }
 
-export async function pushLocalSimple(combined_remote_status) {
+export async function pushLocalSimple(combined_remote_status, combined_local_status) {
   let local = await getGlobal().notes.local_repo_name();
   console.time('push local simple');
-  await pushLocalNotes(local, /*dry run*/false, combined_remote_status);
+  await pushLocalNotes(local, /*dry run*/false, combined_remote_status, combined_local_status);
   console.timeEnd('push local simple');
 }
 
-async function pullRemoteNotes(repo, dry_run, combined_remote_status) {
+async function pullRemoteNotes(repo, dry_run, combined_remote_status, combined_local_status) {
   console.time('computing status for local notes ' + repo);
   console.assert(combined_remote_status !== undefined, 'must used combined remote status');
-  let local_status = await getLocalStatus(repo);
+  console.assert(combined_local_status !== undefined, 'must used combined local status');
+  let local_status = combined_local_status[repo] || {};
   let remote_status = combined_remote_status[repo] || {};
   let updated = statusDiff(local_status, remote_status);
   let updated_notes = Object.keys(updated);

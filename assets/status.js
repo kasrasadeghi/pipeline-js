@@ -46,6 +46,21 @@ export async function getCombinedRemoteStatus() {
   return result;
 }
 
+export async function getRemotes(combined_remote_status) {
+  return Object.keys(combined_remote_status).filter(x => x !== getGlobal().notes.local_repo_name());
+}
+
+export async function getCombinedLocalStatus() {
+  const notes = await getGlobal().notes.listFiles();
+  let repos = {};
+  for (let note of notes) {
+    let repo = note.split('/')[0];
+    repos[repo] = repos[repo] || {};
+    repos[repo][note] = await sha256sum(await getGlobal().notes.readFile(note));
+  }
+  return repos;
+}
+
 export async function getLocalStatus(repo) {
   const notes = await getLocalNotes(repo);
   let status = {};

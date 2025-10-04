@@ -654,6 +654,9 @@ export function searchPagination(delta) {
 
 function paintSearchPagination() {
   let pagination = document.getElementById('search-pagination');
+  if (pagination === null) {
+    return;
+  }
   pagination.innerHTML = `
     ${MenuButton({icon: 'next', action: 'return searchPagination(1)'})}
     ${MenuButton({icon: 'prev', action: 'return searchPagination(-1)'})}

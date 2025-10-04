@@ -493,11 +493,7 @@ Title: ${title}`;
       const note_messages = this.get_messages_in(note.uuid);
       messages.push(...note_messages);
       
-      
-      // Yield the current messages array so search gets immediate results
-      // Sort messages by timestamp (most recent first) before yielding
-      const sorted_messages = [...messages].sort((a, b) => dateComp(b, a));
-      yield sorted_messages;
+      yield undefined;
     }
 
     messages.sort((a, b) => dateComp(b, a));
