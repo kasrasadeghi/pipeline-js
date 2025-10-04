@@ -21,6 +21,9 @@ message:
 visual:
 	cd visual && make test
 
+search:
+	python test_search_immediate.py
+
 clean:
 	@echo "Cleaning up test artifacts..."
 	@if [ -d "logs" ]; then \

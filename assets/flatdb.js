@@ -201,6 +201,11 @@ class FlatCache {
 
     this._messages_cacher = new IncrementalWorker(this.incrementally_gather_sorted_messages());
     this.scheduler.addWorker('sorted_messages', this._messages_cacher);
+    
+    // FIX COMMENTED OUT - testing if worker eventually finishes and updates search
+    // this._messages_cacher.step();
+    // this._messages_cacher.propagate();
+    
     console.log('done flat cache');
   }
 
@@ -561,17 +566,24 @@ class IncrementalWorker {
   step() {
     const { value, done } = this.generator.next();
       
+    // a worker needs to propagate if it has a new result
     if (value !== undefined) {
       this.current_result = value;
       this.needs_propagate = true;
     }
     this.is_done = done;
+    
+    if (this.is_done) {
+      console.log('🔵 WORKER FINISHED - all messages processed');
+    }
+    
     return this.is_done;
   }
 
   // propagate current result to all users
   propagate() {
     if (this.needs_propagate) {
+      console.log('🟡 WORKER PROPAGATING - calling', this.users.length, 'subscribers with', this.current_result?.length || 0, 'messages');
       this.users.forEach(user => {
         user(this.current_result);
       });

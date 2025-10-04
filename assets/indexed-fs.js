@@ -670,10 +670,14 @@ function runSearch() {
 
   const has_text = !(text === null || text === undefined || text === '');
   // search footer should already be rendered
+  console.log('🔍 SEARCH RUNNING - subscribing to messages cacher');
   getGlobal().notes.subscribe_to_messages_cacher(messages => {
+    console.log('🟢 SEARCH CALLBACK - received', messages?.length || 0, 'messages');
     let search_results = search(messages, text, case_sensitive);
+    console.log('🟢 SEARCH RESULTS - found', search_results?.length || 0, 'results');
     getGlobal().search = getGlobal().search || {};
     getGlobal().search.results = search_results;
+    console.log('🟢 SEARCH PAINTING - updating UI');
     paintSearchMain(urlParams);
     paintSearchPagination();
   });

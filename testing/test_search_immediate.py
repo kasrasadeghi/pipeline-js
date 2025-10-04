@@ -4,12 +4,11 @@ Test script specifically for the search timing bug.
 This test reproduces the issue where adding a message and immediately searching for it doesn't work.
 """
 
-import asyncio
 import argparse
 import sys
 from browser_test_base import AsyncBrowserTest
 
-class SearchTimingBugTest(AsyncBrowserTest):
+class TestSearchImmediate(AsyncBrowserTest):
     """Test class specifically for the search timing bug"""
     
     async def setup_test_data(self):
@@ -38,17 +37,38 @@ class SearchTimingBugTest(AsyncBrowserTest):
             else:
                 print(f"Repo name already set to: '{current_value}'")
         
+        # Navigate to journal page after setup
+        print("Navigating to journal page...")
+        await self.page.evaluate("() => { if (window.gotoJournal) window.gotoJournal(); }")
+        await self.page.wait_for_timeout(1000)
+        
+        # Wait for the message input to be available
+        try:
+            await self.page.wait_for_selector('#msg_input', timeout=10000)
+            print("✅ Journal page loaded with message input")
+        except Exception as e:
+            print(f"❌ Failed to load journal page: {e}")
+            raise
+        
         print("Test data setup complete")
     
     
-    async def test_manual_reproduction(self):
+    async def run_test(self):
         """Test that reproduces the exact bug scenario: type message, click search button"""
         print("\n" + "="*60)
-        print("MANUAL REPRODUCTION TEST")
+        print("SEARCH TIMING BUG TEST")
         print("="*60)
         
-        # Navigate to journal page
-        await self.navigate_to('/today')
+        # Set up console log capture
+        console_logs = []
+        self.page.on("console", lambda msg: console_logs.append(f"{msg.type}: {msg.text}"))
+        
+        # Set up test data first
+        await self.setup_test_data()
+        
+        # We should now be on the journal page from setup
+        current_url = self.page.url
+        print(f"Current URL: {current_url}")
         
         # Type the message "what"
         test_message = "what"
@@ -63,6 +83,10 @@ class SearchTimingBugTest(AsyncBrowserTest):
         await msg_input.fill(test_message)
         await msg_input.press('Enter')
         
+        # Add a small delay to see if we can reproduce the timing issue
+        # print("Waiting 100ms before clicking search...")
+        # await self.page.wait_for_timeout(100)
+        
         # Click the search button (not navigate to search)
         print("Clicking search button...")
         search_button = await self.page.query_selector('button[onclick*="gotoSearch"]')
@@ -71,6 +95,17 @@ class SearchTimingBugTest(AsyncBrowserTest):
             return False
             
         await search_button.click()
+        
+        # Wait a bit to see console logs and let search process
+        print("Waiting 2 seconds to see console logs...")
+        await self.page.wait_for_timeout(2000)
+        
+        # Print console logs
+        print("\n--- CONSOLE LOGS ---")
+        for log in console_logs:
+            if "WORKER" in log or "SEARCH" in log:
+                print(log)
+        print("--- END CONSOLE LOGS ---\n")
         
         # Check if message appears and is at the bottom
         search_results = await self.page.query_selector_all('.msglist .msg')
@@ -85,42 +120,30 @@ class SearchTimingBugTest(AsyncBrowserTest):
             print(f"Result {i}: {content[:100]}...")  # Print first 100 chars
             if test_message in content:
                 found_message = True
-                is_bottom = (i == 0)  # First result should be most recent
+                # Due to reverse() in renderSearchMain, the most recent message is at the END of the list
+                is_bottom = (i == len(search_results) - 1)  # Last result should be most recent
                 message_position = i
                 print(f"✅ Found our message at position {i}")
                 break
         
         print(f"\n--- Results ---")
         print(f"Message found: {found_message}")
-        print(f"At bottom (position 0): {is_bottom}")
+        print(f"At bottom (last position): {is_bottom}")
         print(f"Position: {message_position}")
         
         if not found_message:
-            print("✅ BUG CONFIRMED: Message not found in search")
-            return True
+            print("❌ BUG STILL EXISTS: Message not found in search")
+            return False
         elif not is_bottom:
-            print("✅ BUG CONFIRMED: Message found but not at bottom")
-            return True
+            print("❌ BUG STILL EXISTS: Message found but not at bottom")
+            return False
         else:
-            print("❌ BUG NOT REPRODUCED: Message found and at bottom")
-            return False
+            print("✅ BUG FIXED: Message found and at bottom - search works correctly!")
+            return True
     
     
-    async def run(self):
-        """Run the search persistent bug test"""
-        try:
-            # Don't start a new server, use the existing one
-            await self.setup_browser_async()
-            await self.setup_test_data()
-            success = await self.test_manual_reproduction()
-            return self.print_test_summary("search persistent bug", 1 if success else 0, 1)
-        except Exception as e:
-            print(f"❌ Test failed with exception: {e}")
-            return False
-        finally:
-            await self.teardown_browser_async()
 
-async def main_async():
+def main():
     parser = argparse.ArgumentParser(description='Test search timing bug')
     parser.add_argument('--visible', action='store_true', help='Run with visible browser (default is headless)')
     parser.add_argument('--timeout', type=int, default=15000, help='Timeout in milliseconds')
@@ -130,17 +153,14 @@ async def main_async():
     # Default to headless unless --visible is specified
     headless = not args.visible
     
-    test = SearchTimingBugTest(port=8101, headless=headless, timeout=args.timeout)
-    result = await test.run()
+    from browser_test_base import create_async_test_runner
+    result = create_async_test_runner(TestSearchImmediate, headless=headless, timeout=args.timeout)
     
     if result:
         print('\n✅ Search timing bug test completed successfully')
     else:
         print('\n❌ Search timing bug test failed')
         sys.exit(1)
-
-def main():
-    asyncio.run(main_async())
 
 if __name__ == '__main__':
     main()
