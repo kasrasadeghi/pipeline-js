@@ -1,5 +1,5 @@
 import { getGlobal } from '/global.js';
-import { getCurrentNoteUuid, unparseMessageBlocks, shortcircuitLink, retrieveMsg, clickInternalLink, checkWellFormed, preventDivs, Deleted, unparseContent, search, renderSearchMain } from '/indexed-fs.js';
+import { getCurrentNoteUuid, removeFromClipboard, unparseMessageBlocks, shortcircuitLink, retrieveMsg, clickInternalLink, checkWellFormed, preventDivs, Deleted, unparseContent, search, renderSearchMain } from '/indexed-fs.js';
 import { timezoneCompatibility } from '/date-util.js';
 import { getNow } from '/state.js';
 import { Msg, Line, Tag, Link } from '/rewrite.js';
@@ -59,13 +59,20 @@ function trimTrailingRenderedBreak(content) {
 }
 
 export function parseRef(ref) {
-  let s = ref.split('#');  // a ref looks like: "uuid#datetime_id" 
+  if (ref.includes('/disc/')) {
+    // ref looks like: "/disc/uuid#datetime_id" 
+    ref = ref.split('/disc/')[1];
+  }
+  // now it's just "uuid#datetime_id"
+  let s = ref.split('#');  
   // EXAMPLE bigmac-js/f726c89e-7473-4079-bd3f-0e7c57b871f9.note#Sun Jun 02 2024 20:45:46 GMT-0700 (Pacific Daylight Time)
   console.assert(s.length == 2);
   if (s.length !== 2) {
     return {uuid: '', datetime_id: ''};
   }
   let [uuid, datetime_id] = s;
+  // the datetime_id might be urlencoded, so we need to decode it
+  datetime_id = decodeURIComponent(datetime_id);
   return {uuid, datetime_id};
 }
 
@@ -117,7 +124,7 @@ export function htmlNote(uuid) {
   return rendered_messages.join("");
 }
 
-export function htmlLine(line) {
+export function htmlLine(line, mode) {
   if (line instanceof Line) {
     let result = line.parts.map(x => {
       if (x instanceof Tag) {
@@ -125,6 +132,9 @@ export function htmlLine(line) {
       }
       if (x instanceof Link) {
         if (x.type === 'shortcut') {
+          if (mode === 'clipboard') {
+            return `<span class="shortcut">${x.display}</span>`;
+          }
           return shortcircuitLink(x.url, x.display, 'shortcut');
         }
         if (x.type === 'internal_ref') {
@@ -148,6 +158,15 @@ export function htmlLine(line) {
             // invalid datetime value
             return x;
           }
+          if (mode === 'clipboard') {
+            if (found_msg.length > 0) {
+              ref_snippet = htmlLine(found_msg[0].msg, 'clipboard');
+            }
+            return `<div class="ref_snippet">
+              <span class="ref_snippet_datetime">${shorter_datetime}</span>
+              ${ref_snippet}
+            </div>`;
+          }
           return `<div class="ref_snippet">
             <button onclick="return expandRef(this, '${x.display}')">get</button>
             <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${shorter_datetime}</a>
@@ -158,10 +177,18 @@ export function htmlLine(line) {
           
           // TODO add time of search to search result?
           // let shorter_datetime = renderDatetime(new Date(ref.datetime_id));
+          if (mode === 'clipboard') {
+            return `<div style="display:inline">
+              <span class="clipboard_link">${x.display}</span>
+            </div>`;
+          }
           return `<div style="display:inline">
             <button onclick="return expandSearch(this, '${x.display}')">get</button>
             <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${x.display}</a>
           </div>`;
+        }
+        if (mode === 'clipboard') {
+          return `<span class="clipboard_link">${x.display}</span>`;
         }
         return `<a href="${x.url}">${x.display}</a>`;
       }
@@ -179,7 +206,22 @@ export function htmlLine(line) {
   return line;
 }
 
+export function htmlClipboardMsg(msg_id) {
+  // msg_id looks like "/disc/uuid#datetime_id"
+  let msg_item = retrieveMsg(msg_id)[0];
+  if (msg_item === undefined) {
+    return "";
+  }
+  return `<div class="clipboard_msg_row">
+    <button class="clipboard_msg_remove" onclick="return removeFromClipboard('${msg_id}')">x</button>
+    <a href="javascript:void(0)" class="clipboard_msg" onclick="return gotoDisc('${msg_id}')">
+      ${htmlLine(msg_item.msg, 'clipboard')}
+    </a>
+  </div>`;
+}
+
 export function htmlMsg(item, mode, origin_content) {
+  // TODO i think i should delete the origin_content parameter, need to add some visual tests to make sure search and individual-message editing still work.
   let date = Date.parse(timezoneCompatibility(item.date));
   
   let timestamp_content = renderDatetime(date);
@@ -232,6 +274,7 @@ export function htmlMsg(item, mode, origin_content) {
       edit_link = `<a style="display: ${style_display}" class="edit_msg" onclick="return editMessage('${item.origin}', '${item.date}')" href="javascript:void(0)">${edit_state}</a>`;
     }
   }
+
 
   return (`
     <div class='msg' id='${item.date}'>
@@ -397,7 +440,7 @@ export async function expandRef(obj, url) {
     console.log(found_msg);
     insertHtmlBeforeMessage(obj, result, /*name=*/"ref" + url);
   } else {
-    console.log(`ERROR 4: couldn't find ${url_ref.datetime_id} in ${url_ref.uuid}`);
+    console.log(`ERROR 4: couldn't find message at ${url}`);
     // TODO error messaging
   }
 }

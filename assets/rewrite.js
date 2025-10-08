@@ -70,7 +70,6 @@ export class Msg {
   origin;  // the note that this message came from
   blocks;
   gobbled_newline;  // how many newlines came from after this message (and its blocks)
-  msg;
   _compat_date;
   _date_obj;
   constructor(properties) {
@@ -95,6 +94,14 @@ export class Msg {
 
   date_obj() {
     return this._date_obj;
+  }
+
+  ref_id() {
+    return `${this.origin}#${this.date}`;
+  }
+
+  msg_id() {
+    return `/disc/${this.origin}#${this.date}`;
   }
 }
 

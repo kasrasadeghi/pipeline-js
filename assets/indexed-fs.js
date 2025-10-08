@@ -9,7 +9,7 @@ import { sync, restoreRepo } from '/sync.js';
 import { getGlobal, initializeKazGlobal } from '/global.js';
 import { paintList } from '/calendar.js';
 import { lookupIcon, MenuButton, ToggleButton, TextField, TextAction } from '/components.js';
-import { parseRef, htmlNote, htmlLine, htmlMsg } from '/render.js';
+import { parseRef, htmlNote, htmlLine, htmlMsg, htmlClipboardMsg } from '/render.js';
 
 export { handleToggleButton } from '/components.js';
 export { handleTextField, handleTextAction } from '/components.js';
@@ -20,9 +20,9 @@ export { rewrite } from '/rewrite.js';
 export { debugGlobalNotes } from '/flatdb.js';
 export { setNow, tomorrow, getNow } from '/state.js';
 export { dateComp, timezoneCompatibility } from '/date-util.js';
-export { expandRef, expandSearch } from '/render.js';
+export { expandRef, expandSearch, parseRef } from '/render.js';
 export { editMessage } from '/render.js';
-export { htmlNote, htmlLine, htmlMsg } from '/render.js';
+export { htmlNote, htmlLine, htmlMsg, htmlClipboardMsg } from '/render.js';
 
 // JAVASCRIPT UTIL
 
@@ -227,16 +227,21 @@ export function preventDivs(e) {
 
 
 export function retrieveMsg(ref) {
+  // ref is like "/disc/uuid#datetime_id"
   let url_ref = parseRef(ref);
   if (url_ref.uuid === '') {
-    console.log('ERROR 3: could not parse ref', ref);
+    console.error('ERROR 3: could not parse ref', ref);
     return [];
   }
   let r = getGlobal().notes.rewrite(url_ref.uuid);
+  if (r === null) {
+    console.error('ERROR 9: could not parse ref', ref, 'could not find note', url_ref.uuid);
+    return [];
+  }
   let found_msg = r.filter(section => section.title === 'entry')
     .flatMap(s => s.blocks)
     .filter(x => x instanceof Msg && x.date === url_ref.datetime_id);
-  return found_msg; // returns a list
+  return found_msg; // returns a list of Msg objects
 }
 
 export function clickInternalLink(url) {
@@ -267,6 +272,7 @@ async function paintDisc(uuid, flag) {
     // msg_input doesn't exist when the uuid is not in our local repo
     setTimeout(() => {
       document.getElementById('msg_input')?.focus();
+      scrollToSelected();
     }, 0);
   }
 
@@ -283,7 +289,7 @@ async function paintDisc(uuid, flag) {
   if (selected === null) {
     main.scrollTop = main.scrollHeight;
   } else {
-    selected.scrollIntoView();
+    scrollToSelected();
   }
   console.timeEnd('paintDiscBody');
 }
@@ -309,7 +315,7 @@ export function getSupervisorStatusPromise() {
 export function resizeFooterMenu() {
   // yield to the UI thread with settimeout 0, so the msg_input clientHeight uses the post-keyboardEvent UI state.
   setTimeout(() => {
-    let footer_menu_size = (document.getElementById('msg_input').clientHeight) + 80; // for one line, client height is 31px
+    let footer_menu_size = (document.getElementById('msg_input').clientHeight) + (document.getElementById('msg_clipboard')?.clientHeight || 0) + 80; // for one line, msg_input client height is 31px
     document.documentElement.style.setProperty("--footer_menu_size", footer_menu_size + "px");
   }, 0);
 }
@@ -399,26 +405,43 @@ export function gatherSelectedMessage() {
   
   const messageId = encodeURI(selectedMessage.id);
   const currentUuid = getCurrentNoteUuid();
-  const host = window.location.host;
-  const referenceLink = `https://${host}/disc/${currentUuid}#${messageId}`;
+  const reference = `/disc/${currentUuid}#${messageId}`;
   const msgInput = document.getElementById('msg_input');
   
+  addToClipboard(reference);
+
   if (msgInput) {
-    if (msgInput.innerHTML === '' || msgInput.innerHTML === '<br>') {
-      msgInput.innerHTML = '';
-    }
-    
-    const currentText = msgInput.innerText;
-    if (currentText.length > 0 && !currentText.endsWith(' ')) {
-      msgInput.innerText += ' ';
-    }
-    
-    msgInput.innerText += referenceLink;
+    paintDiscFooter(currentUuid);
     resizeFooterMenu();
     msgInput.focus();
   }
   
   return false;
+}
+
+function clearClipboard() {
+  localStorage.setItem('msg_clipboard', JSON.stringify([]));
+}
+
+export function removeFromClipboard(reference) {
+  let clipboardMessages = getClipboardMessages();
+  clipboardMessages = clipboardMessages.filter(x => x !== reference);
+  localStorage.setItem('msg_clipboard', JSON.stringify(clipboardMessages));
+  paintDiscFooter(getCurrentNoteUuid());
+}
+
+function addToClipboard(reference) {
+  const clipboardMessages = getClipboardMessages();
+  if (clipboardMessages.includes(reference)) {
+    return;
+  }
+  clipboardMessages.push(reference);
+  localStorage.setItem('msg_clipboard', JSON.stringify(clipboardMessages));
+}
+
+function getClipboardMessages() {
+  // get the clipboard contents from localStorage
+  return JSON.parse(localStorage.getItem('msg_clipboard') || '[]');
 }
 
 async function paintDiscFooter(uuid) {
@@ -449,7 +472,17 @@ async function paintDiscFooter(uuid) {
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 
   let footer = document.getElementsByTagName('footer')[0];
-  footer.innerHTML = `${msg_form}
+  let clipboard_messages = getClipboardMessages();
+  console.log('clipboard_messages', clipboard_messages);
+  let clipboard = '';
+  if (clipboard_messages.length > 0) {
+    console.log('rendering clipboard messages', clipboard_messages);
+    clipboard = `<div id="msg_clipboard">${clipboard_messages.map(msg_id => htmlClipboardMsg(msg_id)).join("")}</div>`;
+  }
+  
+  footer.innerHTML = 
+    `${clipboard}
+    ${msg_form}
     <div id="modal-container">
       <div class="menu-modal">
         loading routine...
@@ -469,6 +502,7 @@ async function paintDiscFooter(uuid) {
         <div id='well_formed_display'></div>
       </div>
     </div>`;
+  resizeFooterMenu();
   await paintDiscRoutine();
 }
 
@@ -478,7 +512,13 @@ function renderDiscBody(uuid) {
 }
 
 export async function gotoDisc(uuid) {
+  if (uuid.startsWith('/disc/')) {
+    uuid = uuid.slice('/disc/'.length);
+  }
   window.history.pushState({},"", "/disc/" + uuid);
+  if (uuid.includes('#')) {
+    uuid = uuid.split('#')[0];
+  }
   paintDisc(uuid, /* paint both footer and main */ undefined);
   return false;
 }
@@ -533,7 +573,7 @@ async function renderEdit(uuid) {
 function updateSelected() {
   // clear selected
   const currently_selected = document.getElementsByClassName('selected');
-  for (s of currently_selected) {
+  for (let s of currently_selected) {
     s.classList.remove('selected');
   }
 
@@ -563,12 +603,32 @@ export function getSelectedMessage() {
   return null;
 }
 
+function scrollToSelected() {
+  // scroll so that the selected element is 8px above the bottom of the main container
+  //   to create an 8px margin between the selected element and the top of the footer
+  const selected = updateSelected();
+  if (selected) {
+    const main = document.getElementsByTagName('main')[0];
+    const elementRect = selected.getBoundingClientRect();
+    const mainRect = main.getBoundingClientRect();
+    
+    // Get the bottom y coordinate of the element relative to the main container
+    const elementBottomY = elementRect.bottom - mainRect.top + main.scrollTop;
+    
+    // Calculate the target scroll position so element bottom is 8px above main bottom
+    const targetScrollTop = elementBottomY - (mainRect.height - 8);
+    
+    // Scroll to the calculated position
+    main.scrollTop = Math.max(0, targetScrollTop);
+  }
+}
+
 window.addEventListener('load', () => {
   window.addEventListener('hashchange', () => {
-    updateSelected()?.scrollIntoView();
+    scrollToSelected();
   });
 
-  updateSelected()?.scrollIntoView();
+  scrollToSelected();
 });
 
 // SEARCH
@@ -954,6 +1014,7 @@ async function getTagsFromMixedNote(uuid) {
 // MAIN
 
 export async function gotoJournal() {
+  clearClipboard();
   let uuid = await getGlobal().notes.get_or_create_current_journal();
   await gotoDisc(uuid);
 }
