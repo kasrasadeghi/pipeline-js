@@ -321,7 +321,12 @@ export function resizeFooterMenu() {
 }
 
 export async function handleMsg(event) {
-  const displayState = (state) => { document.getElementById('state_display').innerHTML = state; };
+  const displayState = (state) => { 
+    let state_display = document.getElementById('state_display');
+    if (state_display) { 
+      state_display.innerHTML = state; 
+    }
+ };
 
   // console.log(event);  // print out keyboard events 
   resizeFooterMenu();
