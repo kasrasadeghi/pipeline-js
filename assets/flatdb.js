@@ -190,6 +190,15 @@ class FlatCache {
     this.version = new_version;
   }
 
+  update_message_cacher() {
+    // replaces the old message_cacher with a new one for the new set of messages()
+    this._messages_cacher = new IncrementalWorker(this.incrementally_gather_sorted_messages());
+    this.scheduler.addWorker('sorted_messages', this._messages_cacher);
+    this._messages_cacher.step();
+    this._messages_cacher.propagate();
+    console.log('🔵 MESSAGE CACHER UPDATED - calling', this._messages_cacher.users.length, 'subscribers with', this._messages_cacher.current_result?.length || 0, 'messages');
+  }
+
   async refresh_cache() {
     console.log('refreshing cache');
     this._local_repo = await get_local_repo_name();
@@ -199,19 +208,14 @@ class FlatCache {
     this.booleanFiles = {};
     this.booleanFiles[SHOW_PRIVATE_FILE] = await readBooleanFile(SHOW_PRIVATE_FILE, "false");
 
-    this._messages_cacher = new IncrementalWorker(this.incrementally_gather_sorted_messages());
-    this.scheduler.addWorker('sorted_messages', this._messages_cacher);
-    
-    // FIX: Immediately process and propagate to ensure search gets fresh data
-    this._messages_cacher.step();
-    this._messages_cacher.propagate();
-    
     console.log('done flat cache');
   }
 
   // NOTE use this before read operations to ensure coherence
   async ensure_valid_cache() {
     let idb_version = await global_notes.getVersion();
+    this.update_message_cacher();
+    // TODO perhaps we can create a message cacher for local updates that is incremental and differentiate that from refresh_cache that needs to be a rebuild from-scratch.
     console.log(`🔍 CACHE CHECK - cache version: ${this.version}, db version: ${idb_version}`);
     if (this.version !== idb_version) {
       console.log(`🔍 CACHE REFRESH - versions ${this.version} != ${idb_version} don't match, refreshing cache`);
@@ -489,6 +493,7 @@ Title: ${title}`;
   // generator
   *incrementally_gather_sorted_messages() {
     console.log('incrementally gathering messages');
+    console.time('incrementally gathering messages');
 
     let sorted_notes = this.metadata_map.sort((a, b) => dateComp(b, a));
     let messages = [];
@@ -502,7 +507,7 @@ Title: ${title}`;
     }
 
     messages.sort((a, b) => dateComp(b, a));
-
+    console.timeEnd('incrementally gathering messages');
     return messages;
   }
 

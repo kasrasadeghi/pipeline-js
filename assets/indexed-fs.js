@@ -639,7 +639,7 @@ window.addEventListener('load', () => {
 // SEARCH
 
 export function search(messages, text, is_case_sensitive=false) {
-  console.log('searching');
+  console.log('searching on', messages.length, 'messages');
   if (text === '' || text === null || text === undefined) {
     return messages;
   }
