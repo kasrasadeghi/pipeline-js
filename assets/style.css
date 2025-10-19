@@ -23,6 +23,7 @@
   --link-font: monospace;
   --time-font: monospace;
   --menu_modal_display: none;
+  --clipboard_display: flex;
   --global_font_size: 18px;
   --small_font_size: 16px;
 }
@@ -119,6 +120,11 @@ input[type=checkbox] { width: 18px; height: 18px; margin: 1px 3px 1px 3px; paddi
 
 .ref_snippet:last-child {
   margin-bottom: -9px;
+}
+
+#msg_clipboard {
+  display: var(--clipboard_display);
+  flex-direction: column;
 }
 
 .clipboard_msg_row {

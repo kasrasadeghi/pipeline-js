@@ -4,7 +4,7 @@ import { timezoneCompatibility } from '/date-util.js';
 import { getNow } from '/state.js';
 import { Msg, Line, Tag, Link } from '/rewrite.js';
 import { EmptyLine, TreeNode } from '/parse.js';
-import { parseContent, parseSection } from '/parse.js';
+import { parseContent, parseSection, splitLines } from '/parse.js';
 import { rewrite, rewriteBlock, rewriteLine } from '/rewrite.js';
 import { parseRef } from '/ref.js';
 
@@ -153,7 +153,7 @@ export function htmlLine(line, mode) {
           }
           return `<div class="ref_snippet">
             <button onclick="return expandRef(this, '${x.display}')">get</button>
-            <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${shorter_datetime}</a>
+            <a onclick="clickInternalLink('${x.url}'); return false;" href="${x.url}">${shorter_datetime}</a>
             ${ref_snippet}
           </div>`;
         }
@@ -168,7 +168,7 @@ export function htmlLine(line, mode) {
           }
           return `<div style="display:inline">
             <button onclick="return expandSearch(this, '${x.display}')">get</button>
-            <a onclick="return clickInternalLink('${x.url}')" href="${x.url}">${x.display}</a>
+            <a onclick="clickInternalLink('${x.url}'); return false;" href="${x.url}">${x.display}</a>
           </div>`;
         }
         if (mode === 'clipboard') {
@@ -207,7 +207,7 @@ export function htmlClipboardMsg(msg_id) {
   }
   return `<div class="clipboard_msg_row">
     <button class="clipboard_msg_remove" onclick="return removeFromClipboard('${msg_id}')">x</button>
-    <a href="javascript:void(0)" class="clipboard_msg" onclick="return gotoDisc('${msg_id}')">
+    <a href="javascript:void(0)" class="clipboard_msg" onclick="return gotoDisc('${ref.id()}')">
       ${htmlLine(msg_item.msg, 'clipboard')}
     </a>
   </div>`;
@@ -272,7 +272,7 @@ export function htmlMsg(item, mode, origin_content) {
 
   return (`
     <div class='msg' id='${item.date}'>
-      <div class="msg_menu">${msg_timestamp_link} ${item.origin.split('/')[0]} ${edit_link} ${gather_button}</div>
+      <div class="msg_menu">${msg_timestamp_link} ${item.origin.split('/')[0]} ${gather_button} ${edit_link}</div>
       <div class="msg_content" ${editable} ${style_option}>${line}</div>
       <div class="msg_blocks ${has_block_content}" ${editable} onkeydown="return preventDivs(event)">${block_content}</div>
     </div>`
@@ -364,7 +364,7 @@ export async function editMessage(item_origin_uuid, msg_id) {
       msg.blocks = [new Deleted()];
     } else {
       console.log('message block content', msg_block_content.innerHTML);
-      let lines = msg_block_content.innerText.trim().split('\n');  // innerText is unix newlines, only http request are dos newlines
+      let lines = splitLines(msg_block_content.innerText.trim());  // innerText is unix newlines, only http request are dos newlines
       let blocks = parseSection(lines);
       let rewritten_blocks = blocks.map(rewriteBlock);
       // if there are two emptylines next to each other, delete one
@@ -428,7 +428,7 @@ function insertHtmlBeforeMessage(obj, html_content, name) {
 }
 
 export async function expandRef(obj, url) {
-  let found_msg = retrieveMsg(url);
+  let found_msg = retrieveMsg(parseRef(url));
   let result = htmlMsg(found_msg[0]);
   if (found_msg.length > 0) {
     console.log(found_msg);

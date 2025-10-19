@@ -135,14 +135,31 @@ export class Link {
     this.display = url;
     this.url = url;
     this.type = 'unknown';
-    
+
+    if (this.url.startsWith("pipeline://")) {
+      this.display = this.display.slice("pipeline://".length);
+      if (this.display.startsWith("disc/") && this.display.includes("#")) {
+        this.display = this.display.slice("disc/".length);
+        this.type = 'internal_ref';
+      } else if (this.display.startsWith("search/")) {
+        this.display = this.display.slice("search/".length);
+        this.type = 'internal_search';
+      } else {
+        this.type = 'shortcut';
+      }
+      return;
+    }
+
     if (this.url.startsWith("http://") || this.url.startsWith("https://")) {
       this.display = this.display.slice(this.display.indexOf('://') + '://'.length);
+      this.type = 'external';
     }
+
     const reddit_share_tail = "?utm_source=share&utm_medium=mweb3x&utm_name=mweb3xcss&utm_term=1&utm_content=share_button";
     if (this.display.endsWith(reddit_share_tail)) {
       this.display = this.display.slice(0, -reddit_share_tail.length);
     }
+
     if (this.display.startsWith(window.location.host)) {
       this.display = this.display.slice(window.location.host.length);
       this.display = decodeURI(this.display);
@@ -178,19 +195,21 @@ export class Line {
 
 export function rewriteLine(line) {
   let original_line = line;
-  if (! (line.includes(": ") || line.includes("http://") || line.includes("https://"))) {
+
+  // FOR HISTORICAL PURPOSES
+  // internal links used to be old-style single links per line, like "msg: https://example.com"
+  // old style was only one link per line, and the line had to end in ": " follwed by a link
+  const line_has_link = /* old-style links: line.includes(": ") || */ line.includes("http://") || line.includes("https://") || line.startsWith("pipeline://");
+  if (! line_has_link) {
     return new Line(original_line, tagParse(line));
   }
   let result = [];
-  // we're just gonna look for https:// and http:// initially,
-  // but maybe internal links should be old-style single links per line?
-  // old style was only one link per line, and the line had to end in ": " and what could conditionally be a link
 
-  // parse URL if line starts with http(s)://, URLs end in space or end-of-line.
+  // parse URL if line starts with http(s):// or pipeline://, URLs end in space or end-of-line.
   while (line !== '') {
-    if (line.startsWith('https://') || line.startsWith('http://')) {
+    if (line.startsWith('https://') || line.startsWith('http://') || line.startsWith('pipeline://')) {
       let end_of_url = line.search(' ');
-      if (line.slice(0, end_of_url).length > 9) { // after the "https://" is actually a link
+      if (line.slice(0, end_of_url).length > 12) { // after the "https://" or "pipeline://" is actually a link
         if (end_of_url === -1) {  // ideally this wouldn't need a special case but i can't think of how to handle it on this flight
           result.push(new Link(line));
           line = '';

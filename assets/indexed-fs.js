@@ -1,8 +1,8 @@
-import { parseContent, TreeNode, EmptyLine } from '/parse.js';
+import { parseContent, parseSection, splitLines, TreeNode, EmptyLine } from '/parse.js';
 import { initFlatDB, SHOW_PRIVATE_FILE, LOCAL_REPO_NAME_FILE } from '/flatdb.js';
 import { initState, cache, getNow } from '/state.js';
 import { readBooleanFile, toggleBooleanFile } from '/boolean-state.js';
-import { rewrite, Msg, Line, Tag } from '/rewrite.js';
+import { rewrite, Msg, Line, Tag, rewriteBlock } from '/rewrite.js';
 import { dateComp } from '/date-util.js';
 import { hasRemote } from '/remote.js';
 import { sync, restoreRepo } from '/sync.js';
@@ -10,20 +10,19 @@ import { getGlobal, initializeKazGlobal } from '/global.js';
 import { paintList } from '/calendar.js';
 import { lookupIcon, MenuButton, ToggleButton, TextField, TextAction } from '/components.js';
 import { htmlNote, htmlLine, htmlMsg, htmlClipboard, htmlClipboardContent } from '/render.js';
-import { Ref } from '/ref.js';
+import { Ref, parseInternalLink } from '/ref.js';
 
 export { handleToggleButton } from '/components.js';
 export { handleTextField, handleTextAction } from '/components.js';
 export { gotoList } from '/calendar.js';
 export { getGlobal };
 export { parseContent, parseSection, TreeNode, EmptyLine } from '/parse.js';
-export { rewrite } from '/rewrite.js';
+export { rewrite, rewriteBlock, Link } from '/rewrite.js';
 export { debugGlobalNotes } from '/flatdb.js';
 export { setNow, tomorrow, getNow } from '/state.js';
 export { dateComp, timezoneCompatibility } from '/date-util.js';
-export { expandRef, expandSearch } from '/render.js';
-export { parseRef } from '/ref.js';
-export { editMessage } from '/render.js';
+export { expandRef, expandSearch, editMessage } from '/render.js';
+export { parseRef, parseInternalLink } from '/ref.js';
 export { htmlNote, htmlLine, htmlMsg } from '/render.js';
 
 // JAVASCRIPT UTIL
@@ -233,8 +232,11 @@ export function retrieveMsg(ref) {
   return found_msg; // returns a list of Msg objects
 }
 
-export function clickInternalLink(url) {
-  window.history.pushState({}, '', url); handleRouting();
+export async function clickInternalLink(url) {
+  const ref = parseInternalLink(url);
+  const host_url = ref.host_link();
+  window.history.pushState({}, '', host_url);
+  await handleRouting();
   return false;
 }
 
@@ -251,6 +253,7 @@ export function shortcircuitLink(url, text, style_class) {
 // DISC
 
 const MENU_TOGGLE_FILE = 'disc menu toggle state';
+const CLIPBOARD_TOGGLE_FILE = 'disc clipboard toggle state';
 const SEARCH_CASE_SENSITIVE_FILE = 'search case sensitive state';
 
 async function paintDisc(uuid, flag) {
@@ -275,6 +278,7 @@ async function paintDisc(uuid, flag) {
   main.innerHTML = renderDiscBody(uuid);
   
   const selected = updateSelected();
+  console.log('selected', selected);
   if (selected === null) {
     main.scrollTop = main.scrollHeight;
   } else {
@@ -389,10 +393,17 @@ export async function toggleMenu() {
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 }
 
+export async function toggleClipboard() {
+  let clipboard_state = await toggleBooleanFile(CLIPBOARD_TOGGLE_FILE, "true");
+  getGlobal().notes.booleanFiles[CLIPBOARD_TOGGLE_FILE] = clipboard_state;
+  document.documentElement.style.setProperty("--clipboard_display", clipboard_state === 'true' ? "flex" : "none");
+  resizeFooterMenu();
+}
+
 export function gatherMessage(ref) {
   // ref should look like "{uuid}#{datetime_id}"
   
-  addToClipboard(ref);
+  addToClipboard(parseRef(ref));
   
   const msgInput = document.getElementById('msg_input');
   if (msgInput) {
@@ -403,7 +414,7 @@ export function gatherMessage(ref) {
   return false;
 }
 
-function clearClipboard() {
+export function clearClipboard() {
   localStorage.setItem('msg_clipboard', JSON.stringify([]));
 }
 
@@ -416,16 +427,74 @@ export function removeFromClipboard(reference) {
 
 function addToClipboard(reference) {
   const clipboardMessages = getClipboardMessages();
-  if (clipboardMessages.includes(reference)) {
+  if (clipboardMessages.includes(reference.url())) {
     return;
   }
-  clipboardMessages.push(reference);
+  clipboardMessages.push(reference.url());
   localStorage.setItem('msg_clipboard', JSON.stringify(clipboardMessages));
 }
 
 export function getClipboardMessages() {
   // get the clipboard contents from localStorage
   return JSON.parse(localStorage.getItem('msg_clipboard') || '[]');
+}
+
+async function updateMessage(ref, messageTransform) {
+  console.assert(ref instanceof Ref, 'replaceMessage called with a non-Ref object', ref);
+  console.assert(checkWellFormed(ref.uuid), 'uuid of ref is not well-formed', ref);
+  
+  await getGlobal().notes.updateFile(ref.uuid, (content) => {
+    let parsed = parseContent(content);
+    let page = rewrite(parsed, ref.uuid);
+
+    for (let section of page) {
+      if (section.title === 'entry') {
+        for (let i = 0; i < section.blocks.length; i++) {
+          let block = section.blocks[i];
+          if (block instanceof Msg && block.date === ref.datetime_id) {
+            console.log('old message', JSON.stringify(block, null, 2));
+            const msg = messageTransform(block);
+            console.log('new message', JSON.stringify(msg, null, 2));
+            console.assert(msg instanceof Msg, 'messageTransform returned a non-Msg object', msg);
+            section.blocks[i] = msg;
+            break;
+          }
+        }
+      }
+    }
+    // return content; // for testing, disable page modification
+    return unparseContent(page);
+  });
+}
+
+export async function depositClipboard() {
+  // add a GATHER block to the selected message
+
+  let clipboardMessages = getClipboardMessages();
+  let ref = getSelectedMessageRef();
+  if (ref === null) {
+    console.warn('no selected message');
+    return;
+  }
+  let well_formed = checkWellFormed(ref.uuid);
+  if (! well_formed) {
+    console.warn('current note is not well-formed');
+    return;
+  }
+  // we need to parse and rewrite the gather block in order to make a proper replacement.
+  let gather_block_content = `GATHER\n` + clipboardMessages.join("\n");
+  const blocks = parseSection(splitLines(gather_block_content));
+  console.assert(blocks.length === 1, 'gather block should have exactly one block', blocks);
+  let new_block = rewriteBlock(blocks[0], ref.uuid);
+  await updateMessage(ref, (msg) => {
+    if (msg.blocks.length === 0) {
+      msg.blocks = [new_block];
+    } else {
+      msg.blocks.push(new EmptyLine(), new_block);
+    }
+    return msg;
+  });
+  await paintDisc(ref.uuid, 'only main');
 }
 
 async function paintDiscFooter(uuid) {
@@ -454,12 +523,13 @@ async function paintDiscFooter(uuid) {
   let menu_state = await readBooleanFile(MENU_TOGGLE_FILE, "false");
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 
+  let clipboard_state = await readBooleanFile(CLIPBOARD_TOGGLE_FILE, "true");
+  document.documentElement.style.setProperty("--clipboard_display", clipboard_state === 'true' ? "flex" : "none");
+
   let footer = document.getElementsByTagName('footer')[0];
-  let clipboard = '';
-  clipboard = htmlClipboard();
   
   footer.innerHTML = 
-    `${clipboard}
+    `${htmlClipboard()}
     ${msg_form}
     <div id="modal-container">
       <div class="menu-modal">
@@ -472,7 +542,9 @@ async function paintDiscFooter(uuid) {
         ${MenuButton({icon: 'list', action: 'gotoList()'})}
         ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
         ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
-        ${MenuButton({icon: 'routine', action: 'return toggleMenu()'})}
+        ${MenuButton({icon: 'routine', action: 'toggleMenu()'})}
+        ${MenuButton({icon: 'deposit', action: 'depositClipboard()'})}
+        ${MenuButton({icon: 'clipboard', action: 'toggleClipboard()'})}
       </div>
       <div id="footer_message_container">
         <div id='state_display'></div>
@@ -556,7 +628,8 @@ function updateSelected() {
 
   // select from hash
   if (window.location.hash) {
-    const selected = document.getElementById(decodeURI(window.location.hash.slice(1)));
+    const hash = decodeURIComponent(window.location.hash.slice(1));
+    const selected = document.getElementById(hash);
     if (selected) selected.classList.add('selected');
     return selected;
   } else {
@@ -564,7 +637,7 @@ function updateSelected() {
   }
 };
 
-export function getSelectedMessage() {
+export function getSelectedMessageElement() {
   const selectedElements = document.getElementsByClassName('selected');
   if (selectedElements.length > 0) {
     return selectedElements[0];
@@ -577,6 +650,15 @@ export function getSelectedMessage() {
     }
   }
   
+  return null;
+}
+
+export function getSelectedMessageRef() {
+  const selected = getSelectedMessageElement();
+  const uuid = getCurrentNoteUuid();
+  if (selected !== null) {
+    return new Ref({uuid, datetime_id: decodeURI(selected.id)});
+  }
   return null;
 }
 
@@ -602,6 +684,7 @@ function scrollToSelected() {
 
 window.addEventListener('load', () => {
   window.addEventListener('hashchange', () => {
+    console.log('hashchange');
     scrollToSelected();
   });
 

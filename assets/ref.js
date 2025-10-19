@@ -2,8 +2,21 @@ export class Ref {
   uuid;
   datetime_id;
   constructor({uuid, datetime_id}) {
+    console.assert(decodeURIComponent(datetime_id) === datetime_id, 'datetime_id should not be urlencoded', datetime_id);
     this.uuid = uuid;
     this.datetime_id = datetime_id;
+  }
+
+  id() {
+    return `${this.uuid}#${encodeURIComponent(this.datetime_id)}`;
+  }
+
+  url() {
+    return `pipeline://disc/${this.id()}`;
+  }
+
+  host_link() {
+    return `https://${window.location.host}/disc/${this.id()}`;
   }
 }
 
@@ -27,4 +40,13 @@ export function parseRef(ref) {
   // the datetime_id might be urlencoded, so we need to decode it
   datetime_id = decodeURIComponent(datetime_id);
   return new Ref({uuid, datetime_id});
+}
+
+export function parseInternalLink(url) {
+  console.assert(url.startsWith("pipeline://"), 'internal link should start with pipeline://', url);
+  if (url.startsWith("pipeline://disc/")) {
+    url = url.slice("pipeline://disc/".length);
+  }
+  console.assert(url.includes("#"), 'only internal links to message references are supported', url);
+  return parseRef(url);
 }

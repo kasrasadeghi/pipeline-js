@@ -84,6 +84,8 @@ export function lookupIcon(full_name) {
     'private': "PRIV",
     'get repo': "GET_",
     'gather': "GTHR",
+    'deposit': "DEPO",
+    'clipboard': "CLIP",
   }[full_name];
 }
 

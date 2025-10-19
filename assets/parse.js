@@ -1,3 +1,7 @@
+export function splitLines(content) {
+  console.assert(typeof content === 'string', 'content should be a string', content);
+  return content.split('\n');
+}
 
 export function parseContent(content) {
   console.assert(typeof content === 'string', 'content should be a string', content);
@@ -5,7 +9,7 @@ export function parseContent(content) {
   // - a block is a list of nodes
   // - a node can be either a line of type 'str', or a parsed tree
   let sections = [{title: 'entry', lines: []}];
-  for (let L of content.split("\n")) {
+  for (let L of splitLines(content)) {
     if (L.startsWith("--- ") && L.endsWith(" ---") && L.length > 9) {
       sections.push({title: L.slice(4, -4), lines: []});
     } else if (L === '---') {
@@ -32,6 +36,8 @@ export class EmptyLine {
 }
 
 export function parseSection(lines) {
+  console.assert(Array.isArray(lines), 'lines should be a list.  HINT: did you call splitLines?', lines);
+  
   let blocks = [];
   for (let L of lines) {
     if (L === '') {
