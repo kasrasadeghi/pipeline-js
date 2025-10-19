@@ -3,6 +3,8 @@ import { cache } from '/state.js';
 import { initializeKazGlobal, getGlobal } from '/global.js';
 import { getCombinedRemoteStatus, getLocalStatus, statusDiff, getRemotes, getCombinedLocalStatus } from '/status.js';
 import { LOCAL_REPO_NAME_FILE } from '/flatdb.js';
+import { hasRemote } from '/remote.js';
+import { getSupervisorStatusPromise } from '/indexed-fs.js';
 
 export async function restoreRepo(repo) {
   await initializeKazGlobal(false);
