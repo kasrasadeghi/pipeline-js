@@ -99,10 +99,6 @@ export class Msg {
   ref_id() {
     return `${this.origin}#${this.date}`;
   }
-
-  msg_id() {
-    return `/disc/${this.origin}#${this.date}`;
-  }
 }
 
 export function rewriteBlock(block, note) {

@@ -9,7 +9,7 @@ import { sync, restoreRepo } from '/sync.js';
 import { getGlobal, initializeKazGlobal } from '/global.js';
 import { paintList } from '/calendar.js';
 import { lookupIcon, MenuButton, ToggleButton, TextField, TextAction } from '/components.js';
-import { htmlNote, htmlLine, htmlMsg, htmlClipboardMsg } from '/render.js';
+import { htmlNote, htmlLine, htmlMsg, htmlClipboard, htmlClipboardContent } from '/render.js';
 import { Ref } from '/ref.js';
 
 export { handleToggleButton } from '/components.js';
@@ -24,7 +24,7 @@ export { dateComp, timezoneCompatibility } from '/date-util.js';
 export { expandRef, expandSearch } from '/render.js';
 export { parseRef } from '/ref.js';
 export { editMessage } from '/render.js';
-export { htmlNote, htmlLine, htmlMsg, htmlClipboardMsg } from '/render.js';
+export { htmlNote, htmlLine, htmlMsg } from '/render.js';
 
 // JAVASCRIPT UTIL
 
@@ -59,10 +59,6 @@ export function paintSimple(render_result) {
 // link -> note | root-link | internal-link | simple-link
 
 // RENDER
-
-
-
-
 
 export function unparseContent(page) {
   let content = [];
@@ -393,25 +389,15 @@ export async function toggleMenu() {
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 }
 
-export function gatherSelectedMessage() {
-  const selectedMessage = getSelectedMessage();
+export function gatherMessage(ref) {
+  // ref should look like "{uuid}#{datetime_id}"
   
-  if (!selectedMessage) {
-    console.log('No message selected');
-    return false;
-  }
+  addToClipboard(ref);
   
-  const messageId = encodeURI(selectedMessage.id);
-  const currentUuid = getCurrentNoteUuid();
-  const reference = `/disc/${currentUuid}#${messageId}`;
   const msgInput = document.getElementById('msg_input');
-  
-  addToClipboard(reference);
-
   if (msgInput) {
-    paintDiscFooter(currentUuid);
+    document.getElementById('msg_clipboard').innerHTML = htmlClipboardContent();
     resizeFooterMenu();
-    msgInput.focus();
   }
   
   return false;
@@ -437,7 +423,7 @@ function addToClipboard(reference) {
   localStorage.setItem('msg_clipboard', JSON.stringify(clipboardMessages));
 }
 
-function getClipboardMessages() {
+export function getClipboardMessages() {
   // get the clipboard contents from localStorage
   return JSON.parse(localStorage.getItem('msg_clipboard') || '[]');
 }
@@ -464,19 +450,13 @@ async function paintDiscFooter(uuid) {
       data-lexical-editor="true"><br></div>`;
 
   let edit_button = MenuButton({icon: 'edit', action: `gotoEdit('${uuid}')`});
-  let gather_button = MenuButton({icon: 'gather', action: 'gatherSelectedMessage()'});
       
   let menu_state = await readBooleanFile(MENU_TOGGLE_FILE, "false");
   document.documentElement.style.setProperty("--menu_modal_display", menu_state === 'true' ? "flex" : "none");
 
   let footer = document.getElementsByTagName('footer')[0];
-  let clipboard_messages = getClipboardMessages();
-  console.log('clipboard_messages', clipboard_messages);
   let clipboard = '';
-  if (clipboard_messages.length > 0) {
-    console.log('rendering clipboard messages', clipboard_messages);
-    clipboard = `<div id="msg_clipboard">${clipboard_messages.map(msg_id => htmlClipboardMsg(msg_id)).join("")}</div>`;
-  }
+  clipboard = htmlClipboard();
   
   footer.innerHTML = 
     `${clipboard}
@@ -493,7 +473,6 @@ async function paintDiscFooter(uuid) {
         ${MenuButton({icon: 'journal', action: 'gotoJournal()'})}
         ${MenuButton({icon: 'search', action: 'gotoSearch()'})}
         ${MenuButton({icon: 'routine', action: 'return toggleMenu()'})}
-        ${gather_button}
       </div>
       <div id="footer_message_container">
         <div id='state_display'></div>
@@ -1012,7 +991,6 @@ async function getTagsFromMixedNote(uuid) {
 // MAIN
 
 export async function gotoJournal() {
-  clearClipboard();
   let uuid = await getGlobal().notes.get_or_create_current_journal();
   await gotoDisc(uuid);
 }

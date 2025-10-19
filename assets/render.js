@@ -1,11 +1,12 @@
 import { getGlobal } from '/global.js';
-import { getCurrentNoteUuid, removeFromClipboard, unparseMessageBlocks, shortcircuitLink, retrieveMsg, clickInternalLink, checkWellFormed, preventDivs, Deleted, unparseContent, search, renderSearchMain } from '/indexed-fs.js';
+import { getCurrentNoteUuid, removeFromClipboard, unparseMessageBlocks, shortcircuitLink, retrieveMsg, clickInternalLink, checkWellFormed, preventDivs, Deleted, unparseContent, search, renderSearchMain, getClipboardMessages } from '/indexed-fs.js';
 import { timezoneCompatibility } from '/date-util.js';
 import { getNow } from '/state.js';
 import { Msg, Line, Tag, Link } from '/rewrite.js';
 import { EmptyLine, TreeNode } from '/parse.js';
 import { parseContent, parseSection } from '/parse.js';
 import { rewrite, rewriteBlock, rewriteLine } from '/rewrite.js';
+import { parseRef } from '/ref.js';
 
 // date timestamp, like hh:mm:ss in 24-hour clock
 const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
@@ -56,24 +57,6 @@ function trimTrailingRenderedBreak(content) {
     content = content.slice(0, -("<br>".length));
   }
   return content;
-}
-
-export function parseRef(ref) {
-  if (ref.includes('/disc/')) {
-    // ref looks like: "/disc/uuid#datetime_id" 
-    ref = ref.split('/disc/')[1];
-  }
-  // now it's just "uuid#datetime_id"
-  let s = ref.split('#');  
-  // EXAMPLE bigmac-js/f726c89e-7473-4079-bd3f-0e7c57b871f9.note#Sun Jun 02 2024 20:45:46 GMT-0700 (Pacific Daylight Time)
-  console.assert(s.length == 2);
-  if (s.length !== 2) {
-    return {uuid: '', datetime_id: ''};
-  }
-  let [uuid, datetime_id] = s;
-  // the datetime_id might be urlencoded, so we need to decode it
-  datetime_id = decodeURIComponent(datetime_id);
-  return {uuid, datetime_id};
 }
 
 function htmlBlockPart(part) {
@@ -149,7 +132,8 @@ export function htmlLine(line, mode) {
           }
 
           let ref_snippet = '';
-          let found_msg = retrieveMsg(x.display);
+          console.assert(!x.display.startsWith("/disc/"), x.display, 'should not start with /disc/ in ');
+          let found_msg = retrieveMsg(ref);
           if (found_msg.length > 0) {
             ref_snippet = htmlLine(found_msg[0].msg);
           }
@@ -206,9 +190,18 @@ export function htmlLine(line, mode) {
   return line;
 }
 
+export function htmlClipboard() {
+  return `<div id="msg_clipboard">${htmlClipboardContent()}</div>`;
+}
+
+export function htmlClipboardContent() {
+  return getClipboardMessages().map(msg_id => htmlClipboardMsg(msg_id)).join("");
+}
+
 export function htmlClipboardMsg(msg_id) {
-  // msg_id looks like "/disc/uuid#datetime_id"
-  let msg_item = retrieveMsg(msg_id)[0];
+  // msg_id looks like "uuid#datetime_id"
+  let ref = parseRef(msg_id);
+  let msg_item = retrieveMsg(ref)[0];
   if (msg_item === undefined) {
     return "";
   }
@@ -274,11 +267,12 @@ export function htmlMsg(item, mode, origin_content) {
       edit_link = `<a style="display: ${style_display}" class="edit_msg" onclick="return editMessage('${item.origin}', '${item.date}')" href="javascript:void(0)">${edit_state}</a>`;
     }
   }
+  const gather_button = `<a class="gather_msg" onclick="return gatherMessage('${item.ref_id()}')" href="javascript:void(0)">gather</a>`;
 
 
   return (`
     <div class='msg' id='${item.date}'>
-      <div class="msg_menu">${msg_timestamp_link} ${item.origin.split('/')[0]} ${edit_link}</div>
+      <div class="msg_menu">${msg_timestamp_link} ${item.origin.split('/')[0]} ${edit_link} ${gather_button}</div>
       <div class="msg_content" ${editable} ${style_option}>${line}</div>
       <div class="msg_blocks ${has_block_content}" ${editable} onkeydown="return preventDivs(event)">${block_content}</div>
     </div>`
