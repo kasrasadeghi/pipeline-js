@@ -1,6 +1,17 @@
 import { EmptyLine, TreeNode } from "/parse.js";
 import { timezoneCompatibility } from "/date-util.js";
 
+// page -> *section
+// section -> {title: METADATA, lines: *str} | {title,blocks: *block} | {title,roots: *root}
+// root -> {root: 'pre_roots'|'nonfinal'|'final', children: block*}
+// block -> message | EmptyLine | *node | *line
+// class EmptyLine {}
+// message -> {msg: Line ,date,content: str}
+// node -> {value,indent,children:*node,line: Line}
+// class Line {content: str, parts: *line_part}
+// line_part -> str | Tag | cmd | Link
+// link -> note | root-link | internal-link | simple-link
+
 export function rewrite(page, note) {
   return page.map(x => rewriteSection(x, note));
 }

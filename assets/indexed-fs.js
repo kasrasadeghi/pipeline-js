@@ -34,7 +34,7 @@ if (!Array.prototype.back) {
   }
 }
 
-// GENERAL UTIL
+// RENDER
 
 export function paintSimple(render_result) {
   document.title = "Pipeline Notes";
@@ -44,20 +44,6 @@ export function paintSimple(render_result) {
   return {main, footer};
 }
 
-//#region REWRITE
-
-// page -> *section
-// section -> {title: METADATA, lines: *str} | {title,blocks: *block} | {title,roots: *root}
-// root -> {root: 'pre_roots'|'nonfinal'|'final', children: block*}
-// block -> message | EmptyLine | *node | *line
-// class EmptyLine {}
-// message -> {msg: Line ,date,content: str}
-// node -> {value,indent,children:*node,line: Line}
-// class Line {content: str, parts: *line_part}
-// line_part -> str | Tag | cmd | Link
-// link -> note | root-link | internal-link | simple-link
-
-// RENDER
 
 export function unparseContent(page) {
   let content = [];

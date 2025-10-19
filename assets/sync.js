@@ -26,7 +26,7 @@ export async function attemptSync(displayState) {
 
 // attempts to sync.
 // @returns true if sync succeeded.  false if it failed.
-export async function sync(displayState) {
+async function sync(displayState) {
   try {
     let combined_remote_status = await getCombinedRemoteStatus();
     let combined_local_status = await getCombinedLocalStatus();
@@ -46,7 +46,7 @@ export async function sync(displayState) {
   }
 }
 
-export async function fetchNotes(repo, uuids) {
+async function fetchNotes(repo, uuids) {
   // can either be single note: <repo>/<uuid>
   // or multiple: <repo>/<uuid>(/<uuid>)*
 
@@ -70,7 +70,7 @@ export async function fetchNotes(repo, uuids) {
   }
 }
 
-export async function getAllNotes(repo) {
+async function getAllNotes(repo) {
   console.log('getting notes');
 
   let list = await fetch((await getRemote()) + '/api/list/' + repo).then(x => x.json());
