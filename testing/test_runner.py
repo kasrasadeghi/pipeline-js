@@ -19,9 +19,14 @@ def run_manual_tests(headless=False, timeout=10000):
     from test_manual import ManualTest
     return create_sync_test_runner(ManualTest, headless, timeout)
 
+def run_message_edit_tests(headless=False, timeout=10000):
+    """Run message edit tests"""
+    from test_message_edit import MessageEditTest
+    return create_sync_test_runner(MessageEditTest, headless, timeout)
+
 def main():
     parser = argparse.ArgumentParser(description='Run Pipeline Notes tests')
-    parser.add_argument('test_type', choices=['render', 'manual', 'all'], 
+    parser.add_argument('test_type', choices=['render', 'manual', 'message-edit', 'all'], 
                        help='Type of test to run')
     parser.add_argument('--visible', action='store_true', 
                        help='Run with visible browser (default is headless for automated tests)')
@@ -46,6 +51,8 @@ def main():
         success = run_render_tests(headless, args.timeout)
     elif args.test_type == 'manual':
         success = run_manual_tests(headless, args.timeout)
+    elif args.test_type == 'message-edit':
+        success = run_message_edit_tests(headless, args.timeout)
     elif args.test_type == 'all':
         print("\n=== Running Render Function Tests ===")
         render_success = run_render_tests(True, args.timeout)  # Always headless for automated
@@ -53,7 +60,10 @@ def main():
         print("\n=== Running Manual Tests ===")
         manual_success = run_manual_tests(False, args.timeout)  # Always visible for manual
         
-        success = render_success and manual_success
+        print("\n=== Running Message Edit Tests ===")
+        message_edit_success = run_message_edit_tests(False, args.timeout)  # Always visible for message edit
+        
+        success = render_success and manual_success and message_edit_success
     
     if success:
         print('\n✅ All tests completed successfully')
