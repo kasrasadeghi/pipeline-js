@@ -9,7 +9,8 @@ import { sync, restoreRepo } from '/sync.js';
 import { getGlobal, initializeKazGlobal } from '/global.js';
 import { paintList } from '/calendar.js';
 import { lookupIcon, MenuButton, ToggleButton, TextField, TextAction } from '/components.js';
-import { parseRef, htmlNote, htmlLine, htmlMsg, htmlClipboardMsg } from '/render.js';
+import { htmlNote, htmlLine, htmlMsg, htmlClipboardMsg } from '/render.js';
+import { Ref } from '/ref.js';
 
 export { handleToggleButton } from '/components.js';
 export { handleTextField, handleTextAction } from '/components.js';
@@ -20,7 +21,8 @@ export { rewrite } from '/rewrite.js';
 export { debugGlobalNotes } from '/flatdb.js';
 export { setNow, tomorrow, getNow } from '/state.js';
 export { dateComp, timezoneCompatibility } from '/date-util.js';
-export { expandRef, expandSearch, parseRef } from '/render.js';
+export { expandRef, expandSearch } from '/render.js';
+export { parseRef } from '/ref.js';
 export { editMessage } from '/render.js';
 export { htmlNote, htmlLine, htmlMsg, htmlClipboardMsg } from '/render.js';
 
@@ -227,20 +229,11 @@ export function preventDivs(e) {
 
 
 export function retrieveMsg(ref) {
-  // ref is like "/disc/uuid#datetime_id"
-  let url_ref = parseRef(ref);
-  if (url_ref.uuid === '') {
-    console.error('ERROR 3: could not parse ref', ref);
-    return [];
-  }
-  let r = getGlobal().notes.rewrite(url_ref.uuid);
-  if (r === null) {
-    console.error('ERROR 9: could not parse ref', ref, 'could not find note', url_ref.uuid);
-    return [];
-  }
+  console.assert(ref instanceof Ref, 'retrieveMsg called with a non-Ref object', ref);
+  let r = getGlobal().notes.rewrite(ref.uuid);
   let found_msg = r.filter(section => section.title === 'entry')
     .flatMap(s => s.blocks)
-    .filter(x => x instanceof Msg && x.date === url_ref.datetime_id);
+    .filter(x => x instanceof Msg && x.date === ref.datetime_id);
   return found_msg; // returns a list of Msg objects
 }
 
