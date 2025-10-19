@@ -1,0 +1,34 @@
+# NOTE used in simple_server and service-worker
+
+cacheable assets
+
+        "style.css",
+        "boolean-state.js",
+        "calendar.js",
+        "components.js",
+        "date-util.js",
+        "filedb.js",
+        "flatdb.js",
+        "global.js",
+        "indexed-fs.js",
+        "parse.js",
+        "ref.js",
+        "render.js",
+        "remote.js",
+        "rewrite.js",
+        "state.js",
+        "status.js",
+        "sync.js",
+        "manifest.json",
+
+non-cacheable assets
+
+        "service-worker.js",
+
+icons
+
+        "favicon.ico",
+        "icon512.png",
+        "icon192.png",
+        "maskable_icon.png",
+        "maskable_icon_x192.png",

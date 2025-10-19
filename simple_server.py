@@ -189,7 +189,7 @@ def handle_request(request):
         "icon512.png",
         "icon192.png",
         "maskable_icon.png",
-        "maskable_icon_x192.png"
+        "maskable_icon_x192.png",
     ]
 
     if path == '/sw-index.html':

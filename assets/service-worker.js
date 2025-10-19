@@ -3,6 +3,7 @@ const baseFile = 'sw-index.html';
 const icons = [
   "favicon.ico",
   "icon512.png",
+  "icon192.png",
   "maskable_icon.png",
   "maskable_icon_x192.png",
 ];
@@ -18,12 +19,14 @@ const cacheable_assets = [
   "global.js",
   "indexed-fs.js",
   "parse.js",
+  "ref.js",
+  "render.js",
   "remote.js",
   "rewrite.js",
   "state.js",
   "status.js",
   "sync.js",
-  'manifest.json',
+  "manifest.json",
 ];
 
 function LOG(...data) {
