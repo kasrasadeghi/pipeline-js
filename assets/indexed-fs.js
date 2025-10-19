@@ -442,6 +442,9 @@ export function getClipboardMessages() {
 async function updateMessage(ref, messageTransform) {
   console.assert(ref instanceof Ref, 'replaceMessage called with a non-Ref object', ref);
   console.assert(checkWellFormed(ref.uuid), 'uuid of ref is not well-formed', ref);
+
+  const current_local_repo = getGlobal().notes.local_repo_name();
+  console.assert(ref.uuid.split('/')[0] === current_local_repo, 'ref is not from the local repo', ref);
   
   await getGlobal().notes.updateFile(ref.uuid, (content) => {
     let parsed = parseContent(content);
