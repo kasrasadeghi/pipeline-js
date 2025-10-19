@@ -11,9 +11,19 @@ export async function restoreRepo(repo) {
   await getGlobal().notes.refresh_cache();  // refresh the cache after loading the notes.
 }
 
+export async function attemptSync(displayState) {
+  if (hasRemote()) {
+    const sync_success = await sync(displayState);
+    if (! sync_success) {
+      getSupervisorStatusPromise()
+        .then((status) => { displayState(JSON.stringify(status)); })
+        .catch((e) => { displayState("supervisor down", e); console.log(e); });
+    }
+  }
+}
+
 // attempts to sync.
 // @returns true if sync succeeded.  false if it failed.
-// 
 export async function sync(displayState) {
   try {
     let combined_remote_status = await getCombinedRemoteStatus();

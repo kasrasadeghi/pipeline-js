@@ -376,14 +376,8 @@ export async function handleMsg(event) {
     return false;
   }
 
-  if (hasRemote()) {
-    const sync_success = sync(displayState);
-    if (! sync_success) {
-      getSupervisorStatusPromise()
-        .then((status) => { displayState(JSON.stringify(status)); })
-        .catch((e) => { displayState("supervisor down", e); console.log(e); });
-    }
-  }
+  await attemptSync(displayState);
+
   return false;
 };
 
