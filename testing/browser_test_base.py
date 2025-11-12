@@ -5,8 +5,6 @@ Provides shared utilities for Playwright-based tests.
 """
 
 import asyncio
-import argparse
-import sys
 from playwright.async_api import async_playwright
 from playwright.sync_api import sync_playwright, Playwright
 from test_util import get_pipeline_url, Server
