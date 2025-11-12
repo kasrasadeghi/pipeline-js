@@ -1,5 +1,6 @@
 import { parseContent, TreeNode, EmptyLine } from './parse.js';
 import { rewrite, Msg, Line } from './rewrite.js';
+import { timezoneCompatibility } from './date-util.js';
 
 export function unparseContent(page) {
   let content = [];
@@ -14,7 +15,20 @@ export function unparseContent(page) {
       }
     }
     if (['METADATA', 'HTML'].includes(section.title)) {
-      section_content.push(...section.lines);
+      // Convert Date lines in METADATA to new timezone format
+      if (section.title === 'METADATA' && section.lines) {
+        const convertedLines = section.lines.map(line => {
+          if (line.startsWith('Date: ')) {
+            const oldDate = line.slice('Date: '.length);
+            const newDate = timezoneCompatibility(oldDate);
+            return `Date: ${newDate}`;
+          }
+          return line;
+        });
+        section_content.push(...convertedLines);
+      } else {
+        section_content.push(...section.lines);
+      }
       content.push(section_content.join("\n"));
       if (section.title === 'HTML') {
         content.push('\n');
