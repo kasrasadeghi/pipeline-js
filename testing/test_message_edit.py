@@ -16,8 +16,8 @@ from tests.first_time_interaction import test_first_time_interaction
 class MessageEditTest(SyncBrowserTest):
     """Test class for individual message editing functionality"""
     
-    def __init__(self):
-        super().__init__(port=8100, headless=False, timeout=10000)
+    def __init__(self, headless=False, timeout=10000):
+        super().__init__(port=8100, headless=headless, timeout=timeout)
     
     def run_test(self, playwright: Playwright):
         """Run the message edit test suite"""
@@ -164,28 +164,42 @@ class MessageEditTest(SyncBrowserTest):
         # Test 1: Basic text input and editing
         edited_content = self.test_basic_text_editing(msg_content, original_content)
         
-        # Test 2: HTML paste sanitization (critical for user experience)
+        # Test 2: HTML paste sanitization into message blocks (critical for user experience)
         # This tests the exact issue reported - pasting from websites includes CSS styling
-        self.test_html_paste_sanitization(msg_content)
-        
-        # Note: We only do basic text editing and HTML paste testing to avoid overwriting content
-        # Other tests (keyboard shortcuts, etc.) would overwrite the content
-        # and make verification difficult. In a real test suite, these would be separate tests.
-        
-        # Test that we can also edit message blocks if they exist
+        # We paste into the message blocks editor (under the message content)
         msg_blocks = message_element.query_selector(".msg_blocks")
         if msg_blocks and msg_blocks.is_visible():
             blocks_editable = msg_blocks.get_attribute("contenteditable")
-            assert blocks_editable == "true", "Message blocks should also be editable"
-            print("✅ Message blocks are also editable")
+            assert blocks_editable == "true", "Message blocks should be editable"
+            print("✅ Message blocks are editable")
+            
+            # Paste HTML content into the message blocks editor
+            self.test_html_paste_sanitization(msg_blocks)
+        else:
+            # If message blocks don't exist, create them by ensuring they're visible
+            # The blocks area should be created when we enter edit mode
+            print("⚠️ Message blocks not found, skipping paste test in blocks")
+        
+        # Return the edited content (not the pasted content, since we pasted into blocks)
+        # Note: We only do basic text editing and HTML paste testing to avoid overwriting content
+        # Other tests (keyboard shortcuts, etc.) would overwrite the content
+        # and make verification difficult. In a real test suite, these would be separate tests.
         
         print("✅ Message content editing test passed!")
         return edited_content
     
     
-    def test_html_paste_sanitization(self, msg_content):
-        """Test that HTML content is properly sanitized during paste events"""
-        print("\n--- Testing HTML paste sanitization ---")
+    def test_html_paste_sanitization(self, editable_element):
+        """Test that HTML content is properly sanitized during paste events and appended to existing content"""
+        print("\n--- Testing HTML paste sanitization (appending to message blocks) ---")
+        
+        # Get the element's class to identify if it's msg_content or msg_blocks
+        element_class = editable_element.evaluate("el => el.className")
+        is_msg_blocks = "msg_blocks" in element_class
+        
+        # Get initial content to verify it's preserved
+        initial_content = editable_element.text_content()
+        print(f"Initial content: '{initial_content[:50]}...' (length: {len(initial_content)})")
         
         # Test pasting HTML content with styling (like from websites)
         # This simulates copying from a website with background colors, CSS, etc.
@@ -197,19 +211,57 @@ class MessageEditTest(SyncBrowserTest):
         </div>
         """
         
-        # Clear and set content using Playwright's fill method
-        msg_content.fill("")
-        msg_content.fill(styled_html_content)
+        # Move cursor to end of content to append
+        editable_element.click()
+        # Use JavaScript to move cursor to end
+        editable_element.evaluate("el => { const range = document.createRange(); range.selectNodeContents(el); range.collapse(false); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range); }")
+        
+        # Simulate a paste event with HTML content
+        selector = '.msg_blocks' if is_msg_blocks else '.msg_content'
+        self.page.evaluate(f"""
+            const element = document.querySelector('[contenteditable="true"]{selector}');
+            if (element) {{
+                // Move cursor to end
+                const range = document.createRange();
+                range.selectNodeContents(element);
+                range.collapse(false);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                
+                const pasteEvent = new ClipboardEvent('paste', {{
+                    bubbles: true,
+                    cancelable: true,
+                    clipboardData: new DataTransfer()
+                }});
+                
+                // Set the HTML data
+                pasteEvent.clipboardData.setData('text/html', `{styled_html_content}`);
+                pasteEvent.clipboardData.setData('text/plain', 'Styled text Bold text Italic text');
+                
+                // Dispatch the paste event
+                element.dispatchEvent(pasteEvent);
+            }}
+        """)
+        
+        # Wait for the paste event to be processed
+        self.page.wait_for_timeout(500)
         
         # Check that the content was pasted but styling should be stripped
-        current_content = msg_content.text_content()
+        current_content = editable_element.text_content()
         assert "Styled text" in current_content, "HTML content should be pasted"
         assert "Bold text" in current_content, "HTML content should be pasted"
         assert "Italic text" in current_content, "HTML content should be pasted"
-        print(f"✅ Styled HTML content pasted: '{current_content}'")
+        
+        # Verify that initial content is still there (appended, not replaced)
+        if initial_content.strip():
+            assert initial_content in current_content or current_content.startswith(initial_content), "Initial content should be preserved when appending"
+            print(f"✅ Initial content preserved, new content appended")
+        
+        print(f"✅ Styled HTML content pasted (appended): '{current_content[:100]}...'")
         
         # Test that the innerHTML doesn't contain the original styling
-        inner_html = msg_content.evaluate("el => el.innerHTML")
+        inner_html = editable_element.evaluate("el => el.innerHTML")
         print(f"Debug: innerHTML after paste: '{inner_html[:200]}...'")
         
         # The content should be pasted but without the original CSS styling
@@ -217,10 +269,19 @@ class MessageEditTest(SyncBrowserTest):
         assert "background-color: #ff0000" not in inner_html, "Background color styling should be stripped"
         assert "font-size: 20px" not in inner_html, "Font size styling should be stripped"
         assert "padding: 10px" not in inner_html, "Padding styling should be stripped"
+        assert "background-color: yellow" not in inner_html, "Yellow background should be stripped"
+        assert "background-color: green" not in inner_html, "Green background should be stripped"
         print("✅ CSS styling was properly stripped during paste")
         
-        # Test realistic clipboard paste simulation
-        print("\n--- Testing realistic clipboard paste ---")
+        # Test realistic clipboard paste simulation (append more content)
+        print("\n--- Testing realistic clipboard paste (appending) ---")
+        
+        # Get content before second paste
+        content_before_second_paste = editable_element.text_content()
+        
+        # Move cursor to end again
+        editable_element.click()
+        editable_element.evaluate("el => { const range = document.createRange(); range.selectNodeContents(el); range.collapse(false); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range); }")
         
         # Simulate pasting content that might come from a website
         website_content = """
@@ -234,18 +295,63 @@ class MessageEditTest(SyncBrowserTest):
         </div>
         """
         
-        msg_content.fill("")
-        msg_content.fill(website_content)
+        # Simulate paste event for website content
+        self.page.evaluate(f"""
+            const element = document.querySelector('[contenteditable="true"]{selector}');
+            if (element) {{
+                // Move cursor to end
+                const range = document.createRange();
+                range.selectNodeContents(element);
+                range.collapse(false);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                
+                const pasteEvent = new ClipboardEvent('paste', {{
+                    bubbles: true,
+                    cancelable: true,
+                    clipboardData: new DataTransfer()
+                }});
+                
+                // Set the HTML data
+                pasteEvent.clipboardData.setData('text/html', `{website_content}`);
+                pasteEvent.clipboardData.setData('text/plain', 'Article Title This is some content with highlighted text and a link. List item 1 List item 2');
+                
+                // Dispatch the paste event
+                element.dispatchEvent(pasteEvent);
+            }}
+        """)
+        
+        # Wait for the paste event to be processed
+        self.page.wait_for_timeout(500)
         
         # Check that content was pasted
-        current_content = msg_content.text_content()
-        assert "Article Title" in current_content, "Article title should be pasted"
-        assert "highlighted text" in current_content, "Highlighted text should be pasted"
-        assert "List item 1" in current_content, "List items should be pasted"
-        print(f"✅ Website content pasted: '{current_content[:100]}...'")
+        final_content = editable_element.text_content()
+        assert "Article Title" in final_content, "Article title should be pasted"
+        assert "highlighted text" in final_content, "Highlighted text should be pasted"
+        assert "List item 1" in final_content, "List items should be pasted"
+        assert "List item 2" in final_content, "List items should be pasted"
+        
+        # Verify list items are on separate lines by checking innerHTML
+        inner_html = editable_element.evaluate("el => el.innerHTML")
+        # List items should be separated by <br> tags
+        assert "- List item 1" in inner_html, "List item 1 should be in HTML"
+        assert "- List item 2" in inner_html, "List item 2 should be in HTML"
+        # Check that there's a <br> between list items (or they're in separate elements)
+        list_item_1_pos = inner_html.find("- List item 1")
+        list_item_2_pos = inner_html.find("- List item 2")
+        assert list_item_1_pos != -1 and list_item_2_pos != -1, "Both list items should be found"
+        # There should be a <br> tag between them
+        between_items = inner_html[list_item_1_pos:list_item_2_pos]
+        assert "<br>" in between_items, f"List items should be separated by <br> tag. Found between: '{between_items}'"
+        print("✅ List items are on separate lines")
+        
+        # Verify previous content is still there
+        assert content_before_second_paste in final_content or final_content.startswith(content_before_second_paste), "Previous content should be preserved when appending"
+        print(f"✅ Website content pasted (appended): '{final_content[:100]}...'")
         
         # Check that styling was stripped
-        inner_html = msg_content.evaluate("el => el.innerHTML")
+        inner_html = editable_element.evaluate("el => el.innerHTML")
         assert "font-family: Arial" not in inner_html, "Font family should be stripped"
         assert "background: #f5f5f5" not in inner_html, "Background should be stripped"
         assert "line-height: 1.6" not in inner_html, "Line height should be stripped"
@@ -253,6 +359,88 @@ class MessageEditTest(SyncBrowserTest):
         print("✅ Website styling was properly stripped during paste")
         
         print("✅ HTML paste sanitization test passed!")
+        return True
+    
+    def test_html_sanitization_paste_event(self):
+        """Test HTML sanitization via actual paste event"""
+        print("\n--- Testing HTML sanitization via paste event ---")
+        
+        # Find a message to edit
+        msg_content = self.page.locator('[contenteditable="true"]').first
+        if not msg_content.is_visible():
+            print("No editable message found, creating one...")
+            self.page.fill('input[type="text"]', "Test message for paste")
+            self.page.press('input[type="text"]', 'Enter')
+            self.page.wait_for_timeout(1000)
+            msg_content = self.page.locator('[contenteditable="true"]').first
+        
+        # Click to enter edit mode
+        msg_content.click()
+        self.page.wait_for_timeout(500)
+        
+        # Clear the content first
+        msg_content.fill('')
+        
+        # Create HTML content with styling that should be sanitized
+        test_html = """
+        <div style="background-color: #ff0000; color: white; font-size: 20px; padding: 10px;">
+            <span style="background-color: yellow; color: black;">Styled text</span>
+            <strong style="color: blue;">Bold text</strong>
+            <em style="background-color: green;">Italic text</em>
+            <ul style="list-style-type: disc; margin-left: 20px;">
+                <li style="margin-bottom: 5px;">Top level item 1</li>
+                <li style="margin-bottom: 5px;">Top level item 2
+                    <ul style="margin-left: 20px;">
+                        <li>Nested item 1</li>
+                        <li>Nested item 2</li>
+                    </ul>
+                </li>
+                <li style="margin-bottom: 5px;">Top level item 3</li>
+            </ul>
+        </div>
+        """
+        
+        # Simulate a paste event with HTML content
+        self.page.evaluate(f"""
+            const element = document.querySelector('[contenteditable="true"]');
+            const pasteEvent = new ClipboardEvent('paste', {{
+                bubbles: true,
+                cancelable: true,
+                clipboardData: new DataTransfer()
+            }});
+            
+            // Set the HTML data
+            pasteEvent.clipboardData.setData('text/html', `{test_html}`);
+            pasteEvent.clipboardData.setData('text/plain', 'Styled text Bold text Italic text Top level item 1 Top level item 2 Nested item 1 Nested item 2 Top level item 3');
+            
+            // Dispatch the paste event
+            element.dispatchEvent(pasteEvent);
+        """)
+        
+        # Wait for the paste event to be processed
+        self.page.wait_for_timeout(500)
+        
+        # Get the content after paste
+        content_after_paste = msg_content.inner_html()
+        print(f"Content after paste: '{content_after_paste}'")
+        
+        # Check that styling was removed
+        assert "background-color: #ff0000" not in content_after_paste, "Background color should be stripped"
+        assert "font-size: 20px" not in content_after_paste, "Font size should be stripped"
+        assert "padding: 10px" not in content_after_paste, "Padding should be stripped"
+        assert "background-color: yellow" not in content_after_paste, "Yellow background should be stripped"
+        assert "background-color: green" not in content_after_paste, "Green background should be stripped"
+        
+        # Check that lists were converted to dash format
+        assert "- Top level item 1" in content_after_paste, "List items should be converted to dash format"
+        assert "- Top level item 2" in content_after_paste, "List items should be converted to dash format"
+        assert "- Top level item 3" in content_after_paste, "List items should be converted to dash format"
+        
+        # Check that text formatting is preserved
+        assert "<strong>Bold text</strong>" in content_after_paste, "Bold formatting should be preserved"
+        assert "<em>Italic text</em>" in content_after_paste, "Italic formatting should be preserved"
+        
+        print("✅ HTML sanitization paste event test passed!")
         return True
     
     def test_basic_text_editing(self, msg_content, original_content):

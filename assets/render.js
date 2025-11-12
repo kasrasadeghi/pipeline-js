@@ -107,6 +107,86 @@ export function htmlNote(uuid) {
   return rendered_messages.join("");
 }
 
+function sanitizeHTML(html) {
+  // Create a temporary div to parse the HTML
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  
+  // Remove all style attributes and CSS classes
+  const allElements = temp.querySelectorAll('*');
+  allElements.forEach(el => {
+    el.removeAttribute('style');
+    el.removeAttribute('class');
+    el.removeAttribute('id');
+  });
+  
+  // Convert lists to dash format based on indentation level
+  const lists = temp.querySelectorAll('ul, ol');
+  lists.forEach(list => {
+    const level = getIndentationLevel(list);
+    const indentSpaces = '  '.repeat(level); // 2 spaces per level
+    
+    // Convert list items to dash format
+    const listItems = list.querySelectorAll('li');
+    const lines = [];
+    listItems.forEach(li => {
+      const text = li.textContent.trim();
+      if (text) {
+        lines.push(indentSpaces + '- ' + text);
+      }
+    });
+    
+    // Replace the list with a p tag containing the dash-formatted text with <br> tags
+    // This ensures each list item appears on a new line in contenteditable divs
+    // Using <p> since it's in the allowedTags list and won't be removed
+    const replacementP = document.createElement('p');
+    replacementP.innerHTML = lines.join('<br>') + '<br>';
+    list.parentNode.replaceChild(replacementP, list);
+  });
+  
+  // Keep only allowed HTML tags and their content
+  const allowedTags = ['p', 'br', 'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+  const walker = document.createTreeWalker(
+    temp,
+    NodeFilter.SHOW_ELEMENT,
+    null,
+    false
+  );
+  
+  const elementsToRemove = [];
+  let node;
+  while (node = walker.nextNode()) {
+    if (!allowedTags.includes(node.tagName.toLowerCase())) {
+      elementsToRemove.push(node);
+    }
+  }
+  
+  // Remove disallowed elements
+  elementsToRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+  });
+  
+  return temp.innerHTML;
+}
+
+function getIndentationLevel(element) {
+  let level = 0;
+  let parent = element.parentNode;
+  
+  while (parent && parent !== element.ownerDocument.body) {
+    if (parent.tagName && (parent.tagName.toLowerCase() === 'ul' || parent.tagName.toLowerCase() === 'ol')) {
+      level++;
+    }
+    parent = parent.parentNode;
+  }
+  
+  return level;
+}
+
 export function htmlLine(line, mode) {
   if (line instanceof Line) {
     let result = line.parts.map(x => {
@@ -337,8 +417,24 @@ export async function editMessage(item_origin_uuid, msg_id) {
     msg_content.contentEditable = true;
     msg_content.focus();
 
+    // Add paste event handler to sanitize HTML content
+    msg_content.addEventListener('paste', function(event) {
+      event.preventDefault();
+      const html = (event.clipboardData || window.clipboardData).getData('text/html');
+      const sanitized = sanitizeHTML(html);
+      document.execCommand('insertHTML', false, sanitized);
+    });
+
     msg_block_content.innerHTML = htmlEditableMsgBlockContent(msg);
     msg_block_content.contentEditable = true;
+
+    // Add paste event handler to message blocks as well
+    msg_block_content.addEventListener('paste', function(event) {
+      event.preventDefault();
+      const html = (event.clipboardData || window.clipboardData).getData('text/html');
+      const sanitized = sanitizeHTML(html);
+      document.execCommand('insertHTML', false, sanitized);
+    });
 
     // make all other edit buttons invisible
     let all_edit_links = document.getElementsByClassName('edit_msg');
