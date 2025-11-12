@@ -35,6 +35,9 @@ async function main() {
       console.log('rewritten');
       // console.log('page', page);
       let result = unparseContent(page);
+      let page2 = rewrite(parseContent(result), note);
+      let result2 = unparseContent(page2);
+      console.assert(result === result2, 'unparse and rewrite are not idempotent', result, result2);
       console.log('unparsed');
       writeFileSync(`${NOTES_DIR}/${note}`, result, { encoding: 'utf8', flag: 'w' });
       console.log('written');
