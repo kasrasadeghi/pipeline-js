@@ -21,7 +21,7 @@ class MessageRenderingTest(SyncBrowserTest):
         print("Starting message rendering test...")
         
         # Navigate to the main page
-        self.navigate_to_sync()
+        self.goto_main_sync()
         
         # Run the first time setup to get a repo name
         repo_name = first_time_setup(self.page)

@@ -16,7 +16,7 @@ class TestSearchImmediate(AsyncBrowserTest):
         print("Setting up test data...")
         
         # Navigate to setup page first
-        await self.navigate_to('/setup')
+        await self.goto_main_async('/setup')
         
         # Set up local repo name with a unique name to avoid accumulating old messages
         import time

@@ -24,7 +24,7 @@ class MessageEditTest(SyncBrowserTest):
         print("Starting message edit test suite...")
         
         # Navigate to the main page
-        self.navigate_to_sync()
+        self.goto_main_sync()
         
         # Run first time setup to get a repo name
         repo_name = first_time_setup(self.page)

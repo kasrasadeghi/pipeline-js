@@ -111,13 +111,13 @@ class BrowserTestBase:
         self.context = None
         self.page = None
     
-    async def navigate_to(self, path="/", wait_until="networkidle"):
+    async def goto_main_async(self, path="/", wait_until="networkidle"):
         """Navigate to a specific path on the test server"""
         url = f"{get_pipeline_url()}{path}"
         await self.page.goto(url, wait_until=wait_until)
         return self.page
     
-    def navigate_to_sync(self, path="/", wait_until="networkidle"):
+    def goto_main_sync(self, path="/", wait_until="networkidle"):
         """Navigate to a specific path on the test server (sync version)"""
         url = f"{get_pipeline_url()}{path}"
         self.page.goto(url, wait_until=wait_until)

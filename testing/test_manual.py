@@ -16,7 +16,7 @@ class ManualTest(SyncBrowserTest):
         print("Starting manual test suite...")
         
         # Navigate to the main page
-        self.navigate_to_sync()
+        self.goto_main_sync()
         
         # Bring browser to front for manual interaction
         self.page.bring_to_front()

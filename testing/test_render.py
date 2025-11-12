@@ -17,7 +17,7 @@ class RenderFunctionTestWithData(AsyncBrowserTest):
         print("Setting up test data...")
         
         # Navigate to setup page first
-        await self.navigate_to('/setup')
+        await self.goto_main_async('/setup')
         await self.page.wait_for_timeout(1000)
         
         # Set up local repo name if not already set
@@ -40,7 +40,7 @@ class RenderFunctionTestWithData(AsyncBrowserTest):
                 print(f"Repo name already set to: '{current_value}'")
         
         # Navigate to journal page
-        await self.navigate_to('/today')
+        await self.goto_main_async('/today')
         await self.page.wait_for_timeout(2000)
         
         # Check if we're still on setup page (which would indicate repo name wasn't persisted)
@@ -56,7 +56,7 @@ class RenderFunctionTestWithData(AsyncBrowserTest):
                     await set_button.click()
                     await self.page.wait_for_timeout(3000)
                     # Navigate to journal page again
-                    await self.navigate_to('/today')
+                    await self.goto_main_async('/today')
                     await self.page.wait_for_timeout(2000)
         
         # Wait for global state to be initialized
@@ -167,7 +167,7 @@ class RenderFunctionTestWithData(AsyncBrowserTest):
         print("Testing expandSearch function...")
         
         # Navigate to search page
-        await self.navigate_to('/search')
+        await self.goto_main_async('/search')
         await self.page.wait_for_timeout(2000)
         
         # Perform a search first
