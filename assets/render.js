@@ -458,7 +458,7 @@ export async function editMessage(item_origin_uuid, msg_id) {
       if (html && html.trim()) {
         console.log('html', html);
         // If HTML is available, sanitize it
-        const sanitized = sanitizeHTML(html);
+      const sanitized = sanitizeHTML(html);
         console.log('sanitized:', sanitized);
         // Use Selection API instead of deprecated execCommand
         const selection = window.getSelection();
@@ -479,25 +479,19 @@ export async function editMessage(item_origin_uuid, msg_id) {
         }
       } else if (plainText && plainText.trim()) {
         console.log('plainText:', plainText);
-        // If only plain text is available, convert URLs to links and insert
-        const textWithLinks = convertUrlsToLinks(plainText);
-        console.log('textWithLinks:', textWithLinks);
+        // If only plain text is available, insert it as plain text (don't convert URLs to links)
         // Use Selection API instead of deprecated execCommand
         const selection = window.getSelection();
         if (selection.rangeCount > 0) {
           const range = selection.getRangeAt(0);
           range.deleteContents();
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = textWithLinks;
-          const fragment = document.createDocumentFragment();
-          while (tempDiv.firstChild) {
-            fragment.appendChild(tempDiv.firstChild);
-          }
-          range.insertNode(fragment);
+          const textNode = document.createTextNode(plainText);
+          range.insertNode(textNode);
           selection.collapseToEnd();
         } else {
-          // Fallback to execCommand
-          document.execCommand('insertHTML', false, textWithLinks);
+          // Fallback to execCommand - escape HTML to insert as plain text
+          const escapedText = plainText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          document.execCommand('insertHTML', false, escapedText);
         }
       } else {
         console.log('No paste data found');
@@ -520,7 +514,7 @@ export async function editMessage(item_origin_uuid, msg_id) {
       if (html && html.trim()) {
         console.log('html', html);
         // If HTML is available, sanitize it
-        const sanitized = sanitizeHTML(html);
+      const sanitized = sanitizeHTML(html);
         console.log('sanitized:', sanitized);
         // Use Selection API instead of deprecated execCommand
         const selection = window.getSelection();
@@ -541,25 +535,19 @@ export async function editMessage(item_origin_uuid, msg_id) {
         }
       } else if (plainText && plainText.trim()) {
         console.log('plainText:', plainText);
-        // If only plain text is available, convert URLs to links and insert
-        const textWithLinks = convertUrlsToLinks(plainText);
-        console.log('textWithLinks:', textWithLinks);
+        // If only plain text is available, insert it as plain text (don't convert URLs to links)
         // Use Selection API instead of deprecated execCommand
         const selection = window.getSelection();
         if (selection.rangeCount > 0) {
           const range = selection.getRangeAt(0);
           range.deleteContents();
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = textWithLinks;
-          const fragment = document.createDocumentFragment();
-          while (tempDiv.firstChild) {
-            fragment.appendChild(tempDiv.firstChild);
-          }
-          range.insertNode(fragment);
+          const textNode = document.createTextNode(plainText);
+          range.insertNode(textNode);
           selection.collapseToEnd();
         } else {
-          // Fallback to execCommand
-          document.execCommand('insertHTML', false, textWithLinks);
+          // Fallback to execCommand - escape HTML to insert as plain text
+          const escapedText = plainText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          document.execCommand('insertHTML', false, escapedText);
         }
       } else {
         console.log('No paste data found');

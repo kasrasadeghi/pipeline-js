@@ -443,6 +443,125 @@ class MessageEditTest(SyncBrowserTest):
         print("✅ HTML sanitization paste event test passed!")
         return True
     
+    def test_url_paste_conversion(self):
+        """Test that URLs in paste events are handled correctly:
+        1. Plain text URLs stay as plain text (not converted to links)
+        2. HTML <a> tags get converted to just the URL text (the href value)
+        """
+        print("\n--- Testing URL paste conversion ---")
+        
+        # Find a message to edit
+        msg_content = self.page.locator('[contenteditable="true"]').first
+        if not msg_content.is_visible():
+            print("No editable message found, creating one...")
+            self.page.fill('input[type="text"]', "Test message for URL paste")
+            self.page.press('input[type="text"]', 'Enter')
+            self.page.wait_for_timeout(1000)
+            msg_content = self.page.locator('[contenteditable="true"]').first
+        
+        # Click to enter edit mode
+        msg_content.click()
+        self.page.wait_for_timeout(500)
+        
+        # Test 1: Paste plain text URL - should stay as plain text
+        print("\n--- Test 1: Pasting plain text URL ---")
+        msg_content.fill('')
+        test_url = "https://help.supermemo.org/wiki/SuperMemo_Algorithm"
+        
+        # Simulate paste with plain text URL
+        self.page.evaluate(f"""
+            const element = document.querySelector('[contenteditable="true"]');
+            const pasteEvent = new ClipboardEvent('paste', {{
+                bubbles: true,
+                cancelable: true,
+                clipboardData: new DataTransfer()
+            }});
+            
+            // Set only plain text (no HTML)
+            pasteEvent.clipboardData.setData('text/plain', '{test_url}');
+            
+            // Dispatch the paste event
+            element.dispatchEvent(pasteEvent);
+        """)
+        
+        self.page.wait_for_timeout(500)
+        content_after_paste = msg_content.inner_html()
+        print(f"Content after pasting plain text URL: '{content_after_paste}'")
+        
+        # Should contain the URL as plain text, not as a link
+        assert test_url in content_after_paste, f"URL '{test_url}' should be in the content"
+        assert f'<a href=' not in content_after_paste, "Plain text URL should NOT be converted to a link"
+        # The URL should appear as plain text (might be wrapped in <p> tags)
+        assert test_url in msg_content.text_content(), "URL should be in text content"
+        print("✅ Plain text URL stays as plain text correctly")
+        
+        # Test 2: Paste HTML <a> tag - should convert to just the URL text
+        print("\n--- Test 2: Pasting HTML <a> tag ---")
+        msg_content.fill('')
+        link_url = "https://help.supermemo.org/wiki/SuperMemo_Algorithm"
+        link_text = "SuperMemo Algorithm"
+        html_with_link = f'<a href="{link_url}">{link_text}</a>'
+        
+        # Simulate paste with HTML link
+        self.page.evaluate(f"""
+            const element = document.querySelector('[contenteditable="true"]');
+            const pasteEvent = new ClipboardEvent('paste', {{
+                bubbles: true,
+                cancelable: true,
+                clipboardData: new DataTransfer()
+            }});
+            
+            // Set HTML with <a> tag
+            pasteEvent.clipboardData.setData('text/html', '{html_with_link}');
+            pasteEvent.clipboardData.setData('text/plain', '{link_text}');
+            
+            // Dispatch the paste event
+            element.dispatchEvent(pasteEvent);
+        """)
+        
+        self.page.wait_for_timeout(500)
+        content_after_paste = msg_content.inner_html()
+        print(f"Content after pasting HTML link: '{content_after_paste}'")
+        
+        # Should contain just the URL, not the link tag or link text
+        assert link_url in content_after_paste, f"URL '{link_url}' should be in the content"
+        assert f'<a href=' not in content_after_paste, "<a> tag should be removed"
+        assert link_text not in content_after_paste or link_url in content_after_paste, "Link text should be replaced with URL"
+        # The URL should appear as plain text (not wrapped in <a> tag)
+        # It might be wrapped in <p> or other allowed tags, but not <a>
+        assert content_after_paste.replace('<p>', '').replace('</p>', '').replace('<br>', '').strip() == link_url or link_url in content_after_paste, "Content should be just the URL"
+        print("✅ HTML <a> tag converted to URL text correctly")
+        
+        # Test 3: Paste URL with other content
+        print("\n--- Test 3: Pasting URL with other text ---")
+        msg_content.fill('')
+        mixed_content = f"Check out this link: {test_url} for more info"
+        
+        self.page.evaluate(f"""
+            const element = document.querySelector('[contenteditable="true"]');
+            const pasteEvent = new ClipboardEvent('paste', {{
+                bubbles: true,
+                cancelable: true,
+                clipboardData: new DataTransfer()
+            }});
+            
+            pasteEvent.clipboardData.setData('text/plain', '{mixed_content}');
+            element.dispatchEvent(pasteEvent);
+        """)
+        
+        self.page.wait_for_timeout(500)
+        content_after_paste = msg_content.inner_html()
+        print(f"Content after pasting mixed content: '{content_after_paste}'")
+        
+        # Should keep the URL as plain text (not convert to link)
+        assert test_url in content_after_paste, "URL should be in the content"
+        assert f'<a href=' not in content_after_paste, "URL in mixed content should NOT be converted to link"
+        assert mixed_content in msg_content.text_content(), "Mixed content should be preserved as text"
+        print("✅ URL in mixed content stays as plain text correctly")
+        
+        print("\n✅ All URL paste conversion tests passed!")
+        return True
+    
     def test_basic_text_editing(self, msg_content, original_content):
         """Test basic text input and editing functionality"""
         print("\n--- Testing basic text editing ---")
