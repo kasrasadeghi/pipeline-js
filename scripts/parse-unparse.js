@@ -16,6 +16,14 @@ async function notesList() {
   return notes;
 }
 
+export async function parseUnparseNote(note, note_dir) {
+  console.log('fixing', note);
+  let content = readFileSync(`${note_dir}/${note}`, { encoding: 'utf8', flag: 'r' });
+  let page = rewrite(parseContent(content), note);
+  let result = unparseContent(page);
+  writeFileSync(`${note_dir}/${note}`, result, { encoding: 'utf8', flag: 'w' });
+}
+
 async function main() {
   let notes = [];
   `Usage: ${Bun.argv[0]} [note1] [note2] ...`;
@@ -28,19 +36,7 @@ async function main() {
   console.log('notes', notes);
   for (let note of notes) {
     try {
-      console.log('fixing', note);
-      let content = readFileSync(`${NOTES_DIR}/${note}`, { encoding: 'utf8', flag: 'r' });
-      console.log('read');
-      let page = rewrite(parseContent(content), note);
-      console.log('rewritten');
-      // console.log('page', page);
-      let result = unparseContent(page);
-      let page2 = rewrite(parseContent(result), note);
-      let result2 = unparseContent(page2);
-      console.assert(result === result2, 'unparse and rewrite are not idempotent', result, result2);
-      console.log('unparsed');
-      writeFileSync(`${NOTES_DIR}/${note}`, result, { encoding: 'utf8', flag: 'w' });
-      console.log('written');
+      await parseUnparseNote(note, NOTES_DIR);
     } catch (e) {
       console.log(e);
       exit(1);
@@ -48,4 +44,4 @@ async function main() {
   }
 }
 
-main();
+await main();

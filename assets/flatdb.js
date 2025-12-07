@@ -170,9 +170,11 @@ class FlatCache {
 
   async load_metadata_map() {
     const {current_version, result: files} = await global_notes.readAllFiles();
+    resetCompatibilityCounter();
     this.metadata_map = files.map(file => {
       return constructNoteFromFile(new File(file));
     });
+    console.log('compatibility counter', getCompatibilityCounter());
     this.version = current_version;
   }
 

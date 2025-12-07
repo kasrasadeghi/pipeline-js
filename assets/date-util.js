@@ -37,9 +37,10 @@ export function timezoneCompatibility(datestring) {
   }
   let chunks = datestring.split(" ").filter(x => x !== '');
   if (chunks.length !== 6) {
-    // TODO console.warn("datestring should have 6 chunks: weekday, month, monthday, time, timezone, year", chunks, datestring);
+    console.warn("datestring should have 6 chunks: weekday, month, monthday, time, timezone, year", chunks, datestring);
     return datestring;
   }
+  console.error('compatibility counter', getCompatibilityCounter(), 'datestring', datestring);
   compatibility_counter++;
   let time = chunks[3];
   let timezone = chunks[4];
