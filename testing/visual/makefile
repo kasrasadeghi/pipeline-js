@@ -17,30 +17,19 @@ help:
 	@echo "  make update      # After making UI changes"
 	@echo "  make test        # Regular testing"
 
-# Use uv if available, otherwise fall back to python/pip
-UV := $(shell command -v uv 2> /dev/null)
-PYTHON := $(if $(UV),uv run python,python)
-PIP := $(if $(UV),uv pip,pip)
-
 install:
 	@echo "Installing visual testing dependencies..."
-	@if [ -n "$(UV)" ]; then \
-		echo "Using uv..."; \
-		cd ../.. && uv sync --extra visual; \
-	else \
-		echo "Using pip..."; \
-		$(PIP) install -r requirements.txt; \
-	fi
+	pip install -r requirements.txt
 	@echo "Dependencies installed successfully!"
 
 update:
 	@echo "Updating baseline images..."
-	$(PYTHON) visual_tests.py --update-baselines --headless
+	python visual_tests.py --update-baselines --headless
 	@echo "Baseline images updated!"
 
 test:
 	@echo "Running visual regression tests..."
-	$(PYTHON) visual_tests.py --headless
+	python visual_tests.py --headless
 
 clean:
 	@echo "Cleaning up test artifacts..."
