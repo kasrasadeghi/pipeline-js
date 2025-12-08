@@ -23,6 +23,7 @@ const cacheable_assets = [
   "render.js",
   "remote.js",
   "rewrite.js",
+  "sanitize.js",
   "state.js",
   "status.js",
   "sync.js",

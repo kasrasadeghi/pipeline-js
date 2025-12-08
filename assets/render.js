@@ -7,6 +7,7 @@ import { EmptyLine, TreeNode } from '/parse.js';
 import { parseContent, parseSection, splitLines } from '/parse.js';
 import { rewrite, rewriteBlock, rewriteLine } from '/rewrite.js';
 import { parseRef } from '/ref.js';
+import { sanitizePasteEvent } from '/sanitize.js';
 
 // date timestamp, like hh:mm:ss in 24-hour clock
 const timestamp_format = new Intl.DateTimeFormat('en-us', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
@@ -105,113 +106,6 @@ export function htmlNote(uuid) {
   let content = getGlobal().notes.get_note(uuid).content;
   let rendered_messages = messages.map(msg => htmlMsg(msg, /*mode*/undefined, content));
   return rendered_messages.join("");
-}
-
-function sanitizeHTML(html) {
-  // Create a temporary div to parse the HTML
-  const temp = document.createElement('div');
-  temp.innerHTML = html;
-  
-  // Remove all style attributes and CSS classes
-  const allElements = temp.querySelectorAll('*');
-  allElements.forEach(el => {
-    el.removeAttribute('style');
-    el.removeAttribute('class');
-    el.removeAttribute('id');
-  });
-  
-  console.log('sanitizing html', temp);
-
-  // Convert lists to dash format based on indentation level
-  const lists = temp.querySelectorAll('ul, ol');
-  lists.forEach(list => {
-    const level = getIndentationLevel(list);
-    const indentSpaces = '  '.repeat(level); // 2 spaces per level
-    
-    // Convert list items to dash format
-    const listItems = list.querySelectorAll('li');
-    const lines = [];
-    listItems.forEach(li => {
-      const text = li.textContent.trim();
-      if (text) {
-        lines.push(indentSpaces + '- ' + text);
-      }
-    });
-    
-    // Replace the list with a p tag containing the dash-formatted text with <br> tags
-    // This ensures each list item appears on a new line in contenteditable divs
-    // Using <p> since it's in the allowedTags list and won't be removed
-    const replacementP = document.createElement('p');
-    replacementP.innerHTML = lines.join('<br>') + '<br>';
-    list.parentNode.replaceChild(replacementP, list);
-  });
-  
-  // Replace <a> tags with their href URL (just the URL, not the link)
-  // Do this before removing disallowed elements so we can extract the href
-  const links = temp.querySelectorAll('a');
-  links.forEach(link => {
-    const href = link.getAttribute('href');
-    if (href) {
-      const textNode = document.createTextNode(href);
-      link.parentNode.replaceChild(textNode, link);
-    } else {
-      // If no href, just unwrap the link and keep the text content
-      const textNode = document.createTextNode(link.textContent);
-      link.parentNode.replaceChild(textNode, link);
-    }
-  });
-  
-  // Keep only allowed HTML tags and their content
-  const allowedTags = ['p', 'br', 'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
-  const walker = document.createTreeWalker(
-    temp,
-    NodeFilter.SHOW_ELEMENT,
-    null,
-    false
-  );
-  
-  const elementsToRemove = [];
-  let node;
-  while (node = walker.nextNode()) {
-    if (!allowedTags.includes(node.tagName.toLowerCase())) {
-      elementsToRemove.push(node);
-    }
-  }
-  
-  // Remove disallowed elements
-  elementsToRemove.forEach(el => {
-    const parent = el.parentNode;
-    while (el.firstChild) {
-      parent.insertBefore(el.firstChild, el);
-    }
-    parent.removeChild(el);
-  });
-  
-  return temp.innerHTML;
-}
-
-function getIndentationLevel(element) {
-  let level = 0;
-  let parent = element.parentNode;
-  
-  while (parent && parent !== element.ownerDocument.body) {
-    if (parent.tagName && (parent.tagName.toLowerCase() === 'ul' || parent.tagName.toLowerCase() === 'ol')) {
-      level++;
-    }
-    parent = parent.parentNode;
-  }
-  
-  return level;
-}
-
-function convertUrlsToLinks(text) {
-  // URL regex pattern - matches http://, https://, or www. URLs
-  const urlPattern = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-  return text.replace(urlPattern, (url) => {
-    // Ensure URLs starting with www. get https:// prefix
-    const href = url.startsWith('http') ? url : `https://${url}`;
-    return `<a href="${href}">${url}</a>`;
-  });
 }
 
 export function htmlLine(line, mode) {
@@ -448,54 +342,7 @@ export async function editMessage(item_origin_uuid, msg_id) {
     // Add paste event handler to sanitize HTML content
     msg_content.addEventListener('paste', function(event) {
       console.log('paste event fired on msg_content');
-      event.preventDefault();
-      const clipboardData = event.clipboardData || window.clipboardData;
-      let html = clipboardData.getData('text/html');
-      let plainText = clipboardData.getData('text/plain');
-      
-      console.log('paste data:', { html, plainText });
-      
-      if (html && html.trim()) {
-        console.log('html', html);
-        // If HTML is available, sanitize it
-      const sanitized = sanitizeHTML(html);
-        console.log('sanitized:', sanitized);
-        // Use Selection API instead of deprecated execCommand
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = sanitized;
-          const fragment = document.createDocumentFragment();
-          while (tempDiv.firstChild) {
-            fragment.appendChild(tempDiv.firstChild);
-          }
-          range.insertNode(fragment);
-          selection.collapseToEnd();
-        } else {
-          // Fallback to execCommand
-          document.execCommand('insertHTML', false, sanitized);
-        }
-      } else if (plainText && plainText.trim()) {
-        console.log('plainText:', plainText);
-        // If only plain text is available, insert it as plain text (don't convert URLs to links)
-        // Use Selection API instead of deprecated execCommand
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          const textNode = document.createTextNode(plainText);
-          range.insertNode(textNode);
-          selection.collapseToEnd();
-        } else {
-          // Fallback to execCommand - escape HTML to insert as plain text
-          const escapedText = plainText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          document.execCommand('insertHTML', false, escapedText);
-        }
-      } else {
-        console.log('No paste data found');
-      }
+      sanitizePasteEvent(event);
     });
 
     msg_block_content.innerHTML = htmlEditableMsgBlockContent(msg);
@@ -504,54 +351,7 @@ export async function editMessage(item_origin_uuid, msg_id) {
     // Add paste event handler to message blocks as well
     msg_block_content.addEventListener('paste', function(event) {
       console.log('paste event fired on msg_block_content');
-      event.preventDefault();
-      const clipboardData = event.clipboardData || window.clipboardData;
-      let html = clipboardData.getData('text/html');
-      let plainText = clipboardData.getData('text/plain');
-      
-      console.log('paste data:', { html, plainText });
-      
-      if (html && html.trim()) {
-        console.log('html', html);
-        // If HTML is available, sanitize it
-      const sanitized = sanitizeHTML(html);
-        console.log('sanitized:', sanitized);
-        // Use Selection API instead of deprecated execCommand
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = sanitized;
-          const fragment = document.createDocumentFragment();
-          while (tempDiv.firstChild) {
-            fragment.appendChild(tempDiv.firstChild);
-          }
-          range.insertNode(fragment);
-          selection.collapseToEnd();
-        } else {
-          // Fallback to execCommand
-          document.execCommand('insertHTML', false, sanitized);
-        }
-      } else if (plainText && plainText.trim()) {
-        console.log('plainText:', plainText);
-        // If only plain text is available, insert it as plain text (don't convert URLs to links)
-        // Use Selection API instead of deprecated execCommand
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          const textNode = document.createTextNode(plainText);
-          range.insertNode(textNode);
-          selection.collapseToEnd();
-        } else {
-          // Fallback to execCommand - escape HTML to insert as plain text
-          const escapedText = plainText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          document.execCommand('insertHTML', false, escapedText);
-        }
-      } else {
-        console.log('No paste data found');
-      }
+      sanitizePasteEvent(event);
     });
 
     // make all other edit buttons invisible

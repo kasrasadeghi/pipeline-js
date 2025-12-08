@@ -89,6 +89,9 @@ class MessageEditTest(SyncBrowserTest):
         # Test 4: Verify the changes were saved
         self.test_verify_edit_changes(edited_content)
         
+        # Test 5: Test URL/link paste conversion
+        self.test_url_paste_conversion()
+        
         print("✅ All message edit tests passed!")
         return True
     
@@ -465,24 +468,38 @@ class MessageEditTest(SyncBrowserTest):
         
         # Test 1: Paste plain text URL - should stay as plain text
         print("\n--- Test 1: Pasting plain text URL ---")
-        msg_content.fill('')
         test_url = "https://help.supermemo.org/wiki/SuperMemo_Algorithm"
         
-        # Simulate paste with plain text URL
+        # Create a temporary element with the URL, select it, copy with Cmd+C, then paste with Cmd+V
         self.page.evaluate(f"""
-            const element = document.querySelector('[contenteditable="true"]');
-            const pasteEvent = new ClipboardEvent('paste', {{
-                bubbles: true,
-                cancelable: true,
-                clipboardData: new DataTransfer()
-            }});
-            
-            // Set only plain text (no HTML)
-            pasteEvent.clipboardData.setData('text/plain', '{test_url}');
-            
-            // Dispatch the paste event
-            element.dispatchEvent(pasteEvent);
+            // Create a temporary textarea to hold the URL
+            const temp = document.createElement('textarea');
+            temp.value = '{test_url}';
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            document.body.appendChild(temp);
+            temp.select();
+            temp.setSelectionRange(0, temp.value.length);
         """)
+        
+        # Copy using Cmd+C (or Ctrl+C)
+        self.page.keyboard.press('Meta+c')  # Cmd+C on Mac, or use 'Control+c' for Ctrl+C
+        self.page.wait_for_timeout(200)
+        
+        # Remove the temporary element
+        self.page.evaluate("""
+            const temp = document.querySelector('textarea[style*="opacity: 0"]');
+            if (temp) temp.remove();
+        """)
+        
+        # Clear the content and focus the element
+        msg_content.click()
+        msg_content.fill('')
+        self.page.wait_for_timeout(100)
+        
+        # Paste using Cmd+V (or Ctrl+V)
+        msg_content.press('Meta+v')
+        self.page.wait_for_timeout(300)
         
         self.page.wait_for_timeout(500)
         content_after_paste = msg_content.inner_html()
@@ -497,27 +514,47 @@ class MessageEditTest(SyncBrowserTest):
         
         # Test 2: Paste HTML <a> tag - should convert to just the URL text
         print("\n--- Test 2: Pasting HTML <a> tag ---")
-        msg_content.fill('')
         link_url = "https://help.supermemo.org/wiki/SuperMemo_Algorithm"
         link_text = "SuperMemo Algorithm"
         html_with_link = f'<a href="{link_url}">{link_text}</a>'
         
-        # Simulate paste with HTML link
+        # Create a temporary div with the HTML link, select it, copy with Cmd+C, then paste with Cmd+V
         self.page.evaluate(f"""
-            const element = document.querySelector('[contenteditable="true"]');
-            const pasteEvent = new ClipboardEvent('paste', {{
-                bubbles: true,
-                cancelable: true,
-                clipboardData: new DataTransfer()
-            }});
+            // Create a temporary div with the HTML link
+            const temp = document.createElement('div');
+            temp.innerHTML = '{html_with_link}';
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            temp.contentEditable = true;
+            document.body.appendChild(temp);
+            temp.focus();
             
-            // Set HTML with <a> tag
-            pasteEvent.clipboardData.setData('text/html', '{html_with_link}');
-            pasteEvent.clipboardData.setData('text/plain', '{link_text}');
-            
-            // Dispatch the paste event
-            element.dispatchEvent(pasteEvent);
+            // Select all content
+            const range = document.createRange();
+            range.selectNodeContents(temp);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
         """)
+        
+        # Copy using Cmd+C
+        self.page.keyboard.press('Meta+c')
+        self.page.wait_for_timeout(200)
+        
+        # Remove the temporary element
+        self.page.evaluate("""
+            const temp = document.querySelector('div[style*="opacity: 0"]');
+            if (temp) temp.remove();
+        """)
+        
+        # Clear and focus
+        msg_content.click()
+        msg_content.fill('')
+        self.page.wait_for_timeout(100)
+        
+        # Paste using Cmd+V
+        msg_content.press('Meta+v')
+        self.page.wait_for_timeout(300)
         
         self.page.wait_for_timeout(500)
         content_after_paste = msg_content.inner_html()
@@ -534,20 +571,38 @@ class MessageEditTest(SyncBrowserTest):
         
         # Test 3: Paste URL with other content
         print("\n--- Test 3: Pasting URL with other text ---")
-        msg_content.fill('')
         mixed_content = f"Check out this link: {test_url} for more info"
         
+        # Create a temporary textarea with the mixed content, select it, copy with Cmd+C, then paste with Cmd+V
         self.page.evaluate(f"""
-            const element = document.querySelector('[contenteditable="true"]');
-            const pasteEvent = new ClipboardEvent('paste', {{
-                bubbles: true,
-                cancelable: true,
-                clipboardData: new DataTransfer()
-            }});
-            
-            pasteEvent.clipboardData.setData('text/plain', '{mixed_content}');
-            element.dispatchEvent(pasteEvent);
+            // Create a temporary textarea to hold the mixed content
+            const temp = document.createElement('textarea');
+            temp.value = '{mixed_content}';
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            document.body.appendChild(temp);
+            temp.select();
+            temp.setSelectionRange(0, temp.value.length);
         """)
+        
+        # Copy using Cmd+C
+        self.page.keyboard.press('Meta+c')
+        self.page.wait_for_timeout(200)
+        
+        # Remove the temporary element
+        self.page.evaluate("""
+            const temp = document.querySelector('textarea[style*="opacity: 0"]');
+            if (temp) temp.remove();
+        """)
+        
+        # Clear and focus
+        msg_content.click()
+        msg_content.fill('')
+        self.page.wait_for_timeout(100)
+        
+        # Paste using Cmd+V
+        msg_content.press('Meta+v')
+        self.page.wait_for_timeout(300)
         
         self.page.wait_for_timeout(500)
         content_after_paste = msg_content.inner_html()

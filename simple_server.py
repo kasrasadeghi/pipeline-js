@@ -172,6 +172,7 @@ def handle_request(request):
         "render.js",
         "remote.js",
         "rewrite.js",
+        "sanitize.js",
         "state.js",
         "status.js",
         "sync.js",
