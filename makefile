@@ -43,13 +43,6 @@ status:
 certs:
 	python gen-certs.py --server-ip 10.50.50.2
 
-.PHONY: proxy
-proxy: proxy.cpp
-	-killall pipeline-proxy
-	g++ -std=c++20 -o pipeline-proxy proxy.cpp -lssl -lcrypto -g
-	#nohup ./pipeline-proxy < /dev/null 2>&1 > logs/date.log &
-	# ./pipeline-proxy
-
 pl:
 	less logs/`ls -Art logs | tail -n 1`
 

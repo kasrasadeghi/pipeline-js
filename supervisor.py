@@ -11,7 +11,6 @@ import sys
 
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--application-port', type=str, default="8000")
-argparser.add_argument('--proxy-port', type=str, default="8001")
 argparser.add_argument('--supervisor-port', type=str, default="8002")
 argparser.add_argument('--host', type=str)
 args = argparser.parse_args()
@@ -40,8 +39,7 @@ def get_wireguard_address():
                 
                 # Check if this is actually a wireguard interface (look for inet address)
                 if 'inet ' in iface_details:
-                    # Extract the IP address using regex, looks like inet 10.50.50.2 --> 10.50.50.2 netmask 0xffffffff
-                    # so we want to extract the 10.50.50.2 part
+                    # Extract the IP address using regex
                     match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', iface_details)
                     if match:
                         return f"{iface}\tUP\t{match.group(1)}/24"
@@ -94,7 +92,7 @@ if args.host is None:
         "\n" +
         "run `sudo systemctl disable wg-quick@[interface]` and `sudo systemctl stop wg-quick@[interface]` to disable one of them\n"
     )
-    assert len(wireguard_addr.split()) == 3
+    assert len(wireguard_addr.split()) == 3, f"wireguard_addr.split() = {wireguard_addr}"
     assert wireguard_addr.split()[2].endswith('/24') or wireguard_addr.split()[2].endswith('/32'), (wireguard_addr.split()[2] + " does not end with /24 or /32")
     # [wgname, 'UNKNOWN', 10.56.78.1/24]
     args.host = wireguard_addr.split()[2].split('/')[0]
@@ -102,94 +100,53 @@ if args.host is None:
 
 escape = lambda x: x.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 
-# Define the subprocesses
-pipeline_proxy_process = None
+# Define the subprocess
 simple_server_process = None
 
-pipeline_proxy_command = ['./pipeline-proxy', args.application_port]
-simple_server_command = ['python', 'simple_server.py', '--port', args.proxy_port]
-simple_server_direct_command = ['python', 'simple_server.py', '--port', args.application_port]
+simple_server_command = ['python', 'simple_server.py', '--port', args.application_port]
 
 # Global variables
 last_alive_time = {
-    'pipeline_proxy': None,
     'simple_server': None
 }
 autorestart_enabled = {
-    'pipeline_proxy': False,
     'simple_server': False
 }
-is_proxied_mode = False
 
 def start_subprocesses():
-    global pipeline_proxy_process, simple_server_process, is_proxied_mode
-
-    if is_proxied_mode:
-        # Start the proxy with prlimit to enable coredump logging
-        pipeline_proxy_process = subprocess.Popen(pipeline_proxy_command, stdout=open('logs/proxy', 'w'), stderr=subprocess.STDOUT)
-        # Start simple_server on port 8001
-        simple_server_process = subprocess.Popen(simple_server_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
-    else:
-        # Start simple_server directly on port 8000
-        simple_server_process = subprocess.Popen(simple_server_direct_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
+    global simple_server_process
+    simple_server_process = subprocess.Popen(simple_server_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
 
 def stop_subprocesses():
-    global pipeline_proxy_process, simple_server_process
-    if pipeline_proxy_process is not None:
-        pipeline_proxy_process.terminate()
+    global simple_server_process
     if simple_server_process is not None:
         simple_server_process.terminate()
 
-    # kill 8000/tcp and 8001/tcp
+    # kill application port
     kill_process_on_port(args.application_port)
-    kill_process_on_port(args.proxy_port)
-    kill_process_on_port(args.supervisor_port)
 
 def restart_subprocesses():
     stop_subprocesses()
     start_subprocesses()
 
 def check_subprocesses():
-    global pipeline_proxy_process, simple_server_process, last_alive_time, is_proxied_mode
+    global simple_server_process, last_alive_time
     
-    if is_proxied_mode:
-        proxy_alive = pipeline_proxy_process.poll() is None if pipeline_proxy_process else False
-        server_alive = simple_server_process.poll() is None if simple_server_process else False
-        
-        if proxy_alive:
-            last_alive_time['pipeline_proxy'] = datetime.datetime.now()
-        if server_alive:
-            last_alive_time['simple_server'] = datetime.datetime.now()
-        
-        return {'pipeline_proxy': (proxy_alive, pipeline_proxy_process), 'simple_server': (server_alive, simple_server_process)}
-    else:
-        server_alive = simple_server_process.poll() is None if simple_server_process else False
-        
-        if server_alive:
-            last_alive_time['simple_server'] = datetime.datetime.now()
-        
-        return {'simple_server': (server_alive, simple_server_process)}
+    server_alive = simple_server_process.poll() is None if simple_server_process else False
+    
+    if server_alive:
+        last_alive_time['simple_server'] = datetime.datetime.now()
+    
+    return {'simple_server': (server_alive, simple_server_process)}
 
 def restart_process(process_name):
-    global pipeline_proxy_process, simple_server_process, is_proxied_mode
+    global simple_server_process
     
-    if is_proxied_mode:
-        if process_name == 'pipeline_proxy':
-            if pipeline_proxy_process is not None:
-                pipeline_proxy_process.terminate()
-            kill_process_on_port(args.application_port)
-            pipeline_proxy_process = subprocess.Popen(pipeline_proxy_command, stdout=open('logs/proxy', 'w'), stderr=subprocess.STDOUT)
-        elif process_name == 'simple_server':
-            if simple_server_process is not None:
-                simple_server_process.terminate()
-            kill_process_on_port(args.proxy_port)
-            simple_server_process = subprocess.Popen(simple_server_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
-    else:
-        if process_name == 'simple_server':
-            if simple_server_process is not None:
-                simple_server_process.terminate()
-            kill_process_on_port(args.application_port)
-            simple_server_process = subprocess.Popen(simple_server_direct_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
+    if process_name == 'simple_server':
+        if simple_server_process is not None:
+            simple_server_process.terminate()
+        kill_process_on_port(args.application_port)
+        simple_server_process = subprocess.Popen(simple_server_command, stdout=open('logs/server', 'w'), stderr=subprocess.STDOUT)
 
 def liveness_check():
     global autorestart_enabled
@@ -208,11 +165,6 @@ def index_html():
         server_log_bytecount = len(f.read())
     simple_server_logs = f"{server_log_bytecount / 1024:.4} kilobytes in logs/server\n\n" + tail('logs/server', 1000)
 
-    pipeline_proxy_logs = None
-    if is_proxied_mode:
-        with open('logs/proxy') as f:
-            pipeline_proxy_logs = f.read()
-
     subprocess_status = check_subprocesses()
     
     status_html = ""
@@ -221,37 +173,18 @@ def index_html():
         last_alive = last_alive_time[process_name].strftime('%Y-%m-%d %H:%M:%S') if last_alive_time[process_name] else 'Never'
         status_html += f"<p>{process_name.replace('_', ' ').title()}: {status} (Last alive: {last_alive}) (Process: {escape(str(process_obj))})</p>"
 
-    if is_proxied_mode:
-        # parse the logs to sort the lines by timestamp
-        proxy_log_lines = map(lambda x: {'line': x, 'from': 'proxy'}, pipeline_proxy_logs.splitlines())
-        server_log_lines = map(lambda x: {'line': x, 'from': 'server'}, simple_server_logs.splitlines())
-        lines = list(proxy_log_lines) + list(server_log_lines)
-        lines.sort(key=lambda x: " ".join(x['line'].split(' ', 2)[:2]))
-        lines = [f"<span style='color: {'green' if x['from'] == 'proxy' else 'blue'}'>{x['line']}</span>" for x in lines]
-        log_output = "\n".join(lines)
-    else:
-        log_output = "<span style='color: blue'>" + simple_server_logs + "</span>"
+    log_output = "<span style='color: blue'>" + simple_server_logs + "</span>"
 
     return f"""
     <h1>Subprocesses Status</h1>
-    <p>Current Mode: {'Proxied' if is_proxied_mode else 'Non-Proxied'}</p>
     {status_html}
     {subprocess.run(['fuser', args.application_port + '/tcp'], capture_output=True, text=True)}
-    {subprocess.run(['fuser', args.proxy_port + '/tcp'], capture_output=True, text=True)}
     <form action="/restart" method="post">
         <input type="submit" value="Restart All Subprocesses">
     </form>
     
-    <form action="/toggle_mode" method="post">
-        <input type="submit" value="Toggle Proxied/Non-Proxied Mode">
-    </form>
-    
     <form action="/toggle_autorestart" method="post">
         <h3>Enable Autorestart:</h3>
-        <label>
-            <input type="checkbox" name="autorestart_pipeline_proxy" {'checked' if autorestart_enabled['pipeline_proxy'] else ''}>
-            Pipeline Proxy
-        </label><br>
         <label>
             <input type="checkbox" name="autorestart_simple_server" {'checked' if autorestart_enabled['simple_server'] else ''}>
             Simple Server
@@ -269,7 +202,6 @@ def HTTP_REDIRECT(location, keep_alive=False):
     return KazHttpResponse(b"302 Found", b"", extra_headers=f"Location: {location}\n".encode(), keep_alive=keep_alive)
 
 def handle_request(request):
-    global is_proxied_mode
     method = request['method']
     path = request['path']
     body = request['body']
@@ -281,14 +213,8 @@ def handle_request(request):
         restart_subprocesses()
         return HTTP_REDIRECT('/')
 
-    if path == '/toggle_mode' and method == 'POST':
-        is_proxied_mode = not is_proxied_mode
-        restart_subprocesses()
-        return HTTP_REDIRECT('/')
-
     if path == '/toggle_autorestart' and method == 'POST':
         form = parse_qs(body.decode('utf-8'))
-        autorestart_enabled['pipeline_proxy'] = 'autorestart_pipeline_proxy' in form
         autorestart_enabled['simple_server'] = 'autorestart_simple_server' in form
         return HTTP_REDIRECT('/')
 
@@ -296,7 +222,6 @@ def handle_request(request):
         subprocess_status = check_subprocesses()
         cors = b"Access-Control-Allow-Origin: https://" + args.host.encode() + b":" + args.application_port.encode() + b"\n"
         return HTTP_OK_JSON({
-            "proxy": subprocess_status.get('pipeline_proxy', (False, None))[0],
             'server': subprocess_status['simple_server'][0]
         }, extra_header=cors)
 
