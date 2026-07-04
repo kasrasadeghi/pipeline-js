@@ -1,5 +1,6 @@
 import subprocess
-from flask import Flask, request, redirect, jsonify, make_response
+from kazhttp import HTTP_OK, HTTP_OK_JSON, HTTP_NOT_FOUND, KazHttpResponse, run
+from urllib.parse import parse_qs
 import threading
 import time
 import datetime
@@ -100,8 +101,6 @@ if args.host is None:
 
 
 escape = lambda x: x.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
-
-app = Flask(__name__)
 
 # Define the subprocesses
 pipeline_proxy_process = None
@@ -204,8 +203,7 @@ def liveness_check():
 def tail(f, n):
     return subprocess.check_output(['tail', '-n', str(n), f], text=True)
     
-@app.route('/')
-def index():
+def index_html():
     with open('logs/server', 'rb') as f:
         server_log_bytecount = len(f.read())
     simple_server_logs = f"{server_log_bytecount / 1024:.4} kilobytes in logs/server\n\n" + tail('logs/server', 1000)
@@ -267,34 +265,42 @@ def index():
     </div>
     """
 
-@app.route('/restart', methods=['GET', 'POST'])
-def restart():
-    restart_subprocesses()
-    return redirect('/')
+def HTTP_REDIRECT(location, keep_alive=False):
+    return KazHttpResponse(b"302 Found", b"", extra_headers=f"Location: {location}\n".encode(), keep_alive=keep_alive)
 
-@app.route('/toggle_mode', methods=['POST'])
-def toggle_mode():
+def handle_request(request):
     global is_proxied_mode
-    is_proxied_mode = not is_proxied_mode
-    restart_subprocesses()
-    return redirect('/')
+    method = request['method']
+    path = request['path']
+    body = request['body']
 
-@app.route('/toggle_autorestart', methods=['POST'])
-def toggle_autorestart():
-    global autorestart_enabled
-    autorestart_enabled['pipeline_proxy'] = 'autorestart_pipeline_proxy' in request.form
-    autorestart_enabled['simple_server'] = 'autorestart_simple_server' in request.form
-    return redirect('/')
+    if path == '/' and method == 'GET':
+        return HTTP_OK(index_html().encode(), mimetype=b"text/html")
 
-@app.route('/api/status', methods=['GET'])
-def api_status():
-    subprocess_status = check_subprocesses()
+    if path == '/restart' and method in ('GET', 'POST'):
+        restart_subprocesses()
+        return HTTP_REDIRECT('/')
 
-    # Add CORS header from origin args.host:8000
-    response = make_response(jsonify({"proxy": subprocess_status.get('pipeline_proxy', (False, None))[0], 'server': subprocess_status['simple_server'][0]}))
-    response.headers.add('Access-Control-Allow-Origin', f'https://{args.host}:' + args.application_port)
+    if path == '/toggle_mode' and method == 'POST':
+        is_proxied_mode = not is_proxied_mode
+        restart_subprocesses()
+        return HTTP_REDIRECT('/')
 
-    return response
+    if path == '/toggle_autorestart' and method == 'POST':
+        form = parse_qs(body.decode('utf-8'))
+        autorestart_enabled['pipeline_proxy'] = 'autorestart_pipeline_proxy' in form
+        autorestart_enabled['simple_server'] = 'autorestart_simple_server' in form
+        return HTTP_REDIRECT('/')
+
+    if path == '/api/status' and method == 'GET':
+        subprocess_status = check_subprocesses()
+        cors = b"Access-Control-Allow-Origin: https://" + args.host.encode() + b":" + args.application_port.encode() + b"\n"
+        return HTTP_OK_JSON({
+            "proxy": subprocess_status.get('pipeline_proxy', (False, None))[0],
+            'server': subprocess_status['simple_server'][0]
+        }, extra_header=cors)
+
+    return HTTP_NOT_FOUND(b"not found")
 
 if __name__ == '__main__':
     print('starting subprocesses')
@@ -305,5 +311,5 @@ if __name__ == '__main__':
     liveness_thread = threading.Thread(target=liveness_check, daemon=True)
     liveness_thread.start()
     
-    print('starting flask app')
-    app.run(port=int(args.supervisor_port), host=args.host, ssl_context=("cert/cert.pem", "cert/key.pem"))
+    print('starting kazhttp server')
+    run(host=args.host, port=int(args.supervisor_port), handle_request=handle_request, cert_folder='cert')
