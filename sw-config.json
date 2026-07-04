@@ -30,6 +30,7 @@
     "remote.js",
     "render.js",
     "rewrite.js",
+    "sanitize.js",
     "service-worker.js",
     "state.js",
     "status.js",
