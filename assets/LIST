@@ -21,6 +21,7 @@ cacheable assets
         "status.js",
         "sync.js",
         "manifest.json",
+        "install-service-worker.js",
 
 non-cacheable assets
 

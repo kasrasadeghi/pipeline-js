@@ -11,6 +11,7 @@ import { paintList } from '/calendar.js';
 import { lookupIcon, MenuButton, ToggleButton, TextField, TextAction } from '/components.js';
 import { htmlNote, htmlLine, htmlMsg, htmlClipboard, htmlClipboardContent } from '/render.js';
 import { Ref, parseInternalLink } from '/ref.js';
+import { registerServiceWorker } from '/install-service-worker.js';
 
 export { handleToggleButton } from '/components.js';
 export { handleTextField, handleTextAction } from '/components.js';
@@ -1114,29 +1115,6 @@ export async function handleRouting() {
 
   } else {
     await gotoJournal();
-  }
-}
-
-async function registerServiceWorker() {
-  if ("serviceWorker" in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.register("/service-worker.js", {
-        scope: "/",
-      });
-      if (registration.installing) {
-        console.log("Service worker installing");
-      } else if (registration.waiting) {
-        console.log("Service worker installed");
-      } else if (registration.active) {
-        console.log("Service worker active");
-      }
-
-      navigator.serviceWorker.addEventListener("message", (event) => {
-        console.log(event.data);
-      });
-    } catch (error) {
-      console.error(`Registration failed with ${error}`);
-    }
   }
 }
 

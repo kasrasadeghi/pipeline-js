@@ -1,11 +1,10 @@
 # Testing Makefile
 
-.PHONY: help clean install sync
+.PHONY: help clean install sync manual message message_edit visual search sw sw-basic sw-advanced
 
-# Use uv if available, otherwise fall back to python/pip
-UV := $(shell command -v uv 2> /dev/null)
-PYTHON := $(if $(UV),uv run python,python)
-PIP := $(if $(UV),uv pip,pip)
+# Use virtual environment python
+VENV_PYTHON := ../.venv/bin/python
+PYTHON := $(if $(wildcard $(VENV_PYTHON)),$(VENV_PYTHON),python)
 
 help:
 	@echo "Testing Makefile for Pipeline Notes"
@@ -15,6 +14,16 @@ help:
 	@echo "  install     - Install dependencies using uv (or pip)"
 	@echo "  sync        - Sync dependencies with pyproject.toml"
 	@echo "  clean       - Clean up test artifacts and temporary files"
+	@echo ""
+	@echo "Test targets:"
+	@echo "  manual      - Run manual interaction tests"
+	@echo "  message     - Run message rendering tests"
+	@echo "  message_edit- Run message editing tests"
+	@echo "  search      - Run search tests"
+	@echo "  sw          - Run all service worker tests"
+	@echo "  sw-basic    - Run basic service worker tests"
+	@echo "  sw-advanced - Run advanced service worker tests"
+	@echo "  visual      - Run visual regression tests"
 	@echo ""
 	@echo "Usage examples:"
 	@echo "  make install  # Install dependencies"
@@ -58,6 +67,15 @@ visual:
 
 search:
 	$(PYTHON) test_search_immediate.py
+
+sw:
+	$(PYTHON) test_service_worker_runner.py
+
+sw-basic:
+	$(PYTHON) test_service_worker.py
+
+sw-advanced:
+	$(PYTHON) test_service_worker_advanced.py
 
 clean:
 	@echo "Cleaning up test artifacts..."

@@ -1,0 +1,39 @@
+{
+  "cache_name": "pipeline-notes-v2",
+  "assets_dir": "assets",
+  "index_path": "assets/index.html",
+  "bypass_patterns": [
+    "/api/",
+    "chrome-extension://"
+  ],
+  "assets": [
+    "boolean-state.js",
+    "calendar.js",
+    "components.js",
+    "date-util.js",
+    "favicon.ico",
+    "filedb.js",
+    "flatdb.js",
+    "global.js",
+    "icon16.png",
+    "icon192.png",
+    "icon512.png",
+    "index.html",
+    "indexed-fs.js",
+    "install-service-worker.js",
+    "manifest.json",
+    "maskable_icon.png",
+    "maskable_icon_x192.png",
+    "maskable_icon_x512.png",
+    "parse.js",
+    "ref.js",
+    "remote.js",
+    "render.js",
+    "rewrite.js",
+    "service-worker.js",
+    "state.js",
+    "status.js",
+    "style.css",
+    "sync.js"
+  ]
+}

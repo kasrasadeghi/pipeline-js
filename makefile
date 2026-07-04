@@ -2,7 +2,6 @@ restart:
 	sudo systemctl restart pipeline-notes
 
 simple:
-	#python -m http.server
 	python simple_server.py --port 8000
 
 non_api:
@@ -19,7 +18,7 @@ deploy:
 
 systemd:
 	-[ -f /etc/systemd/system/pipeline-notes.service ] && sudo rm /etc/systemd/system/pipeline-notes.service
-	python -c 'import sys; import os; print(open(sys.argv[1]).read().replace("^USER", os.getenv("USER")).replace("^PIPELINE_DIR", os.getcwd()), end="")' \
+	python -c 'import sys; import os; print(open(sys.argv[1]).read().replace("^USER", os.getenv("USER")).replace("^PIPE_DIR", os.getcwd()), end="")' \
 		pipeline-notes.service | sudo tee /etc/systemd/system/pipeline-notes.service
 	sudo systemctl daemon-reload
 	sudo systemctl enable pipeline-notes
@@ -94,3 +93,12 @@ test_client_db:
 
 test_client:
 	python test_client.py 10.50.50.2 8000
+
+# Generate service worker config with discovered assets and build the service worker
+sw:
+	@echo "Generating sw-config.json with discovered assets..."
+	@PYTHONPATH=.. python3 -c "from pipeline_service_worker.discovery import discover_assets; import json; config = {'cache_name': 'pipeline-notes-v2', 'assets_dir': 'assets', 'index_path': 'assets/index.html', 'bypass_patterns': ['/api/', 'chrome-extension://'], 'assets': discover_assets('assets')}; f = open('sw-config.json', 'w'); json.dump(config, f, indent=2); f.close(); print(f'Generated sw-config.json with {len(config[\"assets\"])} assets')"
+	python ../pipeline_service_worker/bin/generate-sw \
+		-c sw-config.json \
+		-o assets/service-worker.js
+	@echo "✓ Generated assets/service-worker.js"
