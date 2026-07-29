@@ -1,5 +1,7 @@
 [Unit]
 Description=Pipeline Server
+After=wg-quick@arkaz.service
+Requires=wg-quick@arkaz.service
 
 [Service]
 User=^USER
