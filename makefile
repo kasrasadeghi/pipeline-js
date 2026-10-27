@@ -18,7 +18,7 @@ deploy:
 
 systemd:
 	-[ -f /etc/systemd/system/pipeline-notes.service ] && sudo rm /etc/systemd/system/pipeline-notes.service
-	python -c 'import sys; import os; print(open(sys.argv[1]).read().replace("^USER", os.getenv("USER")).replace("^PIPE_DIR", os.getcwd()), end="")' \
+	python -c 'import sys; import os; print(open(sys.argv[1]).read().replace("^USER", os.getenv("USER")).replace("^PIPELINE_DIR", os.getcwd()), end="")' \
 		pipeline-notes.service | sudo tee /etc/systemd/system/pipeline-notes.service
 	sudo systemctl daemon-reload
 	sudo systemctl enable pipeline-notes
